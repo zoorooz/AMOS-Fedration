@@ -67,7 +67,7 @@ from amos_federation.services.executive_core.engine import (
 from amos_federation.services.executive_core.fidelity import ExecutionFidelity
 from amos_federation.services.executive_core.repository import ExecutiveTaskRepository
 from amos_federation.services.executive_core.states import TaskState
-from tests.conftest import purge_agents
+from tests.conftest import purge_agents, purge_tasks
 
 
 def analysis_tools() -> list[str]:
@@ -88,7 +88,7 @@ def _fresh_state() -> None:
     init_db()
     session = get_session_factory()()
     try:
-        session.execute(text("DELETE FROM tasks"))
+        purge_tasks(session)
         purge_agents(session)
         session.commit()
     finally:

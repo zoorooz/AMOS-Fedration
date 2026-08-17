@@ -10,7 +10,6 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import text
 
 from amos_federation.common.database import get_session_factory, init_db
 from amos_federation.common.persistent import PersistentAuditStore
@@ -34,7 +33,7 @@ from amos_federation.services.executive_core import (
 from amos_federation.services.executive_core.dispatcher import WILDCARD
 from amos_federation.services.executive_core.engine import TRANSITION_SUBJECT
 from amos_federation.services.executive_core.main import app
-from tests.conftest import purge_agents
+from tests.conftest import purge_agents, purge_tasks
 
 
 @pytest.fixture(autouse=True)
@@ -47,7 +46,7 @@ def _fresh_db() -> None:
     init_db()
     session = get_session_factory()()
     try:
-        session.execute(text("DELETE FROM tasks"))
+        purge_tasks(session)
         purge_agents(session)
         session.commit()
     finally:

@@ -277,6 +277,60 @@ EVENT_CONTRACTS = {
             "audit_id",
         ],
     },
+    # === عقود الخدمات الحكومية (R7-A، الوحدة 2) ===
+    #
+    # كل عقد قضية يُلزم `task_id` لأن كل قضية في هذه الدولة لها مهمّة حقيقية في
+    # `tasks` (R7-E) — فالحدث يُتتبَّع إلى الكيان والفاعل والمهمّة معًا.
+    "amos_federation.gov.service_published": {
+        "required_fields": ["service_id", "code", "institution_id", "actor"],
+        "optional_fields": ["tenant_id", "actor_role", "session_id", "audit_id"],
+    },
+    "amos_federation.gov.service_status_changed": {
+        "required_fields": ["service_id", "from_status", "to_status", "actor"],
+        "optional_fields": ["reason", "tenant_id", "actor_role", "session_id", "audit_id"],
+    },
+    "amos_federation.gov.case_opened": {
+        "required_fields": ["case_id", "reference", "service_id", "task_id", "actor"],
+        "optional_fields": [
+            "institution_id",
+            "applicant_agent_id",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    "amos_federation.gov.case_assigned": {
+        "required_fields": ["case_id", "reference", "official_id", "actor"],
+        "optional_fields": [
+            "institution_id",
+            "task_id",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    "amos_federation.gov.case_reviewed": {
+        "required_fields": ["case_id", "reference", "task_id", "task_final_state", "actor"],
+        "optional_fields": ["terminal", "tenant_id", "actor_role", "session_id", "audit_id"],
+    },
+    "amos_federation.gov.case_decided": {
+        "required_fields": ["case_id", "decision_id", "outcome", "official_id", "actor"],
+        "optional_fields": [
+            "reference",
+            "task_id",
+            "task_final_state",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    "amos_federation.gov.case_closed": {
+        "required_fields": ["case_id", "reference", "decision_id", "actor"],
+        "optional_fields": ["task_id", "tenant_id", "actor_role", "session_id", "audit_id"],
+    },
 }
 
 

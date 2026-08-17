@@ -83,18 +83,44 @@ def postgres_url(monkeypatch: pytest.MonkeyPatch) -> str:
 # فـ`DELETE FROM agents` المجرَّد لم يعد يمرّ حين يكون هناك مسؤولٌ مُقلَّد —
 # وهذا هو القيد يعمل، لا عيبًا فيه. الحلّ حذف التابع قبل المتبوع، من مكان واحد،
 # حتى لا يُكرَّر الترتيب في ثمانية ملفات وينساه تاسعٌ غدًا.
-AGENT_DEPENDENT_TABLES: tuple[str, ...] = ("state_officials",)
+# الترتيب مقصود: القرار يشير إلى القضية والمنصب، والقضية تشير إلى المنصب والوكيل،
+# والمنصب يشير إلى الوكيل. فالحذف من الأخصّ إلى الأعمّ وإلّا رفضه قيدٌ مرجعي مفروض.
+AGENT_DEPENDENT_TABLES: tuple[str, ...] = (
+    "state_decisions",
+    "state_cases",
+    "state_officials",
+)
 
 
-def purge_agents(session) -> None:  # noqa: ANN001 — Session من SQLAlchemy
-    """احذف الوكلاء وما يشير إليهم بالترتيب الذي يقبله قيدٌ مرجعي مفروض."""
+#: ما يشير إلى `tasks` بمفتاح مفروض — القضايا وقراراتها (R7-A، الوحدة 2).
+#: كل قضية تحمل `task_id NOT NULL`، فحذف صفوف المهامّ قبلها يرفضه القيد.
+TASK_DEPENDENT_TABLES: tuple[str, ...] = ("state_decisions", "state_cases")
+
+
+def _delete_existing(session, tables: tuple[str, ...]) -> None:  # noqa: ANN001
+    """احذف من الجداول الموجودة فقط — بعض الاختبارات تعمل على مخطَّط جزئي."""
     from sqlalchemy import inspect as sa_inspect
     from sqlalchemy import text as sa_text
 
     inspector = sa_inspect(session.get_bind())
-    for table in AGENT_DEPENDENT_TABLES:
+    for table in tables:
         if inspector.has_table(table):
             session.execute(sa_text(f"DELETE FROM {table}"))  # noqa: S608 — أسماء ثابتة
+
+
+def purge_tasks(session) -> None:  # noqa: ANN001 — Session من SQLAlchemy
+    """احذف المهامّ وما يشير إليها بالترتيب الذي يقبله قيدٌ مرجعي مفروض."""
+    from sqlalchemy import text as sa_text
+
+    _delete_existing(session, TASK_DEPENDENT_TABLES)
+    session.execute(sa_text("DELETE FROM tasks"))
+
+
+def purge_agents(session) -> None:  # noqa: ANN001 — Session من SQLAlchemy
+    """احذف الوكلاء وما يشير إليهم بالترتيب الذي يقبله قيدٌ مرجعي مفروض."""
+    from sqlalchemy import text as sa_text
+
+    _delete_existing(session, AGENT_DEPENDENT_TABLES)
     session.execute(sa_text("DELETE FROM agents"))
 
 

@@ -27,7 +27,6 @@ import tokenize
 from pathlib import Path
 
 import pytest
-from sqlalchemy import text
 
 from amos_federation.common.database import get_session_factory, init_db
 from amos_federation.services.agent_runtime.health import HealthChecker, population_health
@@ -60,7 +59,7 @@ from amos_federation.services.executive_core.dispatcher import (
     NoEligibleAgentError,
 )
 from amos_federation.services.executive_core.engine import reset_executive_core
-from tests.conftest import purge_agents
+from tests.conftest import purge_agents, purge_tasks
 
 _SERVICES_ROOT = Path(__file__).resolve().parents[1] / "src/amos_federation/services"
 _REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -72,7 +71,7 @@ def _fresh_state() -> None:
     init_db()
     session = get_session_factory()()
     try:
-        session.execute(text("DELETE FROM tasks"))
+        purge_tasks(session)
         purge_agents(session)
         session.commit()
     finally:

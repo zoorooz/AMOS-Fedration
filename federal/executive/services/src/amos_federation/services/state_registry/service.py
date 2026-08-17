@@ -37,8 +37,6 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from amos_federation.common.database import get_session_factory, init_db
-from amos_federation.common.durable_event_bus import get_durable_event_bus
-from amos_federation.common.persistent import PersistentAuditStore
 from amos_federation.common.principal import DEFAULT_TENANT
 from amos_federation.services.executive_core.agent_identity import get_identity
 from amos_federation.services.state_registry.authorization import (
@@ -57,6 +55,7 @@ from amos_federation.services.state_registry.models import (
     InstitutionModel,
     OfficialModel,
 )
+from amos_federation.services.state_registry.trace import record_domain_trace
 
 if TYPE_CHECKING:
     from amos_federation.common.principal import AuthorizationContext
@@ -129,7 +128,6 @@ class StateRegistry:
     """السجل الفدرالي للمؤسسات والإدارات والمسؤولين."""
 
     def __init__(self) -> None:
-        self._audit = PersistentAuditStore()
         init_db()
 
     # ── أدوات داخلية ─────────────────────────────────────────────────────
@@ -152,21 +150,11 @@ class StateRegistry:
         الحدث يحمل ما يلزم لتتبّعه إلى الكيان والفاعل والارتباط (R7-G):
         معرّف الكيان في الحمولة، `actor` هو المبدأ، `correlation_id` من السياق،
         والوقت يُضيفه الناقل.
+
+        التنفيذ في `trace.record_domain_trace` — استُخرج في الوحدة 2 ليستعمله
+        نطاق الخدمات الحكومية نفسه، فلا يوجد ترتيبان للأثر يتباعدان.
         """
-        audit = self._audit.append(action, context.principal_id, {**entity, "role": context.role})
-        payload = {
-            **entity,
-            "actor": context.principal_id,
-            "actor_role": context.role,
-            "session_id": context.session_id,
-            "audit_id": audit["audit_id"],
-        }
-        event = get_durable_event_bus().publish(
-            subject,
-            payload,
-            correlation_id=context.correlation_id,
-        )
-        return {"audit_id": audit["audit_id"], "event_id": event["event_id"]}
+        return record_domain_trace(context, action, subject, entity)
 
     # ── قراءة ────────────────────────────────────────────────────────────
 

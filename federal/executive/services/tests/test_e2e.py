@@ -20,7 +20,6 @@
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import text
 
 from amos_federation.common.auth import create_access_token
 from amos_federation.common.database import get_session_factory, init_db
@@ -30,7 +29,7 @@ from amos_federation.services.executive_core.dispatcher import WILDCARD, registe
 from amos_federation.services.executive_core.engine import reset_executive_core
 from amos_federation.services.executive_core.repository import ExecutiveTaskRepository
 from amos_federation.services.orchestrator.main import app as orchestrator_app
-from tests.conftest import purge_agents
+from tests.conftest import purge_agents, purge_tasks
 
 orchestrator_client = TestClient(orchestrator_app)
 agent_client = TestClient(agent_app)
@@ -47,7 +46,7 @@ def _clean_state() -> None:
     init_db()
     session = get_session_factory()()
     try:
-        session.execute(text("DELETE FROM tasks"))
+        purge_tasks(session)
         purge_agents(session)
         session.commit()
     finally:

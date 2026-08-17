@@ -40,7 +40,7 @@ from amos_federation.services.executive_core.http_errors import EXECUTION_BYPASS
 from amos_federation.services.executive_core.repository import ExecutiveTaskRepository
 from amos_federation.services.executive_core.states import TaskState
 from amos_federation.services.orchestrator.main import app as orchestrator_app
-from tests.conftest import purge_agents
+from tests.conftest import purge_agents, purge_tasks
 
 AUTH_HEADERS = {
     "Authorization": "Bearer "
@@ -58,7 +58,7 @@ def _fresh_state() -> None:
     init_db()
     session = get_session_factory()()
     try:
-        session.execute(text("DELETE FROM tasks"))
+        purge_tasks(session)
         purge_agents(session)
         session.commit()
     finally:

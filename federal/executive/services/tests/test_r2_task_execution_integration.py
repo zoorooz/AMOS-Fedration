@@ -54,7 +54,7 @@ from amos_federation.services.executive_core.subsystem_boundary import (
 )
 from amos_federation.services.model_gateway.main import app as model_app
 from amos_federation.services.training.main import app as training_app
-from tests.conftest import purge_agents
+from tests.conftest import purge_agents, purge_tasks
 
 MODEL_HEADERS = {"Authorization": "Bearer " + create_access_token("r2", ["models:invoke"])}
 TRAINING_HEADERS = {
@@ -79,7 +79,7 @@ def _fresh_state() -> None:
     init_db()
     session = get_session_factory()()
     try:
-        session.execute(text("DELETE FROM tasks"))
+        purge_tasks(session)
         purge_agents(session)
         session.commit()
     finally:
