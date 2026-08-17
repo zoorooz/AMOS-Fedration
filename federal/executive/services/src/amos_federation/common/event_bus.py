@@ -634,6 +634,159 @@ EVENT_CONTRACTS = {
             "audit_id",
         ],
     },
+    # === R8: الفدرالية والولايات — مفردةٌ واحدة `amos_federation.federation.*` ===
+    #
+    # لا ناقلَ أحداثٍ جديد ولا مخزنَ تدقيقٍ ثانٍ (R8-K): هذه عقودٌ تُضاف إلى
+    # المفردة القائمة، وتُنشَر بـ`record_domain_trace` القائمة (تدقيقٌ ثمّ حدث).
+    # وكلُّ حدثٍ يحمل الفاعلَ ودورَه وجلستَه و`audit_id`، و`correlation_id` و
+    # `timestamp` عمودان يضيفهما الناقل فلا يُعادان في الحمولة.
+    #
+    # وما لا حقيقةَ له **لا يُختلق ليُرضي مخطَّطًا** (R8-K): الحقولُ التي قد لا
+    # تُعرف — كالهوية والمنصب والمهمّة — اختياريةٌ لا مطلوبة، فلا يُكتب صفرٌ ولا
+    # نصٌّ فارغٌ مكانَ معرِّفٍ غائب.
+    "amos_federation.federation.government_registered": {
+        "required_fields": ["government_id", "code", "level", "actor"],
+        "optional_fields": [
+            "name",
+            "parent_government_id",
+            "status",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    "amos_federation.federation.government_status_changed": {
+        "required_fields": ["government_id", "code", "status", "reason", "actor"],
+        "optional_fields": [
+            "previous_status",
+            "level",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    "amos_federation.federation.institution_bound": {
+        "required_fields": ["binding_id", "government_id", "institution_id", "relation", "actor"],
+        "optional_fields": [
+            "government_code",
+            "government_level",
+            "identity_id",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    "amos_federation.federation.relation_recorded": {
+        "required_fields": [
+            "relation_id",
+            "from_kind",
+            "from_ref",
+            "to_kind",
+            "to_ref",
+            "relation",
+            "actor",
+        ],
+        "optional_fields": [
+            "status",
+            "note",
+            "identity_id",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    "amos_federation.federation.delegation_granted": {
+        "required_fields": ["delegation_id", "from_government_id", "operation", "scope", "actor"],
+        "optional_fields": [
+            "to_government_id",
+            "to_institution_id",
+            "max_amount",
+            "expires_at",
+            "reason",
+            "identity_id",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    "amos_federation.federation.delegation_revoked": {
+        "required_fields": ["delegation_id", "from_government_id", "operation", "reason", "actor"],
+        "optional_fields": [
+            "to_government_id",
+            "to_institution_id",
+            "previous_status",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    "amos_federation.federation.service_scoped": {
+        "required_fields": ["scope_id", "service_id", "level", "institution_id", "actor"],
+        "optional_fields": [
+            "government_id",
+            "department_id",
+            "identity_id",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    "amos_federation.federation.case_scoped": {
+        "required_fields": [
+            "scope_id",
+            "case_id",
+            "level",
+            "institution_id",
+            "classification",
+            "actor",
+        ],
+        "optional_fields": [
+            "government_id",
+            "department_id",
+            "responsible_official_id",
+            "identity_id",
+            "position_id",
+            "boundary_reason",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    "amos_federation.federation.operation_recorded": {
+        "required_fields": [
+            "operation_id",
+            "kind",
+            "level",
+            "institution_id",
+            "status",
+            "classification",
+            "actor",
+        ],
+        "optional_fields": [
+            "government_id",
+            "department_id",
+            "decision_id",
+            "case_id",
+            "ruling_id",
+            "identity_id",
+            "position_id",
+            "task_id",
+            "transaction_reference",
+            "detail",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
 }
 
 
