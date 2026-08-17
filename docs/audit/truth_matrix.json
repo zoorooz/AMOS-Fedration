@@ -77,7 +77,7 @@
       "md_files": 60,
       "py_files": 208,
       "yaml_files": 3,
-      "code_lines": 54443,
+      "code_lines": 56331,
       "nucleus_count": 7,
       "nucleus_status": {
         "unspecified": 7
@@ -89,7 +89,7 @@
       "secret_hits": 0,
       "observed_hits": 124,
       "api_routes": 178,
-      "test_refs": 133,
+      "test_refs": 140,
       "identity_violations": 2,
       "deployed": true,
       "columns": {
