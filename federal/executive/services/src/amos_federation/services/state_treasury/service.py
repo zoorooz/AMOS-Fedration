@@ -50,9 +50,10 @@ AMOS-Federation State Treasury — Service Layer
 
 ## حدود تُقال ولا تُخفى
 
-- **التنافس على تجاوز الحدّ:** فحص «المصروف + المبلغ ≤ التخصيص» يقرأ ثم يكتب بلا
-  قفل صفٍّ (`SELECT … FOR UPDATE`) ولا مستوى عزل مرتفع. فعمليتان متزامنتان قد
-  تمرّان معًا وتتجاوزان التخصيص. مفروضٌ في المسار الواحد، **غير محميّ من التنافس**.
+- **التنافس على تجاوز الحدّ:** الفحوص تقرأ ثم تكتب، فتُقفل أصولها أولًا
+  (`_lock_rows`) بترتيبٍ قانوني واحد وبمهلة محدودة. وهذا **على PostgreSQL
+  وحده**: SQLite يتجاهل `FOR UPDATE`. ما زال بلا مستوى عزل مرتفع ولا إعادة
+  محاولة تلقائية: الطلب العالق يُرفض بـ`TreasuryContentionError` ليُعاد.
 - **لا إقفال فترات ولا قوائم مالية** — الدفتر متوازن، والمحاسبة الكاملة ليست هنا.
 - **لا تحويل بنكي خارجي ولا قناة دفع** — ولا محاكاةَ واحدةٍ تُسمّى حقيقية.
 """
@@ -64,7 +65,8 @@ import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from amos_federation.common.database import get_session_factory, init_db
 from amos_federation.common.principal import DEFAULT_TENANT
@@ -135,6 +137,45 @@ TREASURY_EVENTS: tuple[str, ...] = (
 DISBURSEMENT_TASK_TYPE = "treasury.disbursement.execute"
 DISBURSEMENT_TASK_DOMAIN = "treasury"
 
+#: مهلة انتظار القفل: نرفض بعدها بدل الانتظار غير المحدود على طلبٍ عالق.
+LOCK_TIMEOUT = "3s"
+
+#: رمز PostgreSQL لتعذُّر القفل (يشمل انتهاء `lock_timeout`).
+PG_LOCK_NOT_AVAILABLE = "55P03"
+
+#: ترتيب القفل القانوني: من الأعمّ إلى الأخصّ، ولا تُقفل جداول بترتيبٍ آخر.
+#: طلبان يقفلان نفس المجموعة بترتيبين متعاكسين يتوقّفان معًا (deadlock)، فيُثبَّت
+#: ترتيبٌ واحد لكل المسارات ويُحرَس باختبار.
+LOCK_ORDER: tuple[Any, ...] = (BudgetModel, AllocationModel, TransactionModel, AccountModel)
+
+
+def lock_query(session: Any, model: Any, ids: set[str] | list[str]) -> Any:
+    """استعلام القفل نفسه الذي تستعمله الخدمة — مُفرَدٌ ليكون قابلًا للفحص.
+
+    `populate_existing` ضرورية لا تحسينًا: بعد انتظارٍ حتى التزم المنافس، ما في
+    الذاكرة صار قديمًا، فتُقرأ الصفوف المقفولة من القاعدة لا من الهوية المحفوظة.
+    والمعرّفات مرتَّبة ليكون ترتيب القفل داخل الجدول ثابتًا أيضًا.
+    """
+    return (
+        session.query(model)
+        .filter(model.id.in_(sorted(ids)))
+        .order_by(model.id)
+        .populate_existing()
+        .with_for_update()
+    )
+
+
+def _row_locks_supported(session: Any) -> bool:
+    """`FOR UPDATE` يُصرَّف على PostgreSQL فقط.
+
+    SQLite **يتجاهله بلا خطأ** (يُسقطه المُصرِّف)، فلا فائدة في إرساله هناك ولا
+    ضرر: وهو محرك الاختبارات لا الإنتاج، ويُسلسل الكتابة بقفل ملفٍّ واحد أصلًا.
+    ولهذا يبقى ضمان عدم التجاوز عند التنافس **خاصًّا بـPostgreSQL** — يُقال ولا
+    يُعمَّم على كل محرك.
+    """
+    return session.get_bind().dialect.name == "postgresql"
+
+
 #: صيغ فترة الموازنة المقبولة: سنة · شهر · ربع.
 _PERIOD_PATTERN = re.compile(r"^\d{4}(-(0[1-9]|1[0-2])|-Q[1-4])?$")
 
@@ -192,6 +233,14 @@ class AllocationExceededError(TreasuryError):
 
 class LedgerImbalanceError(TreasuryError):
     """طرفا الحركة غير متوازنين — عطلٌ برمجي لا حالة عمل."""
+
+
+class TreasuryContentionError(TreasuryError):
+    """تعذّر قفل الصفوف في المهلة — طلبٌ منافس يمسكها الآن.
+
+    ليس عطلًا: هو الرفض الصريح بدل الانتظار غير المحدود، وبدل المرور معًا
+    وتجاوز الحدّ. يُعاد الطلب فيمرّ بعد أن يُغلق المنافس.
+    """
 
 
 class EntityStateError(TreasuryError):
@@ -334,6 +383,58 @@ class StateTreasury:
                 raise CurrencyMismatchError(
                     f"عملة {name} ('{currency}') لا تساوي عملة {base_name} ('{base}')"
                 )
+
+    # ── القفل: تسلسل الفحوص المقروءة من الصفوف ────────────────────────────
+
+    def _lock_rows(self, session, targets: list[tuple[Any, str | None]]) -> None:
+        """اقفل صفوف الفحص قبل قراءتها، بالترتيب القانوني وحده.
+
+        الفحوص كلّها مجاميعُ صفوفٍ لا أعمدة مخزَّنة، فلا يوجد صفٌّ واحد يتضارب
+        عليه طلبان بطبيعته. فيُتَّخذ الصفُّ **الأب** نقطةَ تسلسل: الموازنة قبل
+        قراءة المخصَّص، والتخصيص قبل قراءة المصروف، والحساب قبل قراءة رصيده.
+
+        ولماذا `FOR UPDATE` تحديدًا: إدخالُ ابنٍ (تخصيص، حركة، قيد) يأخذ
+        `FOR KEY SHARE` على أبيه لفحص المفتاح الأجنبي، و`FOR UPDATE` يتضارب مع
+        `FOR KEY SHARE`، فينتظر كل من يريد الكتابة تحت صفٍّ مقفول — لا الفاحصون
+        وحدهم. و`FOR NO KEY UPDATE` **لا** يتضارب معه، فلا يكفي هنا.
+
+        والمهلة محدودة: `lock_timeout` محلّي للمعاملة، فالطلب العالق يُرفض
+        بـ`TreasuryContentionError` بدل أن يُعلَّق بلا نهاية.
+        """
+        if not _row_locks_supported(session):
+            return
+        wanted: dict[Any, set[str]] = {}
+        for model, row_id in targets:
+            if row_id is not None:
+                wanted.setdefault(model, set()).add(row_id)
+        if not wanted:
+            return
+        stray = sorted(m.__name__ for m in wanted if m not in LOCK_ORDER)
+        if stray:
+            # عطلٌ برمجي لا حالة تشغيل: جدولٌ بلا موضع في الترتيب يفتح باب
+            # التوقّف المتبادل، فيُرفض هنا بدل أن يظهر تحت الحمل.
+            raise TreasuryError(f"جدول بلا موضع في ترتيب القفل: {', '.join(stray)}")
+
+        session.execute(
+            text("SELECT set_config('lock_timeout', :timeout, true)"),
+            {"timeout": LOCK_TIMEOUT},
+        )
+        for model in LOCK_ORDER:
+            ids = wanted.get(model)
+            if not ids:
+                continue
+            try:
+                lock_query(session, model, ids).all()
+            except DBAPIError as exc:
+                orig = exc.orig
+                code = getattr(orig, "sqlstate", None) or getattr(orig, "pgcode", None)
+                if code != PG_LOCK_NOT_AVAILABLE:
+                    raise
+                session.rollback()
+                raise TreasuryContentionError(
+                    f"تعذّر قفل صفوف '{model.__tablename__}' خلال {LOCK_TIMEOUT} — "
+                    "طلبٌ منافس يمسكها؛ أعِد المحاولة"
+                ) from exc
 
     # ── مجاميع مشتقّة من الصفوف ───────────────────────────────────────────
 
@@ -517,6 +618,11 @@ class StateTreasury:
         """
         if debit_account.id == credit_account.id:
             raise LedgerImbalanceError("طرفا الحركة لا يجوز أن يكونا حسابًا واحدًا")
+        # الحسابان يُقفلان قبل فحص حالتهما وقبل كتابة القيود: كل قيدٍ يشير إلى
+        # حساب، فقفلُ الحساب يُسلسل كل من يغيّر رصيده — ومنه فاحصُ الكفاية.
+        self._lock_rows(
+            session, [(AccountModel, debit_account.id), (AccountModel, credit_account.id)]
+        )
         for account in (debit_account, credit_account):
             if account.status != "open":
                 raise EntityStateError(f"الحساب '{account.code}' حالته '{account.status}'")
@@ -869,6 +975,13 @@ class StateTreasury:
             if decision_id is not None:
                 self._assert_authorizing_decision(session, context, decision_id, budget)
 
+            # صفّ الموازنة يُقفل قبل قراءة المخصَّص، فتخصيصان متزامنان لا يريان
+            # نفس «المتاح» ثم يمرّان معًا. والحالة تُعاد قراءتها بعد القفل: قد
+            # طال الانتظار حتى التزم المنافس، فما قُرئ قبله صار قديمًا.
+            self._lock_rows(session, [(BudgetModel, budget.id)])
+            if budget.status != "open":
+                raise EntityStateError(f"الموازنة '{budget_code}' حالتها '{budget.status}'")
+
             allocated = self._allocated_total(session, budget.id)
             limit = to_money(budget.limit_amount)
             if allocated + allocation_amount > limit:
@@ -1094,6 +1207,23 @@ class StateTreasury:
                 (f"الحساب '{expense_account_code}'", expense.currency),
             )
 
+            # الحدود الثلاثة تُقرأ من الصفوف، فتُقفل أصولها أولًا وبالترتيب
+            # القانوني: موازنة ← تخصيص ← حسابان. بهذا لا يمرّ صرفان متزامنان
+            # على نفس التخصيص أو نفس الرصيد بقراءةٍ واحدة قديمة.
+            self._lock_rows(
+                session,
+                [
+                    (BudgetModel, budget.id),
+                    (AllocationModel, allocation.id),
+                    (AccountModel, cash.id),
+                    (AccountModel, expense.id),
+                ],
+            )
+            if allocation.status != "active":
+                raise EntityStateError(f"التخصيص حالته '{allocation.status}' — لا صرف عليه")
+            if budget.status != "open":
+                raise EntityStateError(f"الموازنة '{budget.code}' حالتها '{budget.status}'")
+
             spent = self._spent_on_allocation(session, allocation.id)
             allocated = to_money(allocation.amount)
             if spent + spend > allocated:
@@ -1228,6 +1358,10 @@ class StateTreasury:
         session = self._session()
         try:
             original = self._transaction_row(session, context, reference)
+            # الأصل يُقفل قبل قراءة حالته: عكسان متزامنان يقرآن 'posted' معًا،
+            # فيرفض القيدُ الفريد الثاني بخطأ سلامة. مع القفل يقرأ الثاني
+            # 'reversed' فيُرفض برسالة العمل الصحيحة.
+            self._lock_rows(session, [(TransactionModel, original.id)])
             if original.status != "posted":
                 raise TransactionReversedError(
                     f"الحركة '{reference}' حالتها '{original.status}' — لا تُعكس"
@@ -1478,6 +1612,8 @@ __all__ = [
     "AllocationExceededError",
     "AllocationNotFoundError",
     "BudgetExceededError",
+    "TreasuryContentionError",
+    "lock_query",
     "BudgetNotFoundError",
     "CurrencyMismatchError",
     "DecisionNotAuthorizingError",

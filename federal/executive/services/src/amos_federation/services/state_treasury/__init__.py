@@ -8,8 +8,14 @@ AMOS-Federation State Treasury
 
 from amos_federation.services.state_treasury.service import (
     StateTreasury,
+    TreasuryContentionError,
     get_state_treasury,
     reset_state_treasury,
 )
 
-__all__ = ["StateTreasury", "get_state_treasury", "reset_state_treasury"]
+__all__ = [
+    "StateTreasury",
+    "TreasuryContentionError",
+    "get_state_treasury",
+    "reset_state_treasury",
+]

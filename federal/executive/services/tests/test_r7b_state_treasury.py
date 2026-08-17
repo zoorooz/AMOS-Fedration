@@ -15,21 +15,29 @@
 5. **لا تعديل تاريخ**: التصحيح حركةُ عكسٍ، والعكس مرّتين يرفضه قيدٌ في القاعدة.
 6. حدود القاعدة نفسها (`CHECK`/`UNIQUE`/`FK`) مفروضة على SQLite أيضًا.
 
+7. **القفل قبل الفحص** (23–29): كل فحصٍ يقرأ ثم يكتب يقفل أصله أولًا، بترتيبٍ
+   قانوني واحد وبمهلة محدودة. وهذه الاختبارات تفحص العبارة والترتيب والمهلة
+   وترجمة الخطأ — **لا** تفحص التزامن نفسه: SQLite يتجاهل `FOR UPDATE`، فدلالة
+   المنع الفعلية تُتحقَّق على PostgreSQL وتُسجَّل في وثيقة R7-B لا هنا.
+
 ما **لا** يفحصه هذا الملفّ ولا يُدَّعى: قناة دفعٍ خارجية، وإقفال فترات، وقوائم
-مالية، وسلامة الحدود عند التنافس (لا قفل صفوف — دَين مُعلَن في وثيقة R7-B).
+مالية، وتنفيذُ حجزٍ متزامن حقيقي بجلستين.
 """
 
 from __future__ import annotations
 
+import inspect
 import re
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.dialects import postgresql, sqlite
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from amos_federation.common.database import get_session_factory, init_db
 from amos_federation.common.durable_event_bus import get_durable_event_bus
@@ -63,6 +71,7 @@ from amos_federation.services.state_treasury.authorization import (
     OfficeAuthorityError,
     RegistryAuthorizationError,
 )
+from amos_federation.services.state_treasury.main import _http
 from amos_federation.services.state_treasury.models import (
     ACCOUNT_KINDS,
     NORMAL_BALANCE,
@@ -87,6 +96,9 @@ from amos_federation.services.state_treasury.service import (
     DISBURSEMENT_TASK_TYPE,
     EVENT_TRANSACTION_POSTED,
     EVENT_TRANSACTION_REVERSED,
+    LOCK_ORDER,
+    LOCK_TIMEOUT,
+    PG_LOCK_NOT_AVAILABLE,
     TREASURY_EVENTS,
     AllocationExceededError,
     BudgetExceededError,
@@ -98,8 +110,11 @@ from amos_federation.services.state_treasury.service import (
     OfficialNotFoundError,
     StateTreasury,
     TransactionReversedError,
+    TreasuryContentionError,
     TreasuryError,
+    _row_locks_supported,
     get_state_treasury,
+    lock_query,
     reset_state_treasury,
 )
 from tests.conftest import purge_agents, purge_tasks
@@ -1352,3 +1367,198 @@ def test_22_utc_timestamps_are_timezone_aware_in_the_service() -> None:
     assert "datetime.now(UTC)" in code
     assert re.search(r"datetime\.now\(\s*\)", code) is None, "وقتٌ بلا منطقة زمنية"
     assert datetime.now(UTC).tzinfo is not None
+
+
+# ── 23–29. القفل: ما يمنع مرور طلبين معًا على نفس الحدّ ────────────────────
+#
+# SQLite يُسقط `FOR UPDATE` بلا خطأ، فلا يمكن لهذه الاختبارات أن تُظهر منعًا
+# فعليًّا للتنافس. فهي تفحص ما **يمكن** فحصه هنا بصدق: أن العبارة تحمل القفل على
+# PostgreSQL، وأن الترتيب واحد، وأن المهلة محلّية، وأن الخطأ يُترجم رفضًا قابلًا
+# لإعادة المحاولة — ودلالة المنع نفسها محلّها PostgreSQL حقيقيّ.
+
+
+class _FakeQuery:
+    """سلسلة استعلام تسجّل ما طُلب منها بدل أن تنفّذه."""
+
+    def __init__(self, session: _FakeSession, model: object) -> None:
+        self._session = session
+        self._model = model
+
+    def filter(self, *_args: object) -> _FakeQuery:
+        return self
+
+    def order_by(self, *_args: object) -> _FakeQuery:
+        return self
+
+    def populate_existing(self) -> _FakeQuery:
+        self._session.refreshed.append(self._model)
+        return self
+
+    def with_for_update(self) -> _FakeQuery:
+        self._session.locked.append(self._model)
+        return self
+
+    def all(self) -> list[object]:
+        if self._session.raise_code is not None:
+            orig = Exception("boom")
+            orig.sqlstate = self._session.raise_code  # type: ignore[attr-defined]
+            raise DBAPIError("SELECT ... FOR UPDATE", {}, orig)
+        return []
+
+
+class _FakeSession:
+    """جلسة تسجّل النداءات، بلهجة قاعدة نختارها — لا اتّصال ولا كتابة."""
+
+    def __init__(self, dialect: str = "postgresql", raise_code: str | None = None) -> None:
+        self.dialect_name = dialect
+        self.raise_code = raise_code
+        self.locked: list[object] = []
+        self.refreshed: list[object] = []
+        self.executed: list[tuple[str, object]] = []
+        self.rolled_back = 0
+
+    def get_bind(self) -> object:
+        return SimpleNamespace(dialect=SimpleNamespace(name=self.dialect_name))
+
+    def execute(self, statement: object, params: object = None) -> None:
+        self.executed.append((str(statement), params))
+
+    def query(self, model: object) -> _FakeQuery:
+        return _FakeQuery(self, model)
+
+    def rollback(self) -> None:
+        self.rolled_back += 1
+
+
+def test_23_lock_statement_carries_for_update_on_postgresql_and_is_dropped_on_sqlite(
+    treasury: StateTreasury,
+) -> None:
+    """نفس الاستعلام: قفلٌ على PostgreSQL، ولا قفل على SQLite — بلا خطأ."""
+    session = get_session_factory()()
+    try:
+        statement = lock_query(session, AllocationModel, {"b", "a"}).statement
+        pg = str(statement.compile(dialect=postgresql.dialect()))
+        lite = str(statement.compile(dialect=sqlite.dialect()))
+        assert "FOR UPDATE" in pg
+        assert "FOR UPDATE" not in lite
+        # المعرّفات مرتَّبة: ترتيب القفل ثابت داخل الجدول أيضًا لا بحسب ورودها.
+        compiled = statement.compile(dialect=postgresql.dialect())
+        ids = [v for k, v in sorted(compiled.params.items()) if isinstance(v, str)]
+        assert ids == sorted(ids)
+        # وفي بيئة الاختبار القفل معطَّل صراحةً لا ضمنًا.
+        assert _row_locks_supported(session) is False
+    finally:
+        session.close()
+
+    # وعلى لهجة SQLite لا تُرسَل ولا عبارة واحدة — لا مهلة ولا قفل.
+    fake = _FakeSession(dialect="sqlite")
+    StateTreasury()._lock_rows(fake, [(BudgetModel, "bdg-1")])
+    assert fake.executed == []
+    assert fake.locked == []
+
+
+def test_24_locks_are_taken_in_one_canonical_order_regardless_of_call_order() -> None:
+    """ترتيبٌ واحد لكل المسارات — وإلّا توقّف طلبان معًا على نفس المجموعة."""
+    fake = _FakeSession()
+    StateTreasury()._lock_rows(
+        fake,
+        [
+            (AccountModel, "acc-2"),
+            (TransactionModel, "tx-1"),
+            (AccountModel, "acc-1"),
+            (AllocationModel, "alc-1"),
+            (BudgetModel, "bdg-1"),
+        ],
+    )
+    assert fake.locked == [BudgetModel, AllocationModel, TransactionModel, AccountModel]
+    assert fake.locked == [m for m in LOCK_ORDER if m in fake.locked]
+    # والصفوف تُقرأ من القاعدة بعد القفل لا من الذاكرة: الانتظار يُقدِّم القديم.
+    assert fake.refreshed == fake.locked
+    # حسابان في نداء واحد ⇒ استعلام قفل واحد لجدول الحسابات، لا اثنان.
+    assert fake.locked.count(AccountModel) == 1
+
+
+def test_25_lock_timeout_is_bounded_and_local_to_the_transaction() -> None:
+    """الطلب العالق يُرفض، ولا يُعلَّق: مهلة محلّية بالمعاملة لا عامّة للاتّصال."""
+    fake = _FakeSession()
+    StateTreasury()._lock_rows(fake, [(BudgetModel, "bdg-1")])
+    assert len(fake.executed) == 1
+    statement, params = fake.executed[0]
+    assert "set_config" in statement and "lock_timeout" in statement
+    assert ":timeout" in statement  # مُمرَّر لا مُدمَج في النصّ
+    assert params == {"timeout": LOCK_TIMEOUT}
+    assert statement.rstrip().endswith("true)")  # `is_local` ⇒ لا يتسرّب للاتّصال
+    assert LOCK_TIMEOUT != "0"
+
+
+def test_26_a_table_outside_the_lock_order_is_refused_as_a_programming_fault() -> None:
+    """جدولٌ بلا موضع في الترتيب يفتح باب التوقّف المتبادل، فيُرفض حالًا."""
+    fake = _FakeSession()
+    with pytest.raises(TreasuryError) as exc:
+        StateTreasury()._lock_rows(fake, [(LedgerEntryModel, "led-1")])
+    assert not isinstance(exc.value, TreasuryContentionError)
+    assert "LedgerEntryModel" in str(exc.value)
+    assert fake.locked == []
+
+
+def test_27_lock_timeout_becomes_a_retryable_refusal_and_other_errors_are_not_swallowed() -> None:
+    """55P03 ⇒ رفضٌ يُعاد. وأي رمزٍ آخر يمرّ كما هو: لا يُبلَع خطأٌ مجهول."""
+    fake = _FakeSession(raise_code=PG_LOCK_NOT_AVAILABLE)
+    with pytest.raises(TreasuryContentionError) as exc:
+        StateTreasury()._lock_rows(fake, [(AllocationModel, "alc-1")])
+    assert "state_allocations" in str(exc.value)
+    assert fake.rolled_back == 1
+
+    other = _FakeSession(raise_code="40001")  # فشل تسلسل: ليس تعذُّر قفل
+    with pytest.raises(DBAPIError):
+        StateTreasury()._lock_rows(other, [(AllocationModel, "alc-1")])
+    assert other.rolled_back == 0
+
+    # ومسار الترجمة في الواجهة: حالة عابرة قابلة لإعادة المحاولة، لا خطأ طلب.
+    response = _http(TreasuryContentionError("مقفول"))
+    assert response.status_code == 503
+    assert response.headers == {"Retry-After": "1"}
+    assert _http(BudgetExceededError("تجاوز")).status_code == 409
+
+
+def test_28_every_read_then_write_check_locks_before_it_reads() -> None:
+    """القفل قبل القراءة لا بعدها — يُفحص موضعه في الشيفرة لا وجوده فقط."""
+
+    def _body(func: object) -> str:
+        return _strip_comments(inspect.getsource(func))
+
+    def _before(body: str, first: str, second: str) -> bool:
+        i, j = body.find(first), body.find(second)
+        assert i != -1, first
+        assert j != -1, second
+        return i < j
+
+    allocate = _body(StateTreasury.allocate)
+    assert _before(allocate, "_lock_rows(", "_allocated_total(")
+
+    disburse = _body(StateTreasury.disburse)
+    assert _before(disburse, "_lock_rows(", "_spent_on_allocation(")
+    assert _before(disburse, "_lock_rows(", "_account_balance(")
+
+    post = _body(StateTreasury._post)
+    assert _before(post, "_lock_rows(", "session.add(tx)")
+
+    reverse = _body(StateTreasury.reverse_transaction)
+    assert _before(reverse, "_lock_rows(", 'original.status != "posted"')
+
+    # وبعد القفل تُعاد قراءة الحالة: انتظارُ منافسٍ يُبطِل ما قُرئ قبله.
+    assert allocate.count("budget.status") >= 2
+    assert disburse.count("allocation.status") >= 2
+
+
+def test_29_locking_does_not_reintroduce_a_stored_total_or_a_sql_sum() -> None:
+    """القفل تسلسلٌ لا عدّاد: لا عمود مجموع دخل، ولا `SUM` في SQL ظهر."""
+    source = _strip_comments((SRC / "services" / "state_treasury" / "service.py").read_text())
+    assert "func.sum" not in source
+    models_source = _strip_comments((SRC / "services" / "state_treasury" / "models.py").read_text())
+    for forbidden in ("balance = Column", "spent = Column", "allocated = Column"):
+        assert forbidden not in models_source
+    # والقفل مأخوذ بـ`FOR UPDATE` تحديدًا: البديل الأضعف لا يمنع إدخال ابنٍ
+    # تحت صفٍّ مقفول، فوجودُه هنا يعني ضمانًا أقلّ ممّا تقوله الوثيقة.
+    assert "with_for_update()" in source
+    assert "FOR NO KEY UPDATE" not in source

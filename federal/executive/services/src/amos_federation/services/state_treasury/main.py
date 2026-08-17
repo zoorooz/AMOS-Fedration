@@ -68,6 +68,7 @@ from amos_federation.services.state_treasury.service import (
     OfficialNotFoundError,
     TransactionNotFoundError,
     TransactionReversedError,
+    TreasuryContentionError,
     TreasuryError,
     TreasuryNotFoundError,
     get_state_treasury,
@@ -189,6 +190,12 @@ def _http(exc: Exception) -> HTTPException:
         | OfficialNotFoundError,
     ):
         return HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc))
+    if isinstance(exc, TreasuryContentionError):
+        # حالة عابرة لا خطأ في الطلب: صفوفه مقفولة الآن من طلبٍ منافس. تُعاد
+        # بـ503 مع `Retry-After` لأن نفس الطلب يمرّ بعد لحظة بلا تعديل.
+        return HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc), headers={"Retry-After": "1"}
+        )
     if isinstance(
         exc,
         DuplicateCodeError
