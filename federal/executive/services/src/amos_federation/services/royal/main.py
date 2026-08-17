@@ -23,7 +23,7 @@ from amos_federation.common.auth import (
     require_king,
 )
 from amos_federation.common.config import PLACEHOLDER_SECRETS, settings
-from amos_federation.common.database import get_database_url
+from amos_federation.common.database import connect_args, get_database_url
 from amos_federation.common.service import create_service_app
 
 router = APIRouter(prefix="/v1", tags=["royal"])
@@ -34,13 +34,13 @@ KING_USERNAME = "king"
 
 def _get_pg_engine():
     url = get_database_url()
-    connect_args = {}
-    if url.startswith("postgresql"):
-        connect_args = {"sslmode": "require", "connect_timeout": 15}
-    else:
-        connect_args = {"check_same_thread": False}
+    # المصدر الواحد لمعاملات الاتّصال (database.connect_args)، لا نسخةٌ رابعة.
     return create_engine(
-        url, connect_args=connect_args, pool_pre_ping=True, pool_size=3, max_overflow=5
+        url,
+        connect_args=connect_args(url),
+        pool_pre_ping=True,
+        pool_size=3,
+        max_overflow=5,
     )
 
 

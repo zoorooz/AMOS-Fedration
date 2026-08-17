@@ -7,12 +7,13 @@
 """
 
 import json as _json
+import pathlib
 
 import pytest
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 
-from amos_federation.common import auth, events
+from amos_federation.common import auth, database, events
 from amos_federation.common.database import (
     DIALECT_POSTGRES,
     DIALECT_SQLITE,
@@ -180,7 +181,11 @@ class TestDatabaseHelpers:
         args = _pg_connect_args()
         assert args == {"check_same_thread": False}
 
-    def test_pg_connect_args_postgres_branch(self) -> None:
+    def test_pg_connect_args_postgres_branch(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # الافتراضُ يُقاس بعد تنظيف البيئة: هذا الاختبار كان يقرأ بيئةَ المُشغِّل،
+        # فلو صدَّر مُشغِّلٌ AMOS_DB_SSLMODE سقط الاختبارُ ولا عيبَ في الكود.
+        monkeypatch.delenv("AMOS_DB_SSLMODE", raising=False)
+        monkeypatch.delenv("AMOS_DB_CONNECT_TIMEOUT", raising=False)
         args = _pg_connect_args("postgresql://user:pw@host:5432/db")
         assert args["sslmode"] == "require"
         assert args["connect_timeout"] == 15
@@ -420,3 +425,54 @@ class TestEventSchemas:
 
     def test_has_required_fields_non_dict(self) -> None:
         assert _has_required_fields({"required": ["a"]}, 42) is False
+
+
+class TestConnectArgsHaveOneSource:
+    """معاملاتُ الاتّصال تُقرأ من موضعٍ واحد، ولا تُكتَب `sslmode` بيدٍ في مُنشِئٍ.
+
+    ثلاثةُ مُنشِئي محرّكٍ كانوا يكتبون `{"sslmode": "require"}` بأيديهم، فكان
+    المستودعُ يُلزم TLS حتى على حاويةٍ محليّةٍ لا TLS لها، فتسقط حزمةُ
+    PostgreSQL في CI بـ«server does not support SSL, but SSL was required»
+    قبل أن يُنفَّذ اختبارٌ واحد. والحارسُ نصّيٌّ لأنّ العيبَ نصّيٌّ: نسخةٌ رابعةٌ
+    مكتوبةٌ بيدٍ تعيد العيبَ ولو نجحت كلُّ الاختبارات السلوكيّة.
+    """
+
+    _BUILDERS = (
+        "amos_federation/common/event_bus.py",
+        "amos_federation/common/durable_event_bus.py",
+        "amos_federation/services/royal/main.py",
+    )
+
+    def _src_root(self):
+        import amos_federation
+
+        return pathlib.Path(amos_federation.__file__).resolve().parent.parent
+
+    def test_only_database_module_names_sslmode(self) -> None:
+        root = self._src_root()
+        offenders = [
+            rel for rel in self._BUILDERS if '"sslmode"' in (root / rel).read_text("utf-8")
+        ]
+        assert offenders == []
+
+    def test_database_module_is_the_single_source(self) -> None:
+        text = (self._src_root() / "amos_federation/common/database.py").read_text("utf-8")
+        assert text.count('"sslmode"') == 1
+
+    def test_public_connect_args_honours_sslmode_override(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("AMOS_DB_SSLMODE", "disable")
+        args = database.connect_args("postgresql://u:p@localhost:5432/d")
+        assert args["sslmode"] == "disable"
+
+    def test_public_connect_args_defaults_to_require_for_postgres(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("AMOS_DB_SSLMODE", raising=False)
+        args = database.connect_args("postgresql://u:p@host/d")
+        assert args["sslmode"] == "require"
+
+    def test_public_connect_args_gives_sqlite_thread_flag_not_ssl(self) -> None:
+        args = database.connect_args("sqlite:///./x.db")
+        assert args == {"check_same_thread": False}

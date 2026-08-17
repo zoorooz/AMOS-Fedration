@@ -425,7 +425,14 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
+      # fetch-depth: 0 لازمٌ لا زينة: حزمة root-core تشمل
+      # tests/governance/test_identity_law.py، وخاتمُ الهوية يقرأ «تاريخ آخر
+      # تعديل» من `git log -1 -- <path>`. وفي استنساخٍ ضحلٍ (عمق 1) يرى الخاتمُ
+      # التزامًا واحدًا فيظنّ كلَّ ملفٍّ مُعدَّلًا اليوم، فتُعلن 228 بطاقةٍ
+      # مخالِفةً وهي صحيحة. أُعيد إنتاجُ ذلك محليًّا باستنساخٍ ضحلٍ للتأكّد.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -442,6 +449,10 @@ jobs:
         env:
           AMOS_RUN_POSTGRES_TESTS: "1"
           AMOS_TEST_DATABASE_URL: postgresql://postgres:amos_ci@localhost:5432/amos_federation_ci
+          # حاويةُ postgres:17 هنا بلا TLS، والمستودعُ يطلب SSL افتراضًا لأنّ
+          # الإنتاجَ على Supabase يوجبه. فالتخفيضُ محصورٌ في هذه القاعدةِ
+          # الزائلةِ على localhost، ولا يمسّ الافتراضَ في الكود (require).
+          AMOS_DB_SSLMODE: disable
         run: python tools/governance/verify_cross_system_suites.py
       # لا يُقارَن الملفُ حرفًا بحرف: الوثيقة المولَّدة تحمل طابعًا زمنيًّا
       # («آخر توليد») ومددًا بالثواني تختلف في كلّ تشغيل، فبوابةٌ تطلب

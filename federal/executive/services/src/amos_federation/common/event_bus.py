@@ -16,7 +16,7 @@ from typing import Any
 from sqlalchemy import Column, DateTime, Integer, String, Text, create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-from amos_federation.common.database import get_database_url
+from amos_federation.common.database import connect_args, get_database_url
 
 
 class EventBase(DeclarativeBase):
@@ -40,11 +40,15 @@ class EventBus:
 
     def __init__(self) -> None:
         url = get_database_url()
-        connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
-        if url.startswith("postgresql"):
-            connect_args = {"sslmode": "require", "connect_timeout": 15}
+        # معاملات الاتّصال من المصدر الواحد في database.connect_args، فلا يُكتَب
+        # sslmode بيدٍ هنا: كتابتُه بيدٍ كانت تُلزم SSL حتى على حاويةٍ محليّةٍ لا
+        # TLS لها، فتسقط الحزمة بـ«server does not support SSL».
         self._engine = create_engine(
-            url, connect_args=connect_args, pool_pre_ping=True, pool_size=5, max_overflow=10
+            url,
+            connect_args=connect_args(url),
+            pool_pre_ping=True,
+            pool_size=5,
+            max_overflow=10,
         )
         EventBase.metadata.create_all(self._engine)
         self._Session = sessionmaker(bind=self._engine, autoflush=False, expire_on_commit=False)

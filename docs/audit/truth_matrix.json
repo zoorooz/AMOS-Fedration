@@ -54,7 +54,7 @@
       "secret_hits": 0,
       "observed_hits": 0,
       "api_routes": 0,
-      "test_refs": 39,
+      "test_refs": 40,
       "identity_violations": 3,
       "deployed": true,
       "columns": {
@@ -77,13 +77,13 @@
       "md_files": 60,
       "py_files": 208,
       "yaml_files": 3,
-      "code_lines": 56331,
+      "code_lines": 56376,
       "nucleus_count": 7,
       "nucleus_status": {
         "unspecified": 7
       },
       "has_readme": true,
-      "real_source_hits": 196,
+      "real_source_hits": 197,
       "fake_hits": 1,
       "in_memory_hits": 60,
       "secret_hits": 0,
@@ -742,14 +742,14 @@
     {
       "kind": "IN_MEMORY_STORE",
       "path": "federal/executive/services/tests/test_common_branches.py",
-      "line": 39,
+      "line": 40,
       "detail": "مخزن ذاكرة `InMemoryTaskStore` يُستخدم كمصدر حقيقة",
       "severity": "HIGH"
     },
     {
       "kind": "IN_MEMORY_STORE",
       "path": "federal/executive/services/tests/test_common_branches.py",
-      "line": 258,
+      "line": 263,
       "detail": "مخزن ذاكرة `InMemoryTaskStore` يُستخدم كمصدر حقيقة",
       "severity": "HIGH"
     },

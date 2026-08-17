@@ -20,7 +20,7 @@ from typing import Any
 from sqlalchemy import Column, DateTime, Index, Integer, String, Text, create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-from amos_federation.common.database import get_database_url
+from amos_federation.common.database import connect_args, get_database_url
 
 
 class DurableEventBase(DeclarativeBase):
@@ -76,16 +76,11 @@ class DurableEventBus:
 
     def __init__(self) -> None:
         url = get_database_url()
-        connect_args = {}
-        if url.startswith("sqlite"):
-            connect_args = {"check_same_thread": False}
-        elif url.startswith(
-            "postgresql"
-        ):  # pragma: no branch - requires PostgreSQL (production-only)
-            connect_args = {"sslmode": "require", "connect_timeout": 15}
+        # المصدر الواحد لمعاملات الاتّصال؛ لا فرعَ لهجةٍ مكرّرًا هنا ولا
+        # sslmode مكتوبًا بيد (انظر database.connect_args).
         self._engine = create_engine(
             url,
-            connect_args=connect_args,
+            connect_args=connect_args(url),
             pool_pre_ping=True,
             pool_size=5,
             max_overflow=10,
