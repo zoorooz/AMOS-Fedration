@@ -63,9 +63,6 @@ from sqlalchemy import select
 
 from amos_federation.common.database import AgentModel
 from amos_federation.common.principal import DEFAULT_TENANT, assert_tenant
-from amos_federation.services.government_services.authorization import (
-    has_sovereign_authority,
-)
 from amos_federation.services.national_registry.models import (
     GRANTABLE_OPERATIONS,
     AuthorityGrantModel,
@@ -114,6 +111,29 @@ class ForgedAuthorityError(PermissionError):  # noqa: N818 — رفض سلطة،
             f"سلطة غير مُثبتة للمبدأ '{principal_id}': {reason}"
             f" (المُدَّعى: {claimed or 'غير مُعطى'})"
         )
+
+
+
+def has_sovereign_authority(context: Any) -> bool:
+    """يفحص السيادة بتحميلٍ متأخّر لكسر حلقة استيرادٍ حقيقية.
+
+    الحلقة كانت: `national_registry.resolver` → `government_services` (حزمةً،
+    فيُنفَّذ `__init__` فيها) → `government_services.service` →
+    `national_registry.authorization` → `national_registry.resolver` وهي بعدُ
+    نصفَ مُهيّأة، فيرتفع `ImportError: cannot import name 'AuthorityDecision'`.
+
+    ولم تكن الحلقةُ ظاهرةً لأنّ أحدًا لم يستورد `national_registry` **أولًا**:
+    كلُّ مسارٍ قائمٍ يمرّ بـ`government_services` أو `state_registry` قبله فيكتمل
+    التحميلُ ثمّ لا تُغلق الحلقة. وأوّلُ مستهلكٍ يبدأ من هذه الحزمة يكسر.
+
+    والتأخيرُ هنا لا يغيّر سلوكًا: نفسُ الدالّة، ونفسُ النتيجة، وبعد أوّل نداءٍ
+    تكون الوحدةُ في `sys.modules` فلا كلفةَ تحميلٍ متكرّرة.
+    """
+    from amos_federation.services.government_services.authorization import (
+        has_sovereign_authority as _has_sovereign_authority,
+    )
+
+    return _has_sovereign_authority(context)
 
 
 @dataclass(frozen=True, slots=True)

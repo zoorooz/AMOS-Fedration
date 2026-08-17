@@ -88,7 +88,29 @@ def postgres_url(monkeypatch: pytest.MonkeyPatch) -> str:
 # ومنذ R7-B دخل المال في الرسم: `state_transactions` تشير إلى `state_officials`
 # و`tasks` و`state_decisions`، و`state_ledger_entries` تشير إلى الحركات. فصار
 # الأخصّ هو القيد ثم الحركة، وقبل القرار لا بعده.
+#: جداولُ القضاء الفدرالي (R7-D) — من الفرع إلى الأصل.
+#:
+#: `state_court_judges.official_id` يشير إلى `state_officials`، و
+#: `state_ruling_enforcements.task_id` يشير إلى `tasks`، وكلاهما
+#: `ON DELETE RESTRICT`. فحذفُ المسؤولين أو المهامّ قبل هذه الصفوف يرفضه قيدٌ
+#: مفروض — لا عيبًا بل عملَ القيد. والترتيب هنا هو ترتيبُ الحذف الصحيح، ومكانُه
+#: هذا الملفّ وحده حتى لا يُكرَّر في كل ملفّ اختبار.
+JUDICIARY_TABLES: tuple[str, ...] = (
+    "state_ruling_enforcements",
+    "state_rulings",
+    "state_case_proceedings",
+    "state_case_evidence",
+    "state_case_claims",
+    "state_case_parties",
+    "state_legal_cases",
+    "state_court_judges",
+    "state_courts",
+)
+
+
 AGENT_DEPENDENT_TABLES: tuple[str, ...] = (
+    # R7-D: القضاء أوّلًا — تقليدُ القاضي يشير إلى `state_officials`.
+    *JUDICIARY_TABLES,
     # R7-C: إسناد القرار والحركة يشير إلى صفوفهما بمفتاحٍ مفروض، وشغل المناصب
     # يشير إلى `state_officials` — فالحذف يبدأ من الفروع لا من الأصول.
     "state_transaction_authority",
@@ -108,6 +130,8 @@ AGENT_DEPENDENT_TABLES: tuple[str, ...] = (
 #: تنفيذ مهمّة تحمل `task_id`، فحذف صفوف المهامّ قبلها يرفضه القيد.
 #: و`state_allocations` قبل `state_decisions` لأن التخصيص قد يشير إلى قرار.
 TASK_DEPENDENT_TABLES: tuple[str, ...] = (
+    # R7-D: أثرُ تنفيذ الحكم يحمل `task_id` بمفتاحٍ مفروض.
+    *JUDICIARY_TABLES,
     "state_transaction_authority",
     "state_decision_provenance",
     "state_ledger_entries",

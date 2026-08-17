@@ -491,6 +491,149 @@ EVENT_CONTRACTS = {
             "audit_id",
         ],
     },
+    # === R7-D: القضاء الفدرالي — مفردةٌ واحدة `amos_federation.judiciary.*` ===
+    #
+    # ولا يُلمَس `amos_federation.judicial.*` القديم الذي ينشره `JudicialBranch`
+    # في `services/governance/federation.py`: ذاك تحكيمٌ غير رسميّ بين الوكلاء
+    # (قاضيه نصٌّ حرّ) بلا عقدٍ هنا، وخلطُه بأحداث القضاء الكانوني كان سيجعل
+    # مستهلكًا واحدًا يرى النوعين سواءً. فالاسمان مفترقان بقصد.
+    #
+    # وكل عقدٍ يُلزم معرّف الكيان و`actor`، وأحداثُ القضية تُلزم `case_id`.
+    # و`correlation_id` و`timestamp` عمودان في `EventRecord` يضيفهما الناقل.
+    "amos_federation.judiciary.court_registered": {
+        "required_fields": ["court_id", "code", "jurisdiction", "actor"],
+        "optional_fields": [
+            "name",
+            "level",
+            "institution_id",
+            "status",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    "amos_federation.judiciary.court_status_changed": {
+        "required_fields": ["court_id", "code", "status", "reason", "actor"],
+        "optional_fields": [
+            "previous_status",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    "amos_federation.judiciary.judge_appointed": {
+        "required_fields": ["judge_id", "court_id", "official_id", "identity_id", "actor"],
+        "optional_fields": [
+            "position_id",
+            "title",
+            "status",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    "amos_federation.judiciary.judge_status_changed": {
+        "required_fields": ["judge_id", "court_id", "status", "reason", "actor"],
+        "optional_fields": [
+            "previous_status",
+            "identity_id",
+            "official_id",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    "amos_federation.judiciary.case_opened": {
+        "required_fields": ["case_id", "reference", "court_id", "jurisdiction", "actor"],
+        "optional_fields": [
+            "case_type",
+            "status",
+            "opened_by_identity_id",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    "amos_federation.judiciary.case_assigned": {
+        "required_fields": ["case_id", "judge_id", "court_id", "actor"],
+        "optional_fields": [
+            "reference",
+            "status",
+            "identity_id",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    "amos_federation.judiciary.proceeding_recorded": {
+        "required_fields": ["proceeding_id", "case_id", "proceeding_type", "sequence", "actor"],
+        "optional_fields": [
+            "actor_identity_id",
+            "status",
+            "summary",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    "amos_federation.judiciary.evidence_submitted": {
+        "required_fields": ["evidence_id", "case_id", "evidence_type", "actor"],
+        "optional_fields": [
+            "content_hash",
+            "fingerprint_algo",
+            "status",
+            "submitted_by_identity_id",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    "amos_federation.judiciary.ruling_issued": {
+        "required_fields": ["ruling_id", "case_id", "court_id", "judge_id", "decision", "actor"],
+        "optional_fields": [
+            "stage",
+            "status",
+            "provenance_class",
+            "judge_identity_id",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    "amos_federation.judiciary.ruling_enforced": {
+        "required_fields": ["enforcement_id", "ruling_id", "case_id", "kind", "status", "actor"],
+        "optional_fields": [
+            "task_id",
+            "transaction_reference",
+            "detail",
+            "requested_by_identity_id",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    "amos_federation.judiciary.case_closed": {
+        "required_fields": ["case_id", "reference", "reason", "actor"],
+        "optional_fields": [
+            "previous_status",
+            "court_id",
+            "status",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
 }
 
 

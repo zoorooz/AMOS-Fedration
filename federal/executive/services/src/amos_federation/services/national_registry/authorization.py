@@ -34,13 +34,8 @@ AMOS-Federation National Registry — Authorization Boundary
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from amos_federation.services.national_registry.resolver import (
-    AuthorityDecision,
-    ForgedAuthorityError,
-    resolve_authority,
-)
 from amos_federation.services.state_registry.authorization import (
     RegistryAuthorizationError,
     require_domain_permission,
@@ -51,6 +46,32 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
     from amos_federation.common.principal import AuthorizationContext
+    from amos_federation.services.national_registry.resolver import (
+        AuthorityDecision,
+        ForgedAuthorityError,
+    )
+
+#: أسماءٌ تُعاد من `resolver` بتحميلٍ متأخّر — انظر `__getattr__` في آخر الوحدة.
+_RESOLVER_REEXPORTS: tuple[str, ...] = ("AuthorityDecision", "ForgedAuthorityError")
+
+
+def __getattr__(name: str) -> Any:
+    """أعِد تصديرَ أسماء `resolver` بلا استيرادٍ وقت التحميل — كسرُ حلقةٍ حقيقية.
+
+    الحلقة: هذه الوحدة → `resolver` → `government_services` (حزمةً) →
+    `government_services.service` → هذه الوحدة، فتُطلب `AuthorityDecision` من
+    `resolver` وهو بعدُ نصفَ مُهيّأ فيرتفع `ImportError`. ولم تظهر لأنّ كلّ مسارٍ
+    قائمٍ كان يحمّل `government_services` أو `state_registry` أولًا.
+
+    و`__getattr__` على مستوى الوحدة (PEP 562) يحفظ العقد الظاهر: يبقى
+    `from ...authorization import AuthorityDecision` عاملًا كما كان، ويُدفع
+    الاستيرادُ إلى أوّل استعمالٍ فعليّ بعد اكتمال التحميل.
+    """
+    if name in _RESOLVER_REEXPORTS:
+        from amos_federation.services.national_registry import resolver
+
+        return getattr(resolver, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 # === الصلاحيات — من `DEFAULT_ROLES` القائمة حصرًا ===
 
@@ -118,6 +139,8 @@ def require_authority(
         ForgedAuthorityError: ادّعى المُنادي منصبًا لا يشغله.
         ValueError: عملية خارج المفردة — خطأ برمجة لا رفض سلطة.
     """
+    from amos_federation.services.national_registry.resolver import resolve_authority
+
     decision = resolve_authority(
         session,
         context,
