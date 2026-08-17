@@ -101,16 +101,47 @@ GRANT_STATUSES: tuple[str, ...] = ("active", "revoked")
 #: `UNRESOLVED`  : لا هوية كانونية للمبدأ — يُقال ولا يُختلق.
 PROVENANCE_CLASSES: tuple[str, ...] = ("PROVEN", "PARTIAL", "UNRESOLVED")
 
-#: العمليات التي تُمنَح لمنصب. أسماؤها **هي نفسها** أسماء العمليات المفحوصة في
-#: `state_treasury/authorization.py::OFFICE_BOUND_OPERATIONS` و`gov.case.decide`
-#: في `government_services`. لا اسم مُختَرع، ويحرس اختبارٌ ساكن هذا التطابق.
-GRANTABLE_OPERATIONS: tuple[str, ...] = (
+#: عمليات الخزانة والقضاء — مفردة R7-B/R7-C/R7-D الأصلية. أسماؤها **هي نفسها**
+#: أسماء العمليات المفحوصة في `state_treasury/authorization.py::
+#: OFFICE_BOUND_OPERATIONS` و`gov.case.decide` في `government_services`.
+#: لا اسم مُختَرع، ويحرس اختبارٌ ساكن هذا التطابق.
+FISCAL_JUDICIAL_OPERATIONS: tuple[str, ...] = (
     "treasury.funding.post",
     "treasury.allocation.create",
     "treasury.disbursement.post",
     "treasury.transaction.reverse",
     "gov.case.decide",
 )
+
+#: عمليات الدولة الاقتصادية (R9). تُضاف إلى **المفردة الكانونية نفسها** ولا
+#: تُنشئ مفردةً ثانية ولا جدول مِنَحٍ ثانيًا ولا محرّك تخويلٍ ثانيًا: كلُّ واحدة
+#: منها تُحسَم بـ`resolve_authority` عبر `state_authority_grants` كسائر العمليات.
+#:
+#: - `economy.*.register`  : تسجيلُ كيانٍ اقتصاديّ في السجل الوطني.
+#: - `economy.policy.*`    : إصدارُ سياسةٍ ثمّ تنفيذُها — فعلان منفصلان بقصد،
+#:                           فالسياسةُ لا تصبح نافذةً بمجرّد وجود صفّها.
+#: - `economy.expenditure.authorize` : إجازةُ إنفاقٍ **قبل** أيّ حركةِ خزانة.
+#: - `economy.grant.authorize` / `economy.subsidy.authorize` : منفصلتان لأن
+#:   إجازة المِنح ليست إجازة الدعم، ولا تُستنتَج إحداهما من الأخرى.
+ECONOMIC_OPERATIONS: tuple[str, ...] = (
+    "economy.entity.register",
+    "economy.program.create",
+    "economy.policy.issue",
+    "economy.policy.activate",
+    "economy.revenue.register",
+    "economy.expenditure.authorize",
+    "economy.grant.authorize",
+    "economy.subsidy.authorize",
+    "economy.asset.register",
+    "economy.liability.register",
+    "economy.procurement.authorize",
+)
+
+#: العمليات التي تُمنَح لمنصب — مفردةٌ **واحدة** مغلقة، مصدرُ قيود `CHECK` في
+#: `state_authority_grants` و`state_transaction_authority` و
+#: `state_government_delegations` جميعًا. توسيعُها في R9 كان بإضافة أسماءٍ لا
+#: بإنشاء مفردةٍ موازية، فبقي المحرّك الكانونيّ واحدًا.
+GRANTABLE_OPERATIONS: tuple[str, ...] = FISCAL_JUDICIAL_OPERATIONS + ECONOMIC_OPERATIONS
 
 #: جداول هذه الوحدة — تُقرأ في الهجرة وفي فحوص المخطَّط.
 NATIONAL_REGISTRY_TABLES: tuple[str, ...] = (
