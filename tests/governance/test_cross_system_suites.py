@@ -196,3 +196,47 @@ class TestGeneratedDocumentHonesty:
         assert "**PASS**" in text
         assert "725" in text
         assert "مُفعّلة" in text
+
+
+class TestFailureIsPubliclyObservable:
+    """سببُ السقوط يُنشَر في تعليقِ GitHub، لأنّ السجلّ محجوبٌ عن غير الموقّعين.
+
+    سجلُّ الوظيفة لا يُقرأ إلاّ بتسجيلِ دخول، والتعليقاتُ (`::error::`) تُرى
+    علنًا. فحارسُ المخرَجِ الذي لا يُقرأ حارسٌ مُعطَّل.
+    """
+
+    def _failed(self) -> gate.SuiteResult:
+        pg = next(s for s in gate.SUITES if s.dialect == gate.DIALECT_POSTGRES)
+        counts = {"passed": 3, "failed": 2}
+        return gate.SuiteResult(
+            suite=pg,
+            exit_code=1,
+            counts=counts,
+            duration_s=2.0,
+            summary_line="2 failed, 3 passed in 4.20s",
+            violations=gate.evaluate(pg, 1, counts),
+            tail="FAILED tests/test_phase1_postgres.py::test_x - AssertionError\nsecond line",
+        )
+
+    def test_annotation_carries_reason_summary_and_output_tail(self) -> None:
+        line = gate.annotation(self._failed())
+        assert line.startswith("::error title=cross-system services-postgres::")
+        assert "رمز الخروج: 1" in line
+        assert "2 failed, 3 passed in 4.20s" in line
+        assert "AssertionError" in line
+        # التعليقُ سطرٌ واحد: أيُّ سطرٍ جديدٍ حقيقيّ يقطعه فيضيع باقيه.
+        assert "\n" not in line
+        assert line.count("%0A") >= 5
+
+    def test_annotation_does_not_let_output_forge_a_new_command(self) -> None:
+        """مخرَجُ pytest قد يحتوي `::` فلا يُترك ليُصنِّع أمرَ مُشغِّلٍ جديدًا."""
+        result = self._failed()
+        result.tail = "FAILED a::b - ::error::مزيّف"
+        line = gate.annotation(result)
+        assert line.count("::error") == 1
+
+    def test_run_result_captures_a_tail_by_default_empty_not_missing(self) -> None:
+        pg = next(s for s in gate.SUITES if s.dialect == gate.DIALECT_POSTGRES)
+        bare = gate.SuiteResult(suite=pg, exit_code=0)
+        assert bare.tail == ""
+        assert gate.TAIL_LINES > 0

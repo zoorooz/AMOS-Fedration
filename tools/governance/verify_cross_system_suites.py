@@ -111,6 +111,9 @@ SUITES: tuple[Suite, ...] = (
     ),
 )
 
+# عددُ أسطر المخرَج التي تُنشر في تعليق السقوط.
+TAIL_LINES = 40
+
 # أنماط ملخّص pytest: «5 passed, 2 skipped in 1.23s» وما يشبهه.
 _SUMMARY_TOKEN = re.compile(
     r"(\d+)\s+(passed|failed|skipped|error|errors|xfailed|xpassed)"
@@ -127,6 +130,9 @@ class SuiteResult:
     duration_s: float = 0.0
     summary_line: str = ""
     violations: list[str] = field(default_factory=list)
+    # آخِرُ سطور مخرَج pytest الفعليّ: تُنشر في تعليق GitHub عند السقوط،
+    # لأنّ سجلّ الوظيفة لا يُقرأ إلاّ بدخول، أمّا التعليقات فتُرى علنًا.
+    tail: str = ""
 
     @property
     def ok(self) -> bool:
@@ -204,7 +210,9 @@ def run_suite(suite: Suite) -> SuiteResult:
         check=False,
     )
     duration = time.monotonic() - started
-    counts, line = parse_summary(proc.stdout + "\n" + proc.stderr)
+    merged = proc.stdout + "\n" + proc.stderr
+    counts, line = parse_summary(merged)
+    lines = [ln.rstrip() for ln in merged.splitlines() if ln.strip()]
     return SuiteResult(
         suite=suite,
         exit_code=proc.returncode,
@@ -212,7 +220,28 @@ def run_suite(suite: Suite) -> SuiteResult:
         duration_s=duration,
         summary_line=line,
         violations=evaluate(suite, proc.returncode, counts),
+        tail="\n".join(lines[-TAIL_LINES:]),
     )
+
+
+def annotation(result: SuiteResult) -> str:
+    """سطرُ `::error::` واحد يحمل سببَ السقوط ومخرَجه الفعليّ.
+
+    GitHub يعرض التعليقات لكلّ زائر ولو لم يدخل، ويحجب سجلّ الوظيفة عن
+    غير الموقّعين. فإنّ لم يُنشَر السببُ هنا بقي الفشلُ غيرَ مرصود، والفشلُ
+    الذي لا يُرى لا يُصلَح.
+    """
+    parts = [
+        f"الحزمة {result.suite.name} ({result.suite.dialect}) سقطت",
+        f"رمز الخروج: {result.exit_code}",
+        f"العدّادات: {result.counts or 'لا ملخّص مقروء'}",
+        f"ملخّص pytest: {result.summary_line or 'لا سطر ملخّص'}",
+    ]
+    parts.extend(f"مخالفة: {v}" for v in result.violations)
+    parts.append("آخِرُ المخرَج:")
+    parts.extend(result.tail.splitlines())
+    body = "%0A".join(part.replace("::", ": ") for part in parts)
+    return f"::error title=cross-system {result.suite.name}::{body}"
 
 
 def render(results: list[SuiteResult], *, pg_present: bool) -> str:
@@ -351,6 +380,8 @@ def main(argv: list[str] | None = None) -> int:
         )
         for violation in result.violations:
             print(f"      ✗ {violation}")
+        if not result.ok:
+            print(annotation(result), flush=True)
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(render(results, pg_present=pg_present), encoding="utf-8")

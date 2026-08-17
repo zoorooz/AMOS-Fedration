@@ -67,12 +67,12 @@
 | `states/` | 47 | 2 | 0 | 32 | 7 | 2 | unspecified=7 |
 | `institutions/` | 19 | 2 | 0 | 89 | 6 | 2 | unspecified=6 |
 | `agents/` | 601 | 4 | 283 | 549 | 11 | 3 | unspecified=11 |
-| `tools/` | 39 | 15 | 2 | 3879 | 12 | 3 | unspecified=12 |
+| `tools/` | 39 | 15 | 2 | 3903 | 12 | 3 | unspecified=12 |
 | `interfaces/` | 14 | 2 | 0 | 30 | 4 | 2 | unspecified=4 |
 | `runtime/` | 20 | 2 | 0 | 71 | 7 | 2 | unspecified=7 |
 | `docs/` | 62 | 2 | 0 | 47 | 7 | 2 | unspecified=7 |
 | `ops/` | 38 | 2 | 0 | 93 | 12 | 1 | unspecified=12 |
-| `tests/` | 14 | 24 | 0 | 6760 | 5 | 1 | unspecified=5 |
+| `tests/` | 14 | 24 | 0 | 6796 | 5 | 1 | unspecified=5 |
 
 ---
 
@@ -186,9 +186,9 @@
 | `federal/executive/services/src/amos_federation/services/governance/policy_engine.py:56` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
 | `federal/executive/services/src/amos_federation/services/governance/policy_engine.py:61` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
 | `federal/executive/services/src/amos_federation/services/tool_registry/store.py:58` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
-| `tools/governance/truth_audit.py:248` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
-| `tools/governance/truth_audit.py:276` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
-| `tools/governance/truth_audit.py:353` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
+| `tools/governance/truth_audit.py:251` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
+| `tools/governance/truth_audit.py:279` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
+| `tools/governance/truth_audit.py:356` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
 
 ### إعلاناتُ «ليست سرًّا» الصريحة (6)
 

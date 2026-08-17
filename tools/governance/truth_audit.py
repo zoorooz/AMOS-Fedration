@@ -235,7 +235,10 @@ class TruthAudit:
 
     # -- أدوات مساعدة -------------------------------------------------------
     def _iter_files(self):
-        for p in self.root.rglob("*"):
+        # الترتيب مُحتَّم قصدًا: `rglob` يُسلِّم بترتيب نظام الملفات، فيختلف بين
+        # جهازٍ وآخر. وبوابة CI تقارن المصفوفة المدفوعة بالمولَّدة حرفًا بحرف،
+        # فترتيبٌ غير محتَّم يعني بوابةً تسقط لاختلاف السطور لا لاختلاف الحقيقة.
+        for p in sorted(self.root.rglob("*")):
             if not p.is_file():
                 continue
             if any(part in SKIP_DIRS or part.endswith(".egg-info") for part in p.parts):
