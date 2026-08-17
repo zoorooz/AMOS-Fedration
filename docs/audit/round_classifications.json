@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "identity": {
+    "purpose": "تصنيفاتُ الحقيقة المُعلَنة لكل جولة تدقيق (REAL / PARTIAL / UNRESOLVED / UNAVAILABLE / UNOBSERVED)",
+    "scope": "docs/audit/",
+    "owner": "docs/audit/ — ديوان تدقيق الدولة",
+    "created": "2026-08-17",
+    "rule": "لا يُرفَع تصنيفٌ إلا بدليلٍ مُلاحَظٍ فعليًا. هذا الملف مصدرُ القسم «تصنيفات الجولات» في TRUTH_MATRIX.md"
+  },
+  "rounds": [
+    {
+      "round": "R8",
+      "title": "تكاملُ الدولة الاتحادية (federal_state)",
+      "reference": "docs/audit/R8_FEDERAL_STATE_INTEGRATION.md §19",
+      "claims": [
+        {
+          "area": "سجلّ الحكومات وهويتُها ودورةُ حياتها",
+          "classification": "REAL",
+          "evidence": "جداولٌ وقيودٌ مُلاحَظةٌ على PostgreSQL 18.4 محليًّا و17.6 على Supabase + 28 اختبارًا"
+        },
+        {
+          "area": "انتماءُ المؤسّسة لحكومةٍ واحدة",
+          "classification": "REAL",
+          "evidence": "قيدُ `uq_…_institution` مُلاحَظٌ في القاعدة + اختبار"
+        },
+        {
+          "area": "حدودُ النطاق الأربعة",
+          "classification": "REAL",
+          "evidence": "28 اختبارًا في `tests/test_r8_federal_state_integration.py`، منها الحدودُ الأربعة صريحةً"
+        },
+        {
+          "area": "التفويضُ الصريح النافذ",
+          "classification": "REAL",
+          "evidence": "منحٌ/نقضٌ/انتهاءٌ/خصوصيةُ عملية مُختبَرة + قيودُ القاعدة"
+        },
+        {
+          "area": "نطاقُ الخدمة والقضية",
+          "classification": "REAL",
+          "evidence": "فرادةٌ وقيودُ اتساقٍ مُلاحَظةٌ على PostgreSQL"
+        },
+        {
+          "area": "إثباتُ مصدر القضية",
+          "classification": "PARTIAL",
+          "evidence": "بقصد: `PROVEN` يلزمه سلسلةُ إثباتٍ كاملة، والناقصُ يُعلَن ناقصًا"
+        },
+        {
+          "area": "التنفيذُ عبر النواة",
+          "classification": "REAL",
+          "evidence": "مهمّةٌ في `tasks` مُلاحَظة، والمرفوضُ بلا مهمّة"
+        },
+        {
+          "area": "الخزانةُ بنطاقٍ وسقف",
+          "classification": "REAL",
+          "evidence": "حقنًا لا إعادةَ بناءٍ: اختبارٌ عمليٌّ + حَظرٌ ساكنٌ للنسخ"
+        },
+        {
+          "area": "صفوفُ ما قبل R8 غيرِ المرتبطة بحكومة",
+          "classification": "UNRESOLVED",
+          "evidence": "مُعلَنٌ: لا ترحيلَ بياناتٍ مُختَرعًا"
+        },
+        {
+          "area": "سلسلةُ الترحيلات كاملةً",
+          "classification": "UNAVAILABLE",
+          "evidence": "تصنيفُ R8 كما أُعلن حينَه: عطلُ `004` كان قائمًا. أُصلح لاحقًا في R9 — انظر أدناه"
+        },
+        {
+          "area": "GitHub CI",
+          "classification": "UNOBSERVED",
+          "evidence": "لم تُشاهَد جولةٌ فعلية"
+        },
+        {
+          "area": "Modal / E2B",
+          "classification": "UNOBSERVED",
+          "evidence": "لم يُلاحَظ تشغيلٌ حقيقيّ"
+        },
+        {
+          "area": "النفاذُ القانونيُّ خارج النظام",
+          "classification": "UNAVAILABLE",
+          "evidence": "لا يُدَّعى"
+        }
+      ]
+    },
+    {
+      "round": "R9",
+      "title": "إصلاحُ عطل 004 وفشلِ matplotlib وإعادةُ الانحدار",
+      "reference": "docs/audit/ACTIVE_EXECUTION_STATE.md §22",
+      "claims": [
+        {
+          "area": "سلسلةُ الترحيلات 001→010 على قاعدةٍ نظيفة",
+          "classification": "REAL",
+          "evidence": "مُلاحَظ: تطبيقُ الملفات العشرة بالترتيب على قاعدةٍ فارغة `amos_chain` على PostgreSQL 18.4 محليًّا، 10/10 OK بلا خطأ، بعد إعادةِ كتابة `migrations/004_unify_tasks_schema.sql`"
+        },
+        {
+          "area": "سببُ عطل 004",
+          "classification": "REAL",
+          "evidence": "مُلاحَظ: `001_init.sql` يمنح المفاتيحَ الأولية نوعَ UUID مع عمودِ هويةٍ منطقيٍّ VARCHAR منفصل، بينما نماذجُ ORM في `common/database.py` تستخدم `id VARCHAR` وحدَه، فتفشل مفاتيحُ الإحالة بـ «incompatible types: uuid and character varying»"
+        },
+        {
+          "area": "توافقُ القاعدة المبنيّة بالسلسلة مع نماذج ORM",
+          "classification": "REAL",
+          "evidence": "مُلاحَظ: تحقُّقُ تطابقِ الأعمدة 7/7 نماذج (agents, tasks, tools, experiences, memories, reviews, audit_entries) وكتابةٌ وقراءةٌ فعليةٌ عبر ORM على القاعدة المبنيّة بالسلسلة بلا `create_all`"
+        },
+        {
+          "area": "قابليةُ إعادة تشغيل 004→010",
+          "classification": "REAL",
+          "evidence": "مُلاحَظ: إعادةُ تطبيق 004 حتى 010 على القاعدة نفسِها نجحت (idempotent)"
+        },
+        {
+          "area": "قابليةُ إعادة تشغيل 001 و002",
+          "classification": "PARTIAL",
+          "evidence": "مُلاحَظ: `001` و`002` تفشلان عند إعادة التشغيل بعد التوحيد («column \"agent_id\" does not exist») لأنهما نصّا تهيئةٍ ابتدائيّان غيرُ متكافئَي التطبيق. يُعلَن ولا يُخفى"
+        },
+        {
+          "area": "السلسلةُ على PostgreSQL خارجيّ (Supabase)",
+          "classification": "UNOBSERVED",
+          "evidence": "قاعدةُ Supabase التجريبية مبنيّةٌ أصلًا بشكل ORM وليست فارغة، فلم تُطبَّق السلسلةُ عليها من الصفر. قيودُ 010 وحدَها هي المُلاحَظةُ هناك (PostgreSQL 17.6)"
+        },
+        {
+          "area": "اعتمادُ matplotlib لأداة chart_generate",
+          "classification": "REAL",
+          "evidence": "مُصلَحٌ في المصدر: أُضيفت `matplotlib>=3.9.0` إلى `dependencies` في `federal/executive/services/pyproject.toml`؛ كانت مُستخدَمةً في `tool_registry/sandbox.py` وغيرَ مُعلَنة"
+        },
+        {
+          "area": "الانحدارُ الكامل للاختبارات",
+          "classification": "REAL",
+          "evidence": "مُلاحَظ: 1040 ناجحًا، 25 مُتخطًّى، 0 فاشل (‏320 ثانية) على Python 3.14 بعد حذف `amos_federation_test.db`؛ خطُّ الأساس السابق كان 1038 ناجحًا و2 فاشلَين"
+        },
+        {
+          "area": "ترحيلُ بيانات صفوف ما قبل R8",
+          "classification": "UNRESOLVED",
+          "evidence": "لم يُنفَّذ في R9 ولا يُدَّعى"
+        },
+        {
+          "area": "GitHub CI",
+          "classification": "UNOBSERVED",
+          "evidence": "لم تُشاهَد جولةٌ فعلية في R9 كذلك"
+        },
+        {
+          "area": "بوابةُ عدم التراجع (truth_audit --ratchet)",
+          "classification": "REAL",
+          "evidence": "مُلاحَظ: كانت البوابةُ تفشل عند إعادة التوليد (100 ← 118) لأن خطَّ الأساس لم يُحدَّث منذ f1e69eb. صارت 97 مخالفةً بعد الإصلاح في المصدر، وشُدَّ خطُّ الأساس إلى 97"
+        },
+        {
+          "area": "سبعُ مخالفات HARDCODED_SECRET المُكتشَفة",
+          "classification": "REAL",
+          "evidence": "مُلاحَظٌ أنها إنذاراتٌ كاذبة: ستٌّ منها قيمٌ مُختَرَعةٌ في اختبارٍ سلبيٍّ يُثبت أن الصندوق لا يُورّث أسرارَ المضيف، وواحدةٌ عضوُ تعدادٍ يُسمّي نفسَه `TOKEN_VERIFIED`. أُصلح المُكتشِف: عضوُ التعداد لا يُعَدُّ سرًّا، والقيمُ الاختبارية تحتاج إعلانًا صريحًا بالعلامة `truth-audit: not-a-secret` ويُنشَر كلُّ إعلانٍ في المصفوفة"
+        },
+        {
+          "area": "أحدَ عشرَ معالِجَ استثناءٍ صامتًا",
+          "classification": "REAL",
+          "evidence": "مُصلَحٌ في المصدر: أُضيف `logger.warning` صريحٌ في 13 موضعًا (subsystem_boundary, federal_state/delegation, governance/security, national_registry/resolver, tool_registry/authorized_execution ×2, e2b_provider, modal_provider ×2, network, selection, sandbox ×2). SILENT_FALLBACK: 40 ← 26"
+        },
+        {
+          "area": "أثرُ الإصلاحات على الاختبارات",
+          "classification": "REAL",
+          "evidence": "مُلاحَظ: الانحدارُ الكامل بعد الإصلاحات 1040 ناجحًا · 25 مُتخطًّى · 0 فاشل (325 ثانية)"
+        }
+      ]
+    }
+  ]
+}

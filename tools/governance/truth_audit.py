@@ -88,6 +88,9 @@ SECRET_NAME_EXEMPT = re.compile(
 )
 # ملفات معفاة من فحص الأسرار (أدوات الفحص نفسها تذكر أسماء الأنماط)
 SECRET_SCAN_EXEMPT_FILES = {"truth_audit.py", "check_repository_identity.py"}
+# إعلانٌ صريحٌ في المصدر بأن القيمة ليست سرًّا (لقيم اختبارٍ سلبيّةٍ مُختَرَعة).
+# لا يُسكِت الفحصَ بصمت: كلُّ إعلانٍ يُعَدُّ ويُنشَر في مصفوفة الحقيقة.
+SECRET_DECLARATION_MARKER = "truth-audit: not-a-secret"
 SECRET_SAFE_VALUE = re.compile(
     r"^(os\.|env|getenv|\$\{|<|change[_-]?me$|xxx|placeholder|example|\*+$)",
     re.IGNORECASE,
@@ -225,6 +228,8 @@ class TruthAudit:
         self.root = root
         self.reports: dict[str, DomainReport] = {d: DomainReport(d) for d in DOMAINS}
         self.global_findings: list[Finding] = []
+        # إعلاناتُ «ليست سرًّا» الصريحةُ في المصدر — تُنشَر ولا تُخفى
+        self._declared_exemptions: list[tuple[str, int, str]] = []
         self.test_corpus = ""
         self.deploy_corpus = ""
 
@@ -348,7 +353,7 @@ class TruthAudit:
         except SyntaxError:
             return
 
-        self._scan_secrets_ast(tree, rel, rep)
+        self._scan_secrets_ast(tree, rel, rep, lines)
 
         for node in ast.walk(tree):
             # ثابت على مستوى الوحدة يمثّل "حقيقة" تشغيلية
@@ -425,9 +430,20 @@ class TruthAudit:
         v = node.value.strip()
         return bool(v) and len(v) >= 6 and not SECRET_SAFE_VALUE.match(v)
 
-    def _scan_secrets_ast(self, tree: ast.AST, rel: str, rep: DomainReport):
+    def _declared_not_secret(self, node, lines: list[str]) -> bool:
+        """أُعلن صراحةً في المصدر أن القيمة ليست سرًّا؟ يُعَدُّ الإعلانُ ويُنشَر."""
+        start = getattr(node, "lineno", 0)
+        end = getattr(node, "end_lineno", None) or start
+        # يُقبل الإعلانُ داخل مدى العقدة أو في تعليقٍ يعلوها بثلاثة أسطر كأكثر
+        seg = "\n".join(lines[max(start - 4, 0):end])
+        return SECRET_DECLARATION_MARKER in seg
+
+    def _scan_secrets_ast(
+        self, tree: ast.AST, rel: str, rep: DomainReport, lines: list[str] | None = None
+    ):
         if Path(rel).name in SECRET_SCAN_EXEMPT_FILES:
             return
+        lines = lines or []
         for node in ast.walk(tree):
             # x = "secret"  /  x: str = "secret"
             targets = []
@@ -440,6 +456,13 @@ class TruthAudit:
             for tgt in targets:
                 name = getattr(tgt, "id", None) or getattr(tgt, "attr", None)
                 if name and self._is_secret_name(name) and self._is_unsafe_secret_value(value):
+                    # عضوُ تعدادٍ يُسمّي نفسَه (`TOKEN_VERIFIED = "TOKEN_VERIFIED"`)
+                    # ليس سرًّا: القيمةُ هي الاسمُ نفسُه.
+                    if isinstance(value, ast.Constant) and value.value.strip() == name:
+                        continue
+                    if self._declared_not_secret(node, lines):
+                        self._declared_exemptions.append((rel, node.lineno, name))
+                        continue
                     self._secret_hit(rel, node.lineno,
                                      f"`{name}` قيمة سرية افتراضية مكتوبة داخل الكود", rep)
 
@@ -458,6 +481,9 @@ class TruthAudit:
                     if isinstance(k, ast.Constant) and isinstance(k.value, str) \
                             and self._is_secret_name(k.value) \
                             and self._is_unsafe_secret_value(v):
+                        if self._declared_not_secret(node, lines):
+                            self._declared_exemptions.append((rel, node.lineno, k.value))
+                            continue
                         self._secret_hit(rel, node.lineno,
                                          f"مفتاح `{k.value}` بقيمة سرية ثابتة", rep)
 
@@ -495,6 +521,10 @@ class TruthAudit:
                 for d, r in self.reports.items()
             },
             "findings": [asdict(f) for f in self.global_findings],
+            "declared_not_secret": [
+                {"path": rel, "line": line, "key": name}
+                for rel, line, name in sorted(self._declared_exemptions)
+            ],
             "summary": self.summary(),
         }
 
@@ -512,6 +542,19 @@ class TruthAudit:
             "by_severity": by_sev,
             "by_kind": by_kind,
         }
+
+    def _load_round_classifications(self) -> list[dict]:
+        """قراءةُ تصنيفات الجولات المُعلَنة — مُدخَلٌ يدويٌّ يُقرأ آليًا."""
+        path = self.root / "docs" / "audit" / "round_classifications.json"
+        if not path.exists():
+            return []
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"[TRUTH AUDIT] تعذّرت قراءةُ {path}: {exc}", file=sys.stderr)
+            return []
+        rounds = data.get("rounds", [])
+        return rounds if isinstance(rounds, list) else []
 
     def to_markdown(self) -> str:
         s = self.summary()
@@ -606,9 +649,53 @@ class TruthAudit:
             for f in sorted(items, key=lambda x: (order[x.severity], x.path, x.line)):
                 a(f.as_row())
             a("")
+        if self._declared_exemptions:
+            a("### إعلاناتُ «ليست سرًّا» الصريحة "
+              f"({len(self._declared_exemptions)})")
+            a("")
+            a("> قيمٌ اختباريةٌ مُختَرَعةٌ أُعلن في المصدر صراحةً أنها ليست أسرارًا "
+              f"بالعلامة `{SECRET_DECLARATION_MARKER}`. تُنشَر هنا ولا تُخفى.")
+            a("")
+            a("| الموقع | المفتاح |")
+            a("|---|---|")
+            for rel, line, name in sorted(self._declared_exemptions):
+                a(f"| `{rel}:{line}` | `{name}` |")
+            a("")
         a("---")
         a("")
-        a("## 5. ماذا يعني هذا")
+        a("## 5. تصنيفاتُ الجولات المُعلَنة")
+        a("")
+        rounds = self._load_round_classifications()
+        if not rounds:
+            a("> لا يوجد ملفُّ تصنيفاتٍ مُعلَنة (`docs/audit/round_classifications.json`).")
+            a("")
+        else:
+            a("> المصدر: [`round_classifications.json`](round_classifications.json) — "
+              "يُحرَّر يدويًا ويُقرأ آليًا. "
+              "`REAL` = مُلاحَظٌ فعليًا · `PARTIAL` = جزئيٌّ مُعلَن · "
+              "`UNRESOLVED` = دَينٌ مفتوح · `UNAVAILABLE` = غيرُ متوفّر · "
+              "`UNOBSERVED` = لم يُلاحَظ.")
+            a("")
+            for rnd in rounds:
+                title = str(rnd.get("title", "")).strip()
+                head = str(rnd.get("round", "?")).strip()
+                a(f"### {head}" + (f" — {title}" if title else ""))
+                a("")
+                ref = str(rnd.get("reference", "")).strip()
+                if ref:
+                    a(f"> المرجع: `{ref}`")
+                    a("")
+                a("| المجال | التصنيف | الدليل |")
+                a("|---|---|---|")
+                for claim in rnd.get("claims", []):
+                    area = str(claim.get("area", "")).replace("|", "\\|")
+                    cls = str(claim.get("classification", "")).replace("|", "\\|")
+                    ev = str(claim.get("evidence", "")).replace("|", "\\|")
+                    a(f"| {area} | `{cls}` | {ev} |")
+                a("")
+        a("---")
+        a("")
+        a("## 6. ماذا يعني هذا")
         a("")
         a("كل صف بحالة أقل من `PROVEN` هو **دَين تنفيذي** مفتوح. "
           "خطة Phase E مرتّبة لسداد هذا الدين إقليمًا إقليمًا.")
