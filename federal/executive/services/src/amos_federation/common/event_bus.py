@@ -277,6 +277,85 @@ EVENT_CONTRACTS = {
             "audit_id",
         ],
     },
+    # === عقود السجل الوطني والهوية الكانونية (R7-C) ===
+    #
+    # لا موضوعٌ جديد خارج مفردة `amos_federation.registry.*` القائمة، ولا ناقل
+    # ثانٍ: هذه أحداثٌ على الناقل الدائم نفسه (R7-G). وكل عقدٍ يُلزم معرّف الكيان
+    # و`actor` — فالحدث يُتتبَّع إلى ما تغيَّر ومن غيَّره، لا إلى أحدهما.
+    "amos_federation.registry.identity_created": {
+        "required_fields": ["identity_id", "identity_type", "actor"],
+        "optional_fields": [
+            "status",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    "amos_federation.registry.identity_status_changed": {
+        "required_fields": ["identity_id", "status", "reason", "actor"],
+        "optional_fields": [
+            "previous_status",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    # ربط المبدأ بهويته — الحدث الذي يجعل «من هو المُنادي؟» قابلًا للتتبّع.
+    "amos_federation.registry.principal_linked": {
+        "required_fields": ["link_id", "principal_id", "identity_id", "actor"],
+        "optional_fields": [
+            "binding_source",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    # ربط الوكيل التشغيلي (R3/R4) بهويته — بلا دمج الجدولين.
+    "amos_federation.registry.agent_identity_linked": {
+        "required_fields": ["link_id", "agent_id", "identity_id", "actor"],
+        "optional_fields": ["tenant_id", "actor_role", "session_id", "audit_id"],
+    },
+    "amos_federation.registry.position_created": {
+        "required_fields": ["position_id", "code", "institution_id", "authority_scope", "actor"],
+        "optional_fields": [
+            "department_id",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    # تقليد منصب: ثلاث إشارات معًا (المسؤول والهوية والمنصب) لأن الإسناد يلزمه
+    # الثلاث؛ حدثٌ يحمل اثنتين منها يُنتج سلسلةً ناقصة في التدقيق.
+    "amos_federation.registry.position_granted": {
+        "required_fields": ["assignment_id", "official_id", "identity_id", "position_id", "actor"],
+        "optional_fields": ["tenant_id", "actor_role", "session_id", "audit_id"],
+    },
+    "amos_federation.registry.position_revoked": {
+        "required_fields": ["assignment_id", "official_id", "position_id", "reason", "actor"],
+        "optional_fields": [
+            "identity_id",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    # منح سلطة أو سحبها — `change` يفرّق بينهما في موضوعٍ واحد، فيُقرأ تاريخ
+    # السلطة على منصبٍ واحد بترتيبٍ واحد.
+    "amos_federation.registry.authority_changed": {
+        "required_fields": ["grant_id", "position_id", "operation", "scope", "change", "actor"],
+        "optional_fields": [
+            "reason",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
     # === عقود الخدمات الحكومية (R7-A، الوحدة 2) ===
     #
     # كل عقد قضية يُلزم `task_id` لأن كل قضية في هذه الدولة لها مهمّة حقيقية في
