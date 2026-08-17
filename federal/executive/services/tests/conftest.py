@@ -108,7 +108,26 @@ JUDICIARY_TABLES: tuple[str, ...] = (
 )
 
 
+#: جداولُ الفدرالية/الولاية (R8) — من الفرع إلى الأصل.
+#:
+#: `state_government_operations` تشير إلى `tasks` و`state_transactions`
+#: و`state_officials`، وإسنادُ القضايا يشير إلى `state_cases`، والربطُ يشير إلى
+#: `state_institutions` — كلُّها `ON DELETE RESTRICT`. فحذفُ المهامّ أو الوكلاء أو
+#: القضايا قبل هذه الصفوف يرفضه قيدٌ مفروض. والترتيبُ هنا ترتيبُ الحذفِ الصحيح،
+#: ومكانُه هذا الملفُّ وحده حتى لا يُكرَّر في كل ملفّ اختبار.
+FEDERATION_TABLES: tuple[str, ...] = (
+    "state_government_operations",
+    "state_case_scopes",
+    "state_service_scopes",
+    "state_government_delegations",
+    "state_government_relations",
+    "state_institution_governments",
+)
+
+
 AGENT_DEPENDENT_TABLES: tuple[str, ...] = (
+    # R8: الفدرالية أوّلًا — أثرُ العملية يشير إلى `state_officials` و`tasks`.
+    *FEDERATION_TABLES,
     # R7-D: القضاء أوّلًا — تقليدُ القاضي يشير إلى `state_officials`.
     *JUDICIARY_TABLES,
     # R7-C: إسناد القرار والحركة يشير إلى صفوفهما بمفتاحٍ مفروض، وشغل المناصب
@@ -130,6 +149,8 @@ AGENT_DEPENDENT_TABLES: tuple[str, ...] = (
 #: تنفيذ مهمّة تحمل `task_id`، فحذف صفوف المهامّ قبلها يرفضه القيد.
 #: و`state_allocations` قبل `state_decisions` لأن التخصيص قد يشير إلى قرار.
 TASK_DEPENDENT_TABLES: tuple[str, ...] = (
+    # R8: أثرُ العملية الحكومية يحمل `task_id` بمفتاحٍ مفروض.
+    *FEDERATION_TABLES,
     # R7-D: أثرُ تنفيذ الحكم يحمل `task_id` بمفتاحٍ مفروض.
     *JUDICIARY_TABLES,
     "state_transaction_authority",
