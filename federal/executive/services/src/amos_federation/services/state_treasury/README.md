@@ -38,3 +38,15 @@ federal/executive/services
 
 ## تاريخ الإنشاء
 2026-08-17
+
+## تاريخ آخر تعديل
+2026-08-17
+
+## المحتويات
+- `README.md` — بطاقة هوية هذا المجلد (المادة التاسعة)
+- `__init__.py` — AMOS-Federation State Treasury
+- `authorization.py` — AMOS-Federation State Treasury — Authorization Boundary
+- `main.py` — AMOS-Federation State Treasury — HTTP Interface
+- `models.py` — AMOS-Federation State Treasury — Domain Models
+- `money.py` — AMOS-Federation State Treasury — Money Primitive
+- `service.py` — AMOS-Federation State Treasury — Service Layer

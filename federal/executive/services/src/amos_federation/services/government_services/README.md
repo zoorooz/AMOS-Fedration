@@ -1,10 +1,17 @@
 # government_services — الخدمات الحكومية والقضايا والقرارات
 
-**الهدف:** تشغيل ما تفعله الدولة فعلًا فوق سجلّها: خدمةٌ تُعلَن، قضيةٌ تُفتَح،
+## التعريف
+تشغيل ما تفعله الدولة فعلًا فوق سجلّها: خدمةٌ تُعلَن، قضيةٌ تُفتَح،
 مهمّةٌ تُنفَّذ في العمود التنفيذي، ثم قرارٌ يُسجَّل ويُغلق الملفّ.
-**النطاق:** `federal/executive/services/src/amos_federation/services/government_services`
-**المالك:** `federal/executive/services`
-**تاريخ الإنشاء:** 2026-08-17 (R7-A، الوحدة 2)
+
+## النطاق
+`federal/executive/services/src/amos_federation/services/government_services`
+
+## المالك
+`federal/executive/services`
+
+## تاريخ الإنشاء
+2026-08-17 (R7-A، الوحدة 2)
 
 ## الملفّات
 
@@ -38,3 +45,14 @@
   نفس المرجع يترك مهمّة بلا قضية. المرجع يُفحَص قبل التقديم ويُولَّد عشوائيًّا.
 
 التفصيل الكامل والتصنيفات في `docs/audit/R7_DOMAIN_BUILD.md`.
+
+## تاريخ آخر تعديل
+2026-08-17
+
+## المحتويات
+- `README.md` — بطاقة هوية هذا المجلد (المادة التاسعة)
+- `__init__.py` — AMOS-Federation Government Services
+- `authorization.py` — AMOS-Federation Government Services — Domain Authorization Boundary
+- `main.py` — AMOS-Federation Government Services — HTTP Interface
+- `models.py` — AMOS-Federation Government Services — Domain Models
+- `service.py` — AMOS-Federation Government Services — Service Layer

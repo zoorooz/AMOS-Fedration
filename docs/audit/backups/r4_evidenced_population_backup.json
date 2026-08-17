@@ -1,4 +1,5 @@
 {
+  "$comment": "الهدف: نسخةٌ احتياطيةٌ للصفوف المتأثرة قبل ترحيل R4 — أُضيف هذا الحقلُ وحدَه لإعلان هدف الملف (المادة التاسعة · 2)، ولم يُحرَّر ولا يُحذَف أيُّ صفٍّ أو قيمة.",
   "purpose": "نسخة احتياطية للصفوف المتأثرة قبل تطبيق ترحيل R4 (OPTION 2) على القاعدة الحقيقية",
   "database": "supabase project mqcfmwtdaymrmwvthqyw (PostgreSQL 17.6.1.155)",
   "policy": "OPTION_2_HISTORICAL_EVIDENCE_ONLY",

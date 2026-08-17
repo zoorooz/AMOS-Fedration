@@ -1,4 +1,5 @@
 {
+  "$comment": "الهدف: تصنيفاتُ الحقيقة المُعلَنة لكل جولة تدقيق — يُقرأ آليًّا ولا يُحرَّر إلّا بدليل.",
   "schema_version": 1,
   "identity": {
     "purpose": "تصنيفاتُ الحقيقة المُعلَنة لكل جولة تدقيق (REAL / PARTIAL / UNRESOLVED / UNAVAILABLE / UNOBSERVED)",
