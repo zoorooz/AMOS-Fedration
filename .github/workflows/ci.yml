@@ -124,7 +124,11 @@ jobs:
         with:
           python-version: "3.12"
       - name: تثبيت التبعيات
-        run: pip install pytest pytest-cov
+        # `cryptography` لازمة لا زائدة: قواعد المادة العاشرة تقرأ المرسوم الملكي،
+        # فتستورد `core.constitutional_engine.rules` من `core.sovereignty.crown` وهي
+        # تستند إلى Ed25519. وبغيابها كانت البوابة الأولى تسقط بـ ModuleNotFoundError
+        # قبل أن تُفحص مادة دستورية واحدة — فسقطت الوظيفة لا الدستور.
+        run: pip install pytest pytest-cov cryptography
 
       - name: بوابة 1 — نص الدستور غير مُعدَّل (المادة الخامسة)
         run: python -m core.constitutional_engine.cli verify
