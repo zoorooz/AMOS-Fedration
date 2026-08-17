@@ -63,16 +63,16 @@
 |---|---:|---:|---:|---:|---:|---:|---|
 | `core/` | 65 | 32 | 0 | 9186 | 14 | 2 | unspecified=14 |
 | `royal/` | 51 | 2 | 1 | 92 | 14 | 3 | unspecified=14 |
-| `federal/` | 56 | 203 | 3 | 48962 | 7 | 2 | unspecified=7 |
+| `federal/` | 60 | 208 | 3 | 54443 | 7 | 2 | unspecified=7 |
 | `states/` | 47 | 2 | 0 | 32 | 7 | 2 | unspecified=7 |
 | `institutions/` | 19 | 2 | 0 | 89 | 6 | 2 | unspecified=6 |
 | `agents/` | 601 | 4 | 283 | 549 | 11 | 3 | unspecified=11 |
 | `tools/` | 39 | 15 | 2 | 3879 | 12 | 3 | unspecified=12 |
 | `interfaces/` | 14 | 2 | 0 | 30 | 4 | 2 | unspecified=4 |
 | `runtime/` | 20 | 2 | 0 | 71 | 7 | 2 | unspecified=7 |
-| `docs/` | 60 | 2 | 0 | 47 | 7 | 2 | unspecified=7 |
+| `docs/` | 62 | 2 | 0 | 47 | 7 | 2 | unspecified=7 |
 | `ops/` | 38 | 2 | 0 | 93 | 12 | 1 | unspecified=12 |
-| `tests/` | 14 | 23 | 0 | 6483 | 5 | 1 | unspecified=5 |
+| `tests/` | 14 | 24 | 0 | 6760 | 5 | 1 | unspecified=5 |
 
 ---
 
@@ -196,12 +196,12 @@
 
 | الموقع | المفتاح |
 |---|---|
-| `federal/executive/services/tests/test_r5_multi_provider_sandbox.py:557` | `CLAUDE_API_KEY` |
-| `federal/executive/services/tests/test_r5_multi_provider_sandbox.py:557` | `E2B_API_KEY` |
-| `federal/executive/services/tests/test_r5_multi_provider_sandbox.py:557` | `GITHUB_TOKEN` |
-| `federal/executive/services/tests/test_r5_multi_provider_sandbox.py:557` | `JWT_SECRET` |
-| `federal/executive/services/tests/test_r5_multi_provider_sandbox.py:557` | `KING_LOGIN_SECRET` |
-| `federal/executive/services/tests/test_r5_multi_provider_sandbox.py:557` | `MODAL_TOKEN_SECRET` |
+| `federal/executive/services/tests/test_r5_multi_provider_sandbox.py:560` | `CLAUDE_API_KEY` |
+| `federal/executive/services/tests/test_r5_multi_provider_sandbox.py:560` | `E2B_API_KEY` |
+| `federal/executive/services/tests/test_r5_multi_provider_sandbox.py:560` | `GITHUB_TOKEN` |
+| `federal/executive/services/tests/test_r5_multi_provider_sandbox.py:560` | `JWT_SECRET` |
+| `federal/executive/services/tests/test_r5_multi_provider_sandbox.py:560` | `KING_LOGIN_SECRET` |
+| `federal/executive/services/tests/test_r5_multi_provider_sandbox.py:560` | `MODAL_TOKEN_SECRET` |
 
 ---
 
