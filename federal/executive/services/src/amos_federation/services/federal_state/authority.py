@@ -46,6 +46,7 @@ from amos_federation.services.federal_state.delegation import find_active_delega
 from amos_federation.services.federal_state.scopes import (
     ScopePoint,
     evaluate_boundary,
+    government_chain,
     government_of_institution,
     target_point,
 )
@@ -70,6 +71,29 @@ def _narrow(base: str, other: str) -> str:
     if _CLASSIFICATION_RANK.get(other, 0) < _CLASSIFICATION_RANK.get(base, 0):
         return other
     return base
+
+
+def _delegator_government(
+    session: Session, *, holder: ScopePoint, target: ScopePoint, tenant_id: str
+) -> str | None:
+    """أعِد الحكومةَ التي **تملك** نطاقَ الهدف، فهي وحدها من يصحّ أن تفوّض.
+
+    قاعدتان لا أكثر:
+
+    * هدفٌ في حكومةٍ أخرى → المالكُ حكومةُ الهدف. تفوّض هي داخلًا، ولا يفوّض
+      المستدعي نفسَه.
+    * هدفٌ بمستوى فدراليٍّ وشاغلُ المنصب دونه → المالكُ الجذرُ الفدراليُّ لسلسلة
+      حكومته. فالمستوى الفدراليُّ لا يُنتزَع بالصعود في الشجرة، بل يُعطى.
+
+    وما عدا ذلك `None`: لا مالكَ يُفترَض، فلا تفويضَ يُقرأ.
+    """
+    if target.government_id and target.government_id != holder.government_id:
+        return target.government_id
+    if target.level == "FEDERAL" and holder.level != "FEDERAL" and holder.government_id:
+        chain = government_chain(session, holder.government_id, tenant_id=tenant_id)
+        root = chain[-1] if chain else None
+        return root if root and root != holder.government_id else None
+    return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -200,18 +224,29 @@ def resolve_government_authority(
 
     # الحدُّ رفض. والطريقُ الوحيدُ للعبور صفُّ تفويضٍ نشطٍ حاضر — ولا يوجد طريقٌ
     # بالدور ولا بالعلاقة ولا بموضع الحكومة في الشجرة.
-    if holder.government_id and (target.government_id or target.institution_id):
+    delegator = _delegator_government(session, holder=holder, target=target, tenant_id=tenant_id)
+    if delegator and holder.government_id:
+        # يُقرأ التفويضُ إلى حكومةِ شاغل المنصب، ثمّ إلى مؤسستِه بعينها — والأضيقُ
+        # مقصودٌ: تفويضٌ لمؤسسةٍ واحدةٍ لا يُعمَّم على ولايتها كلِّها.
         delegation = find_active_delegation(
             session,
-            from_government_id=holder.government_id,
-            to_government_id=target.government_id
-            if target.government_id != holder.government_id
-            else None,
-            to_institution_id=target.institution_id if not target.government_id else None,
+            from_government_id=delegator,
+            to_government_id=holder.government_id,
             operation=operation,
+            scope=target.level,
             amount=amount,
             tenant_id=tenant_id,
         )
+        if delegation is None and holder.institution_id:
+            delegation = find_active_delegation(
+                session,
+                from_government_id=delegator,
+                to_institution_id=holder.institution_id,
+                operation=operation,
+                scope=target.level,
+                amount=amount,
+                tenant_id=tenant_id,
+            )
         if delegation is not None:
             return GovernmentAuthority(
                 allowed=True,

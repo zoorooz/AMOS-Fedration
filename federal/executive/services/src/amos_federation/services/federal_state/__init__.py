@@ -37,15 +37,29 @@ from amos_federation.services.federal_state.scopes import (
     ScopePoint,
     evaluate_boundary,
 )
+from amos_federation.services.federal_state.service import (
+    DuplicateGovernmentError,
+    FederalStateGovernment,
+    FederationError,
+    GovernmentNotFoundError,
+    get_federal_state,
+    reset_federal_state,
+)
 
 __all__ = [
     "FEDERAL_STATE_TABLES",
     "BoundaryVerdict",
     "DelegationError",
+    "DuplicateGovernmentError",
+    "FederalStateGovernment",
+    "FederationError",
     "GovernmentAuthority",
     "GovernmentAuthorityError",
+    "GovernmentNotFoundError",
     "ScopePoint",
     "evaluate_boundary",
+    "get_federal_state",
     "require_government_authority",
+    "reset_federal_state",
     "resolve_government_authority",
 ]
