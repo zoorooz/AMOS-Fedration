@@ -76,6 +76,7 @@ from amos_federation.services.government_services.service import (
     get_government_services,
     reset_government_services,
 )
+from amos_federation.services.national_registry.models import DecisionProvenanceModel
 from amos_federation.services.state_registry.service import (
     StateRegistry,
     get_state_registry,
@@ -125,6 +126,8 @@ def _fresh_state() -> None:
     init_db()
     session = get_session_factory()()
     try:
+        # R7-C: إسناد القرار يشير إلى صفّه بـ`ON DELETE RESTRICT`، فيُحذف أولًا.
+        session.query(DecisionProvenanceModel).delete()
         session.query(DecisionModel).delete()
         session.query(CaseModel).delete()
         session.query(ServiceModel).delete()

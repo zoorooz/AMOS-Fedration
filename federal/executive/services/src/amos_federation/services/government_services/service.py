@@ -68,6 +68,13 @@ from amos_federation.services.government_services.models import (
     DecisionModel,
     ServiceModel,
 )
+from amos_federation.services.national_registry.authorization import require_authority
+from amos_federation.services.national_registry.models import DecisionProvenanceModel
+from amos_federation.services.national_registry.resolver import (
+    resolve_identity,
+    resolve_official_for_principal,
+    resolve_positions,
+)
 from amos_federation.services.state_registry.models import (
     DepartmentModel,
     InstitutionModel,
@@ -641,12 +648,44 @@ class GovernmentServices:
                     f"(الحالة المخزَّنة: {case.review_state or 'لم تُعالَج'})"
                 )
 
+            # === R7-C9: من أين تأتي سلطة القرار ===
+            #
+            # قبل R7-C كان `official_id` يُقبل من الطلب ويُفحص وجودُه فقط، فمن
+            # يملك `write:tasks` يقرّر باسم **أيّ** مسؤول قائم. الآن:
+            #
+            # - غير السيادي: المنصب **يُشتقّ من هويته** لا من طلبه. وإن ادّعى
+            #   منصبًا لا يشغله رُفع `ForgedAuthorityError`.
+            # - السيادي (`manage:all`): يمرّ بسلطته كما في R7-A — والتاج لا
+            #   يُشتَرط له منصب — ويُسجَّل قراره `UNRESOLVED` أو `PARTIAL` بحسب
+            #   ما ثبت من هويته، فلا يُدَّعى إسنادٌ لم يُقرأ.
+            sovereign = has_sovereign_authority(context)
             official = None
-            if official_id is not None:
-                official = self._official_row(session, context, official_id)
-            elif case.assigned_official_id is not None:
-                official = self._official_row(session, context, case.assigned_official_id)
+            if sovereign:
+                if official_id is not None:
+                    official = self._official_row(session, context, official_id)
+                elif case.assigned_official_id is not None:
+                    official = self._official_row(session, context, case.assigned_official_id)
+            else:
+                official = resolve_official_for_principal(
+                    session,
+                    context,
+                    institution_id=case.institution_id,
+                    claimed_official_id=official_id,
+                )
             require_office(context, official, institution_id=case.institution_id)
+
+            # سلطةٌ على العملية نفسها: غير السيادي يلزمه مِنحة `gov.case.decide`
+            # لمنصبه في هذه المؤسسة. والصلاحية وحدها لا تكفي — وهذا هو معنى «لا
+            # يقرّر المُنادي سلطته». والسيادي معفى، كما كان في R7-A.
+            if not sovereign:
+                require_authority(
+                    session,
+                    context,
+                    "gov.case.decide",
+                    institution_id=case.institution_id,
+                    department_id=official.department_id if official else None,
+                    claimed_official_id=official.id if official else None,
+                )
             if official is None:
                 # سلطة سيادية بلا منصب: العمود مفتاح أجنبي مُلزَم، فالقول الصادق
                 # أن المسار غير مدعوم اليوم بدل تخزين قرار منسوب إلى منصب مُختَرع.
@@ -669,6 +708,10 @@ class GovernmentServices:
             session.add(decision)
             case.status = "decided"
             case.updated_at = _now()
+            session.flush()
+            provenance = self._record_decision_provenance(
+                session, context, decision=decision, case=case, official=official
+            )
             session.commit()
             entity = self._decision_dict(decision)
             case_entity = self._case_dict(case)
@@ -687,10 +730,79 @@ class GovernmentServices:
                 "official_id": entity["decided_by_official_id"],
                 "task_id": case_entity["task_id"],
                 "task_final_state": entity["task_final_state"],
+                "provenance": provenance["provenance_class"],
+                "identity_id": provenance["identity_id"],
                 "tenant_id": entity["tenant_id"],
             },
         )
-        return {**entity, "case": case_entity, **trace}
+        return {**entity, "case": case_entity, "provenance": provenance, **trace}
+
+    def _record_decision_provenance(
+        self,
+        session,
+        context: AuthorizationContext,
+        *,
+        decision: DecisionModel,
+        case: CaseModel,
+        official: OfficialModel | None,
+    ) -> dict[str, Any]:
+        """اكتب إسناد القرار إلى سلسلته، وصنِّف قوّته بما قُرئ لا بما يُرجى — R7-C9.
+
+        `PROVEN` تلزمها الحلقات كلها صفوفًا: هوية المبدأ، ومنصبٌ نشط لتلك الهوية،
+        وهو نفسه المنصب المنسوب إليه القرار. و`PARTIAL` حين تُعرف الهوية ولا يُقرأ
+        لها منصبٌ في هذا القرار (سلطة سيادية مثلًا). و`UNRESOLVED` حين لا هوية —
+        وهو حال القرارات التي يُصدرها التاج بجلسةٍ غير مربوطة بهوية كانونية.
+        """
+        identity = resolve_identity(session, context)
+        position_id: str | None = None
+        provenance_class = "UNRESOLVED"
+        reason = identity.reason
+
+        if identity.resolved:
+            provenance_class = "PARTIAL"
+            holdings = resolve_positions(
+                session, identity.identity_id or "", tenant_id=self._tenant_of(context)
+            )
+            match = next(
+                (h for h in holdings if official is not None and h.official_id == official.id),
+                None,
+            )
+            if match is not None:
+                position_id = match.position_id
+                provenance_class = "PROVEN"
+                reason = (
+                    "مبدأ ← هوية ← مسؤول ← منصب ← مؤسسة: كل حلقةٍ صفٌّ مقروء"
+                )
+            else:
+                reason = (
+                    "الهوية ثابتة ولا منصبَ نشطًا لها منسوبًا إلى هذا القرار — "
+                    "سلطةٌ من صلاحية دور لا من منصب"
+                )
+
+        row = DecisionProvenanceModel(
+            decision_id=decision.id,
+            principal_id=context.principal_id,
+            identity_id=identity.identity_id,
+            official_id=official.id if official is not None else None,
+            position_id=position_id,
+            institution_id=case.institution_id,
+            provenance_class=provenance_class,
+            reason=reason,
+            session_id=context.session_id,
+            correlation_id=context.correlation_id,
+            tenant_id=case.tenant_id,
+        )
+        session.add(row)
+        return {
+            "decision_id": decision.id,
+            "principal_id": context.principal_id,
+            "identity_id": identity.identity_id,
+            "official_id": official.id if official is not None else None,
+            "position_id": position_id,
+            "institution_id": case.institution_id,
+            "provenance_class": provenance_class,
+            "reason": reason,
+        }
 
     def close_case(self, *, context: AuthorizationContext, reference: str) -> dict[str, Any]:
         """أغلق قضية صدر فيها قرار — ولا تُغلَق قضية بلا قرار."""

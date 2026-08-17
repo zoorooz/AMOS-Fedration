@@ -72,6 +72,11 @@ from amos_federation.common.database import get_session_factory, init_db
 from amos_federation.common.principal import DEFAULT_TENANT
 from amos_federation.services.executive_core.engine import get_executive_core
 from amos_federation.services.government_services.models import CaseModel, DecisionModel
+from amos_federation.services.national_registry.models import TransactionAuthorityModel
+from amos_federation.services.national_registry.resolver import (
+    AuthorityDecision,
+    resolve_official_for_principal,
+)
 from amos_federation.services.state_registry.models import (
     DepartmentModel,
     InstitutionModel,
@@ -87,8 +92,10 @@ from amos_federation.services.state_treasury.authorization import (
     PERMISSIONS_REVERSAL,
     PERMISSIONS_TREASURY_ESTABLISH,
     PERMISSIONS_TREASURY_READ,
+    gate_treasury_operation,
     require_domain_permission,
     require_tenant,
+    require_treasury_authority,
     require_treasury_office,
 )
 from amos_federation.services.state_treasury.models import (
@@ -355,6 +362,110 @@ class StateTreasury:
         require_tenant(context, row.tenant_id)
         return row
 
+    def _authorize_money(
+        self,
+        session,
+        context: AuthorizationContext,
+        operation: str,
+        *,
+        required: tuple[str, ...],
+        grant_required: bool,
+        institution_id: str,
+        claimed_official_id: str | None,
+        budget_id: str | None = None,
+        account_id: str | None = None,
+        amount: Any | None = None,
+    ) -> tuple[OfficialModel | None, AuthorityDecision]:
+        """من يحرّك هذا المال، وبأيّ سلطة؟ — مكانٌ واحد يُجاب فيه (R7-C6/C8).
+
+        مساران، وترتيبهما مقصود:
+
+        - **مسار المِنحة** (`grant_required`): السلطة تُحسم أوّلًا من القاعدة، والمنصب
+          يُقرأ **من قرار السلطة نفسه** لا من جسم الطلب. فمن لا مِنحة له يُرفض
+          رفض تخويل واضحًا، قبل أن يُسأل عن منصب أصلًا.
+        - **مسار الصلاحية** (سيادي): المنصب يُقرأ كما كان في R7-B — توافقًا تامًا
+          مع ما كان يمرّ قبل R7-C — ثمّ يُسجّل أثرُه `PARTIAL`/`UNRESOLVED` لا `PROVEN`.
+          ولا يُمرّر له `claimed_official_id` إلى المُحلّل: سلطته ليست من هوية،
+          فلا يُقاس ادّعاءه بمناصب هويةٍ لا يُشترط أن توجد.
+        """
+        if grant_required:
+            decision = require_treasury_authority(
+                session,
+                context,
+                operation,
+                required=required,
+                grant_required=True,
+                institution_id=institution_id,
+                budget_id=budget_id,
+                account_id=account_id,
+                amount=None if amount is None else str(amount),
+                claimed_official_id=claimed_official_id,
+            )
+            official = resolve_official_for_principal(
+                session,
+                context,
+                institution_id=institution_id,
+                claimed_official_id=decision.official_id,
+            )
+            require_treasury_office(context, official, institution_id=institution_id)
+            return official, decision
+
+        official = self._official_row(session, context, claimed_official_id)
+        require_treasury_office(context, official, institution_id=institution_id)
+        decision = require_treasury_authority(
+            session,
+            context,
+            operation,
+            required=required,
+            grant_required=False,
+            institution_id=institution_id,
+            department_id=official.department_id if official is not None else None,
+            budget_id=budget_id,
+            account_id=account_id,
+            amount=None if amount is None else str(amount),
+            claimed_official_id=None,
+        )
+        return official, decision
+
+    @staticmethod
+    def _record_transaction_authority(
+        session,
+        context: AuthorizationContext,
+        *,
+        transaction: TransactionModel,
+        decision: AuthorityDecision,
+    ) -> None:
+        """اربط الحركة بسلسلة سلطتها في صفّ جانبيّ مفتاحُه الحركة — R7-C8.
+
+        صفّ واحد لكل حركة (`transaction_id` مفتاح أوّليّ)، فلا إسنادان متناقضان
+        لريالٍ واحد. والقرار يُخزّن كما حُسم لا كما يُرجى: `PROVEN` حين أجازته
+        مِنحة منصب، و`PARTIAL`/`UNRESOLVED` حين مرّ بصلاحية سيادية — فلا تُخفى
+        حركةٌ سيادية ولا تُرفّع إلى إسنادٍ لم يُقرأ.
+        """
+        session.add(
+            TransactionAuthorityModel(
+                transaction_id=transaction.id,
+                principal_id=context.principal_id,
+                identity_id=decision.identity_id,
+                official_id=transaction.official_id,
+                position_id=decision.position_id,
+                grant_id=decision.grant_id,
+                scope=decision.scope,
+                operation=decision.operation,
+                authority_class=decision.classification,
+                reason=decision.reason,
+                targets={
+                    **decision.targets,
+                    "transaction_reference": transaction.reference,
+                    "amount": str(transaction.amount),
+                    "currency": transaction.currency,
+                },
+                session_id=context.session_id,
+                correlation_id=context.correlation_id,
+                tenant_id=transaction.tenant_id,
+            )
+        )
+
     def _transaction_row(
         self, session, context: AuthorizationContext, reference: str
     ) -> TransactionModel:
@@ -610,6 +721,7 @@ class StateTreasury:
         decision_id: str | None = None,
         reverses_transaction_id: str | None = None,
         idempotency_key: str | None = None,
+        authority: AuthorityDecision,
     ) -> tuple[TransactionModel, list[LedgerEntryModel]]:
         """اكتب حركة وطرفيها في معاملة واحدة — لا حركة بطرف واحد ولا بلا توازن.
 
@@ -691,6 +803,11 @@ class StateTreasury:
             session.flush()
             for entry in entries:
                 session.add(entry)
+            session.flush()
+            # إسناد السلطة يُكتب في **نفس** المعاملة — فلا حركة ملتزمة بلا من أجازها.
+            self._record_transaction_authority(
+                session, context, transaction=tx, decision=authority
+            )
             session.flush()
             session.commit()
         except IntegrityError as exc:
@@ -954,7 +1071,7 @@ class StateTreasury:
         المجموع المخصَّص يُقرأ من الصفوف، فلا يمكن أن تتجاوز التخصيصات الحدَّ ولو
         دخلت على دفعات. والتخصيص يُنسب إلى منصب قائم في مؤسسة الموازنة.
         """
-        require_domain_permission(
+        grant_required = gate_treasury_operation(
             context, "treasury.allocation.create", PERMISSIONS_ALLOCATION_WRITE
         )
         allocation_amount = require_positive(amount, field="amount")
@@ -966,9 +1083,19 @@ class StateTreasury:
             budget = self._budget_row(session, context, budget_code)
             if budget.status != "open":
                 raise EntityStateError(f"الموازنة '{budget_code}' حالتها '{budget.status}'")
-            official = self._official_row(session, context, official_id)
-            require_treasury_office(context, official, institution_id=budget.institution_id)
             account = self._account_row(session, context, budget.treasury_id, account_code)
+            official, authority = self._authorize_money(
+                session,
+                context,
+                "treasury.allocation.create",
+                required=PERMISSIONS_ALLOCATION_WRITE,
+                grant_required=grant_required,
+                institution_id=budget.institution_id,
+                claimed_official_id=official_id,
+                budget_id=budget.id,
+                account_id=account.id,
+                amount=allocation_amount,
+            )
             self._require_same_currency(
                 ("الموازنة", budget.currency), (f"الحساب '{account_code}'", account.currency)
             )
@@ -1073,7 +1200,9 @@ class StateTreasury:
         الخزانة بلا مؤسسة لا تُموَّل: لا جهة تُسأل عن المال، و`official_id` يجب
         أن يكون منصبًا في مؤسسة الخزانة نفسها.
         """
-        require_domain_permission(context, "treasury.funding.post", PERMISSIONS_FUNDING)
+        grant_required = gate_treasury_operation(
+            context, "treasury.funding.post", PERMISSIONS_FUNDING
+        )
         funding_amount = require_positive(amount, field="amount")
         if not purpose.strip():
             raise TreasuryError("الحركة تلزمها غرض مكتوب")
@@ -1089,11 +1218,19 @@ class StateTreasury:
                 raise EntityStateError(f"الخزانة '{treasury_code}' حالتها '{treasury.status}'")
             if treasury.institution_id is None:
                 raise TreasuryError(f"الخزانة '{treasury_code}' بلا مؤسسة — لا تُموَّل بلا جهة مسؤولة")
-            official = self._official_row(session, context, official_id)
-            require_treasury_office(context, official, institution_id=treasury.institution_id)
-
             cash = self._account_row(session, context, treasury.id, cash_account_code)
             revenue = self._account_row(session, context, treasury.id, revenue_account_code)
+            official, authority = self._authorize_money(
+                session,
+                context,
+                "treasury.funding.post",
+                required=PERMISSIONS_FUNDING,
+                grant_required=grant_required,
+                institution_id=treasury.institution_id,
+                claimed_official_id=official_id,
+                account_id=cash.id,
+                amount=funding_amount,
+            )
             if cash.kind not in ("cash", "reserve"):
                 raise TreasuryError(f"الحساب '{cash_account_code}' ليس نقديًّا ({cash.kind})")
             if revenue.kind != "revenue":
@@ -1110,6 +1247,7 @@ class StateTreasury:
                 debit_account=cash,
                 credit_account=revenue,
                 official=official,
+                authority=authority,
                 reference=reference,
                 institution_id=treasury.institution_id,
                 idempotency_key=idempotency_key,
@@ -1165,7 +1303,9 @@ class StateTreasury:
         ثلاثة حدود مفروضة قبل أي كتابة: التخصيص نشط · المصروف عليه + المبلغ ≤
         مبلغه · ورصيد الحساب النقدي يكفي. وكلها مقروءة من الصفوف لا من عدّاد.
         """
-        require_domain_permission(context, "treasury.disbursement.post", PERMISSIONS_DISBURSE)
+        grant_required = gate_treasury_operation(
+            context, "treasury.disbursement.post", PERMISSIONS_DISBURSE
+        )
         spend = require_positive(amount, field="amount")
         if not purpose.strip():
             raise TreasuryError("الحركة تلزمها غرض مكتوب")
@@ -1189,8 +1329,18 @@ class StateTreasury:
             if treasury.status != "active":
                 raise EntityStateError(f"الخزانة '{treasury.code}' حالتها '{treasury.status}'")
 
-            official = self._official_row(session, context, official_id)
-            require_treasury_office(context, official, institution_id=budget.institution_id)
+            official, authority = self._authorize_money(
+                session,
+                context,
+                "treasury.disbursement.post",
+                required=PERMISSIONS_DISBURSE,
+                grant_required=grant_required,
+                institution_id=budget.institution_id,
+                claimed_official_id=official_id,
+                budget_id=budget.id,
+                account_id=allocation.account_id,
+                amount=spend,
+            )
             if decision_id is not None:
                 self._assert_authorizing_decision(session, context, decision_id, budget)
 
@@ -1248,6 +1398,7 @@ class StateTreasury:
                 debit_account=expense,
                 credit_account=cash,
                 official=official,
+                authority=authority,
                 reference=reference,
                 budget_id=budget.id,
                 allocation_id=allocation.id,
@@ -1351,7 +1502,9 @@ class StateTreasury:
         `unique` على `reverses_transaction_id` يمنع عكسين لحركة واحدة في القاعدة
         نفسها، لا في الذاكرة.
         """
-        require_domain_permission(context, "treasury.transaction.reverse", PERMISSIONS_REVERSAL)
+        grant_required = gate_treasury_operation(
+            context, "treasury.transaction.reverse", PERMISSIONS_REVERSAL
+        )
         if not reason.strip():
             raise TreasuryError("العكس يلزمه سبب مكتوب")
 
@@ -1387,11 +1540,20 @@ class StateTreasury:
                 session.query(AccountModel).filter(AccountModel.id == debit_entry.account_id).one()
             )
 
-            official = self._official_row(session, context, official_id)
             institution_id = original.institution_id
             if institution_id is None:
                 raise TreasuryError(f"الحركة '{reference}' بلا مؤسسة — لا يمكن نسبة عكسها إلى منصب")
-            require_treasury_office(context, official, institution_id=institution_id)
+            official, authority = self._authorize_money(
+                session,
+                context,
+                "treasury.transaction.reverse",
+                required=PERMISSIONS_REVERSAL,
+                grant_required=grant_required,
+                institution_id=institution_id,
+                claimed_official_id=official_id,
+                budget_id=original.budget_id,
+                amount=to_money(original.amount),
+            )
 
             reversal, reversal_entries = self._post(
                 session,
@@ -1404,6 +1566,7 @@ class StateTreasury:
                 debit_account=new_debit,
                 credit_account=new_credit,
                 official=official,
+                authority=authority,
                 budget_id=original.budget_id,
                 allocation_id=original.allocation_id,
                 institution_id=institution_id,

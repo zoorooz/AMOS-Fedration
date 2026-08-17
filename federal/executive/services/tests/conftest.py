@@ -89,11 +89,16 @@ def postgres_url(monkeypatch: pytest.MonkeyPatch) -> str:
 # و`tasks` و`state_decisions`، و`state_ledger_entries` تشير إلى الحركات. فصار
 # الأخصّ هو القيد ثم الحركة، وقبل القرار لا بعده.
 AGENT_DEPENDENT_TABLES: tuple[str, ...] = (
+    # R7-C: إسناد القرار والحركة يشير إلى صفوفهما بمفتاحٍ مفروض، وشغل المناصب
+    # يشير إلى `state_officials` — فالحذف يبدأ من الفروع لا من الأصول.
+    "state_transaction_authority",
+    "state_decision_provenance",
     "state_ledger_entries",
     "state_transactions",
     "state_allocations",
     "state_decisions",
     "state_cases",
+    "state_official_positions",
     "state_officials",
 )
 
@@ -103,6 +108,8 @@ AGENT_DEPENDENT_TABLES: tuple[str, ...] = (
 #: تنفيذ مهمّة تحمل `task_id`، فحذف صفوف المهامّ قبلها يرفضه القيد.
 #: و`state_allocations` قبل `state_decisions` لأن التخصيص قد يشير إلى قرار.
 TASK_DEPENDENT_TABLES: tuple[str, ...] = (
+    "state_transaction_authority",
+    "state_decision_provenance",
     "state_ledger_entries",
     "state_transactions",
     "state_allocations",

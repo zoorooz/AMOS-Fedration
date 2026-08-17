@@ -60,6 +60,11 @@ from amos_federation.services.government_services.service import (
     get_government_services,
     reset_government_services,
 )
+from amos_federation.services.national_registry.models import (
+    DecisionProvenanceModel,
+    TransactionAuthorityModel,
+)
+from amos_federation.services.national_registry.resolver import ForgedAuthorityError
 from amos_federation.services.state_registry.service import (
     StateRegistry,
     get_state_registry,
@@ -167,6 +172,9 @@ def _fresh_state() -> None:
     init_db()
     session = get_session_factory()()
     try:
+        # R7-C: إسناد الحركة والقرار يشير إليهما بـ`ON DELETE RESTRICT`، فيُحذف أولًا.
+        session.query(TransactionAuthorityModel).delete()
+        session.query(DecisionProvenanceModel).delete()
         session.query(LedgerEntryModel).delete()
         # حركات العكس تشير إلى حركاتٍ أخرى في نفس الجدول، وحذفٌ واحدٌ لكل الصفوف
         # يفشل على مفتاحها الأجنبي الذاتي — فتُحذف العواكس أولًا.
@@ -829,10 +837,14 @@ def test_10_authorization_is_denied_without_the_required_permission(
             account_code=fiscal.cash["code"],
         )
 
-    # دور `official` يقرأ ولا يصرف — دَينٌ مُعلَن من مفردتَي الأدوار، لا تصميم
+    # دور `official` يقرأ ولا يصرف. وكان هذا في R7-B رفضَ صلاحية
+    # (`RegistryAuthorizationError`)؛ وشدّدته R7-C: هذا المبدأ لا هوية كانونية له
+    # وقد مرّر `official_id` مسؤولٍ ليس له، فالرفض صار **رفضَ انتحال**
+    # (`ForgedAuthorityError`) — وهو أدقّ وصفًا لا أوسع سماحًا. والاختبار يقبل
+    # الاثنين لأن المضمون واحد: لا مال يتحرّك.
     official_ctx = _context("official")
     assert treasury.budget_balance(context=official_ctx, budget_code=fiscal.budget["code"])
-    with pytest.raises(RegistryAuthorizationError):
+    with pytest.raises((RegistryAuthorizationError, ForgedAuthorityError)):
         treasury.disburse(
             context=official_ctx,
             allocation_id=allocation["id"],
