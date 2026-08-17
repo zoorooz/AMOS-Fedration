@@ -258,9 +258,7 @@ def test_health_report_is_built_on_component_checks_not_process_existence() -> N
     """التقرير يسمّي المكوّنات المفحوصة، وينزل عن `healthy` عند صفّ غير مُوفَّق."""
     report = identity_health()
     assert report["basis"] == "component_checks"
-    assert {"canonical_registry", "event_bus", "population_projection"} <= set(
-        report["components"]
-    )
+    assert {"canonical_registry", "event_bus", "population_projection"} <= set(report["components"])
     assert report["status"] == "healthy"
 
     session = PopulationRegistry()._Session()  # noqa: SLF001 — إدخال دَين توفيق مقصود

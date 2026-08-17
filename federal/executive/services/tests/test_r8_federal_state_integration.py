@@ -795,9 +795,9 @@ def test_11_role_string_is_never_authority(
     for name, source in sources.items():
         for forbidden in ('role == "governor"', 'role == "minister"', 'role == "king"'):
             assert forbidden not in source, f"{name} يقرأ دورًا كسلطة"
-        assert "context.role" not in source or name == "service.py", (
-            f"{name} لا يقرأ الدورَ إطلاقًا في حلِّ السلطة"
-        )
+        assert (
+            "context.role" not in source or name == "service.py"
+        ), f"{name} لا يقرأ الدورَ إطلاقًا في حلِّ السلطة"
     assert "context.role" not in sources["authority.py"], "حلُّ السلطة لا يعرف الدورَ أصلًا"
     assert "context.role" not in sources["scopes.py"]
 
@@ -1518,9 +1518,9 @@ def test_25_crown_authority_is_preserved_and_forged_authority_is_refused(
     sources = _r8_sources()
     for name, source in sources.items():
         assert 'role="king"' not in source, f"{name} يستعمل الدورَ كمصادقةٍ سيادية"
-        assert "has_sovereign_authority" not in source, (
-            f"{name} يوسّع سلطةً بالسيادة — نموذجُ السيادة لا يُلمَس هنا"
-        )
+        assert (
+            "has_sovereign_authority" not in source
+        ), f"{name} يوسّع سلطةً بالسيادة — نموذجُ السيادة لا يُلمَس هنا"
 
 
 # ── 14. حدُّ المستأجر والمحرّكُ الواحد (R8-P · R8-D) ──────────────────────
@@ -1610,6 +1610,6 @@ def test_28_every_write_correlates_audit_and_durable_event(
     assert match[0]["correlation_id"] == officer.correlation_id
 
     audit = PersistentAuditStore().list_all(limit=200)
-    assert any(entry["audit_id"] == scoped["audit_id"] for entry in audit), (
-        "سلسلةُ التدقيق كُتبت قبل الحدث لا بعده"
-    )
+    assert any(
+        entry["audit_id"] == scoped["audit_id"] for entry in audit
+    ), "سلسلةُ التدقيق كُتبت قبل الحدث لا بعده"

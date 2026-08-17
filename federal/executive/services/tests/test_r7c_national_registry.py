@@ -282,9 +282,7 @@ def _chain(
         title="أمين الخزانة",
         department_code=dept["code"] if dept else None,
     )
-    identity = national.create_identity(
-        context=crown, identity_type="PERSON", label="أمين الخزانة"
-    )
+    identity = national.create_identity(context=crown, identity_type="PERSON", label="أمين الخزانة")
     national.link_principal(
         context=crown, principal_id=context.principal_id, identity_id=identity["id"]
     )
@@ -730,8 +728,7 @@ def test_12_department_scope_does_not_reach_institution_level_resources(
         )
         assert institution_level.allowed is False
         assert any(
-            phrase in institution_level.reason
-            for phrase in ("ترقية", "مستوى المؤسسة", "لا يطابق")
+            phrase in institution_level.reason for phrase in ("ترقية", "مستوى المؤسسة", "لا يطابق")
         ), "الرفض يُشرح: إدارةٌ مُسمّاة في المِنحة لا تُغطّي موردًا بلا إدارة"
 
         in_department = resolve_authority(
@@ -768,9 +765,7 @@ def test_13_revoked_position_ends_authority_without_any_extra_check(
     finally:
         session.close()
 
-    national.revoke_assignment(
-        context=crown, assignment_id=chain.assignment["id"], reason="عزل"
-    )
+    national.revoke_assignment(context=crown, assignment_id=chain.assignment["id"], reason="عزل")
     session = _session()
     try:
         after = resolve_authority(
@@ -915,9 +910,7 @@ def test_18_operation_vocabulary_is_closed_and_scopes_are_the_four_named(
     session = _session()
     try:
         with pytest.raises(ValueError, match="عملية غير معروفة"):
-            resolve_authority(
-                session, crown, "treasury.print_money", institution_id="inst-x"
-            )
+            resolve_authority(session, crown, "treasury.print_money", institution_id="inst-x")
     finally:
         session.close()
 
@@ -1117,9 +1110,10 @@ def test_23_a_decision_carries_its_provenance_and_the_crown_is_not_proven(
     proven = _decide(context, chain.official["id"])
     assert proven["provenance"]["provenance_class"] == "PROVEN"
     sovereign = _decide(crown, chain.official["id"])
-    assert sovereign["provenance"]["provenance_class"] in {"PARTIAL", "UNRESOLVED"}, (
-        "التاج لا يُصنَّف `PROVEN` — سلطته من صلاحيةٍ سيادية لا من منصبٍ لهويته"
-    )
+    assert sovereign["provenance"]["provenance_class"] in {
+        "PARTIAL",
+        "UNRESOLVED",
+    }, "التاج لا يُصنَّف `PROVEN` — سلطته من صلاحيةٍ سيادية لا من منصبٍ لهويته"
 
     session = _session()
     try:
@@ -1150,8 +1144,7 @@ def test_24_no_request_body_ever_carries_identity_position_or_scope() -> None:
         for block in models:
             for field in forbidden:
                 assert not re.search(rf"^\s+{field}\s*:", block, re.M), (
-                    f"حقل '{field}' في جسم طلبٍ في {service}/main.py — "
-                    "المُنادي لا يقرّر سلطته"
+                    f"حقل '{field}' في جسم طلبٍ في {service}/main.py — " "المُنادي لا يقرّر سلطته"
                 )
 
 
@@ -1180,9 +1173,9 @@ def test_25_the_money_and_decision_paths_actually_call_the_resolver() -> None:
 
     signature = inspect.signature(StateTreasury._post)
     assert "authority" in signature.parameters, "مسار الكتابة الوحيد يلزمه قرار سلطة"
-    assert signature.parameters["authority"].default is inspect.Parameter.empty, (
-        "قرار السلطة إلزاميٌّ بلا قيمة افتراضية — لا حركةَ بلا إسناد"
-    )
+    assert (
+        signature.parameters["authority"].default is inspect.Parameter.empty
+    ), "قرار السلطة إلزاميٌّ بلا قيمة افتراضية — لا حركةَ بلا إسناد"
 
 
 def test_26_the_registry_invents_no_permission_vocabulary_and_no_third_registry() -> None:
@@ -1219,9 +1212,9 @@ def test_26_the_registry_invents_no_permission_vocabulary_and_no_third_registry(
     migration = MIGRATION.read_text(encoding="utf-8")
     for table in NATIONAL_REGISTRY_TABLES:
         assert f"CREATE TABLE IF NOT EXISTS {table}" in migration
-    assert "DROP TABLE" not in migration and "DELETE FROM" not in migration, (
-        "الترحيل لا يحذف تاريخًا"
-    )
+    assert (
+        "DROP TABLE" not in migration and "DELETE FROM" not in migration
+    ), "الترحيل لا يحذف تاريخًا"
     assert set(GRANTABLE_OPERATIONS) >= {
         "treasury.funding.post",
         "treasury.allocation.create",

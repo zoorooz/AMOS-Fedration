@@ -240,9 +240,7 @@ def crown(national: NationalRegistry) -> AuthorizationContext:
     أثرُه منسوبًا إلى صفٍّ حقيقيّ لا إلى اسمِ جلسة.
     """
     context = _context("king", username="crown")
-    identity = national.create_identity(
-        context=context, identity_type="PERSON", label="التاج"
-    )
+    identity = national.create_identity(context=context, identity_type="PERSON", label="التاج")
     national.link_principal(
         context=context, principal_id=context.principal_id, identity_id=identity["id"]
     )
@@ -359,9 +357,7 @@ def _party_identity(
     national: NationalRegistry, crown: AuthorizationContext, context: AuthorizationContext
 ) -> dict[str, Any]:
     """هويةٌ كانونية لمُقدِّم الطلب، مربوطةٌ بمبدأ جلسته."""
-    identity = national.create_identity(
-        context=crown, identity_type="PERSON", label="مُدَّعٍ"
-    )
+    identity = national.create_identity(context=crown, identity_type="PERSON", label="مُدَّعٍ")
     national.link_principal(
         context=crown, principal_id=context.principal_id, identity_id=identity["id"]
     )
@@ -385,9 +381,7 @@ def _open_and_assign(
         reference=_code("CASE"),
     )
     judiciary.file_case(context=filer_ctx, case_id=case["id"])
-    return judiciary.assign_case(
-        context=crown, case_id=case["id"], judge_id=bench.judge["id"]
-    )
+    return judiciary.assign_case(context=crown, case_id=case["id"], judge_id=bench.judge["id"])
 
 
 # ── 1. المحكمة كيانٌ بمعرّفٍ مستقرّ على مؤسسةٍ قضائية (R7-D2/D4) ──────────
@@ -459,9 +453,11 @@ def test_02_jurisdiction_is_explicit_and_never_a_ladder(
             jurisdiction="GALACTIC",
             institution_code=chain.institution["code"],
         )
-    assert set(JURISDICTIONS) == {"FEDERAL", "STATE", "INSTITUTION"}, (
-        "المفردةُ ثلاثةٌ موجودةٌ فعلًا — ولا رابعَ يُخترَع في الاختبار"
-    )
+    assert set(JURISDICTIONS) == {
+        "FEDERAL",
+        "STATE",
+        "INSTITUTION",
+    }, "المفردةُ ثلاثةٌ موجودةٌ فعلًا — ولا رابعَ يُخترَع في الاختبار"
 
     federal = judiciary.register_court(
         context=crown,
@@ -500,9 +496,9 @@ def test_02_jurisdiction_is_explicit_and_never_a_ladder(
         }
     finally:
         session.close()
-    assert state_case["id"] not in federal_ids, (
-        "المحكمةُ الفدرالية — وإن كانت SUPREME — لا تملك قضيةَ الولاية تلقائيًّا"
-    )
+    assert (
+        state_case["id"] not in federal_ids
+    ), "المحكمةُ الفدرالية — وإن كانت SUPREME — لا تملك قضيةَ الولاية تلقائيًّا"
 
 
 # ── 3. تقليدُ القاضي سلسلةٌ لا دور (R7-D4) ────────────────────────────────
@@ -518,9 +514,9 @@ def test_03_judge_appointment_requires_the_whole_chain(
     judge_ctx = _context("official", username="j3")
     bench = _bench(registry, national, judiciary, crown, judge_ctx)
     assert bench.judge["id"].startswith("jdg-")
-    assert bench.judge["identity_id"] == bench.identity["id"], (
-        "التقليدُ يحمل الهوية الكانونية — لا الاسم"
-    )
+    assert (
+        bench.judge["identity_id"] == bench.identity["id"]
+    ), "التقليدُ يحمل الهوية الكانونية — لا الاسم"
     assert bench.judge["status"] == "active"
 
     with pytest.raises(JudgeAppointmentError, match="نشطٌ في المحكمة"):
@@ -724,16 +720,12 @@ def test_07_case_lifecycle_is_ordered_with_no_force_transition(
 
     # تخطّي `filed` مرفوض: لا إسنادَ لقضيةٍ لم تُقدَّم.
     with pytest.raises(CaseTransitionError):
-        judiciary.assign_case(
-            context=crown, case_id=case["id"], judge_id=bench.judge["id"]
-        )
+        judiciary.assign_case(context=crown, case_id=case["id"], judge_id=bench.judge["id"])
     with pytest.raises(CaseTransitionError):
         judiciary.open_hearing(context=judge_ctx, case_id=case["id"])
 
     judiciary.file_case(context=filer, case_id=case["id"])
-    assigned = judiciary.assign_case(
-        context=crown, case_id=case["id"], judge_id=bench.judge["id"]
-    )
+    assigned = judiciary.assign_case(context=crown, case_id=case["id"], judge_id=bench.judge["id"])
     assert assigned["status"] == "assigned"
     assert assigned["assigned_at"], "الإسنادُ زوجٌ: قاضٍ وطابعُ وقت"
     hearing = judiciary.open_hearing(context=judge_ctx, case_id=case["id"])
@@ -752,13 +744,13 @@ def test_07_case_lifecycle_is_ordered_with_no_force_transition(
         judiciary.open_hearing(context=judge_ctx, case_id=case["id"])
 
     assert ALLOWED_TRANSITIONS["closed"] == (), "المُغلقةُ نهاية — لا انتقالَ منها"
-    assert set(ALLOWED_TRANSITIONS) == set(CASE_STATUSES), (
-        "كلُّ حالةٍ في المفردة لها مدخلٌ في الخريطة — فلا حالةٌ بلا قانونِ انتقال"
-    )
+    assert set(ALLOWED_TRANSITIONS) == set(
+        CASE_STATUSES
+    ), "كلُّ حالةٍ في المفردة لها مدخلٌ في الخريطة — فلا حالةٌ بلا قانونِ انتقال"
     source = _strip_comments((JUDICIARY_SRC / "docket.py").read_text(encoding="utf-8"))
-    assert re.search(r"\bforce", source, re.IGNORECASE) is None, (
-        "لا انتقالَ بالقوّة في مصدر السجلّ — والحدُّ على الكلمة كي لا يخدعنا 'enforcement'"
-    )
+    assert (
+        re.search(r"\bforce", source, re.IGNORECASE) is None
+    ), "لا انتقالَ بالقوّة في مصدر السجلّ — والحدُّ على الكلمة كي لا يخدعنا 'enforcement'"
 
 
 # ── 8. الطرفُ هويةٌ كانونية (R7-D6) ───────────────────────────────────────
@@ -851,9 +843,9 @@ def test_09_claim_records_an_unverified_legal_basis_honestly(
         amount="1500.0000",
     )
     assert claim["legal_basis_kind"] == "LEGISLATION"
-    assert claim["legal_basis_verified"] is False, (
-        "لا سجلَّ تشريعاتٍ يُحقَّق منه — فالعَلَمُ يقول ذلك بلا تجميل"
-    )
+    assert (
+        claim["legal_basis_verified"] is False
+    ), "لا سجلَّ تشريعاتٍ يُحقَّق منه — فالعَلَمُ يقول ذلك بلا تجميل"
     assert claim["claimant_party_id"] == party["id"], "المطالبةُ لطرفٍ في هذه القضية"
 
     with pytest.raises(JudiciaryError):
@@ -924,9 +916,7 @@ def test_10_evidence_is_a_deposit_record_and_claims_no_chain_of_custody(
     assert admitted["status"] == "admitted"
 
     columns = set(CaseEvidenceModel.__table__.c.keys())
-    assert not any("custody" in name for name in columns), (
-        "لا عمودَ حيازة: ما لم يُبنَ لا يُسمّى"
-    )
+    assert not any("custody" in name for name in columns), "لا عمودَ حيازة: ما لم يُبنَ لا يُسمّى"
 
 
 # ── 11. الإجراءات مُرتَّبةٌ ونوعُ RULING محجوز (R7-D8) ────────────────────
@@ -1002,12 +992,10 @@ def test_12_ruling_requires_proven_authority_and_links_to_the_case(
 
     session = _session()
     try:
-        court_only = resolve_judicial_authority(
-            session, judge_ctx, court_id=bench.court["id"]
-        )
-        assert court_only.classification == "PARTIAL", (
-            "بلا قضيةٍ يبقى التصنيفُ PARTIAL — لا يُرقّى تسامحًا"
-        )
+        court_only = resolve_judicial_authority(session, judge_ctx, court_id=bench.court["id"])
+        assert (
+            court_only.classification == "PARTIAL"
+        ), "بلا قضيةٍ يبقى التصنيفُ PARTIAL — لا يُرقّى تسامحًا"
     finally:
         session.close()
 
@@ -1030,9 +1018,9 @@ def test_12_ruling_requires_proven_authority_and_links_to_the_case(
         assert row.authority["classification"] == "PROVEN"
         assert row.authority["identity_id"] == bench.identity["id"]
         assert row.authority["position_id"] == bench.position["id"]
-        assert session.get(LegalCaseModel, case["id"]).status == "decided", (
-            "القضيةُ تنتقل إلى `decided` مع الحكم — لا يدويًّا"
-        )
+        assert (
+            session.get(LegalCaseModel, case["id"]).status == "decided"
+        ), "القضيةُ تنتقل إلى `decided` مع الحكم — لا يدويًّا"
     finally:
         session.close()
 
@@ -1072,9 +1060,7 @@ def test_13_second_ruling_for_the_same_stage_is_denied(
     # والإلغاءُ نفسه عملٌ قضائيّ: يلزمه سلطةٌ مُثبَتة لا صلاحيةً إداريّة.
     with pytest.raises(JudicialAuthorityError):
         judiciary.vacate_ruling(context=crown, ruling_id=first["id"], reason="بأمرٍ إداريّ")
-    vacated = judiciary.vacate_ruling(
-        context=judge_ctx, ruling_id=first["id"], reason="عيبٌ إجرائيّ"
-    )
+    vacated = judiciary.vacate_ruling(context=judge_ctx, ruling_id=first["id"], reason="عيبٌ إجرائيّ")
     assert vacated["status"] == "vacated" and vacated["vacated_at"]
 
     replacement = judiciary.issue_ruling(
@@ -1183,9 +1169,9 @@ def test_15_enforcement_goes_through_executive_core_task(
         assert session.get(RulingModel, ruling["id"]).status == "enforced"
         assert session.get(LegalCaseModel, case["id"]).status == "enforcement"
         task_fk = list(RulingEnforcementModel.__table__.c.task_id.foreign_keys)
-        assert task_fk and task_fk[0].target_fullname == "tasks.id", (
-            "الأثرُ يشير إلى جدول المهامّ القائم — لا إلى جدولٍ قضائيّ موازٍ"
-        )
+        assert (
+            task_fk and task_fk[0].target_fullname == "tasks.id"
+        ), "الأثرُ يشير إلى جدول المهامّ القائم — لا إلى جدولٍ قضائيّ موازٍ"
     finally:
         session.close()
 
@@ -1288,9 +1274,9 @@ def test_16_ruling_never_bypasses_treasury_authorization(
             purpose="تنفيذُ حكم",
             official_id=bench.official["id"],
         )
-    assert "treasury.disbursement.post" in str(denied.value), (
-        "الرفضُ من حدِّ الخزانة نفسه — لا من حدٍّ قضائيّ موازٍ"
-    )
+    assert "treasury.disbursement.post" in str(
+        denied.value
+    ), "الرفضُ من حدِّ الخزانة نفسه — لا من حدٍّ قضائيّ موازٍ"
 
     session = _session()
     try:
@@ -1371,9 +1357,7 @@ def test_17_every_judicial_action_writes_audit_and_event(
     assert payload["judge_identity_id"] == bench.identity["id"]
     assert payload["audit_id"] == ruling["audit_id"], "الحدثُ يحمل مفتاحَ الأثر"
 
-    actions = {
-        entry["action"] for entry in PersistentAuditStore().list_all(limit=200)
-    }
+    actions = {entry["action"] for entry in PersistentAuditStore().list_all(limit=200)}
     for action in (
         "judiciary.court.register",
         "judiciary.judge.appoint",
@@ -1441,15 +1425,13 @@ def test_19_static_guards_forbid_parallel_executors_and_schema_rewrites() -> Non
 
     # الخزانةُ تُمرَّر إلى الدالّة ولا تُستورَد في الوحدة — فلا مسارَ صرفٍ خاصّ.
     service_src = sources["service.py"]
-    assert "state_treasury" not in service_src, (
-        "`enforce_ruling_via_treasury` يأخذ الخزانةَ وسيطًا كأيّ مُنادٍ آخر"
-    )
+    assert (
+        "state_treasury" not in service_src
+    ), "`enforce_ruling_via_treasury` يأخذ الخزانةَ وسيطًا كأيّ مُنادٍ آخر"
 
     # الهجرةُ 009 تُضيف ولا تُعيد كتابة التاريخ.
     migration = MIGRATION.read_text(encoding="utf-8")
-    body = "\n".join(
-        line for line in migration.splitlines() if not line.strip().startswith("--")
-    )
+    body = "\n".join(line for line in migration.splitlines() if not line.strip().startswith("--"))
     for forbidden in ("ALTER TABLE", "DROP TABLE", "DROP INDEX", "DELETE FROM", "TRUNCATE"):
         assert forbidden not in body.upper(), f"الهجرةُ 009 لا تحتوي {forbidden}"
     for table in FEDERAL_JUDICIARY_TABLES:
@@ -1460,9 +1442,9 @@ def test_19_static_guards_forbid_parallel_executors_and_schema_rewrites() -> Non
         (SRC / "services" / "governance" / "federation.py").read_text(encoding="utf-8")
     )
     for canonical in ("state_rulings", "RulingModel", "federal_judiciary"):
-        assert canonical not in legacy, (
-            "المسارُ القديم لا يكتب في جداول القضاء الكانونية — ولا يُدَّعى أنه محكمة"
-        )
+        assert (
+            canonical not in legacy
+        ), "المسارُ القديم لا يكتب في جداول القضاء الكانونية — ولا يُدَّعى أنه محكمة"
 
     # ولا سيادةَ تُنتزَع: لا نقضَ قضائيًّا لأمرٍ سياديّ صحيح في مصدر القضاء.
     for forbidden in ("veto", "override_sovereign", "revoke_crown"):

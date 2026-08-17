@@ -770,9 +770,7 @@ class GovernmentServices:
             if match is not None:
                 position_id = match.position_id
                 provenance_class = "PROVEN"
-                reason = (
-                    "مبدأ ← هوية ← مسؤول ← منصب ← مؤسسة: كل حلقةٍ صفٌّ مقروء"
-                )
+                reason = "مبدأ ← هوية ← مسؤول ← منصب ← مؤسسة: كل حلقةٍ صفٌّ مقروء"
             else:
                 reason = (
                     "الهوية ثابتة ولا منصبَ نشطًا لها منسوبًا إلى هذا القرار — "

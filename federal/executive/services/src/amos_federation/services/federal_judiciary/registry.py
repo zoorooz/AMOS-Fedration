@@ -141,9 +141,7 @@ def load_court_by_code(session: Session, code: str, *, tenant_id: str) -> CourtM
     return row
 
 
-def _load_judicial_institution(
-    session: Session, code: str, *, tenant_id: str
-) -> InstitutionModel:
+def _load_judicial_institution(session: Session, code: str, *, tenant_id: str) -> InstitutionModel:
     """اقرأ مؤسسةً قائمةً واطلب أن تكون قضائيةً نشطة — ولا تُنشئ مؤسسة."""
     row = session.execute(
         select(InstitutionModel).where(
@@ -246,9 +244,7 @@ def appoint_judge(
 
     official = session.get(OfficialModel, official_id)
     if official is None or official.tenant_id != tenant_id:
-        raise JudgeAppointmentError(
-            f"لا مسؤول بالمعرّف '{official_id}' في مستأجر '{tenant_id}'"
-        )
+        raise JudgeAppointmentError(f"لا مسؤول بالمعرّف '{official_id}' في مستأجر '{tenant_id}'")
     if official.status != "appointed":
         raise JudgeAppointmentError(
             f"المسؤول '{official_id}' حالته '{official.status}' لا 'appointed'"
@@ -270,13 +266,10 @@ def appoint_judge(
     holding = holdings.get(position_id)
     if holding is None:
         raise JudgeAppointmentError(
-            f"المنصب '{position_id}' غير مُقلَّدٍ نشطًا لهذه الهوية — "
-            "قلِّد المنصب في السجلّ الوطني أوّلًا"
+            f"المنصب '{position_id}' غير مُقلَّدٍ نشطًا لهذه الهوية — " "قلِّد المنصب في السجلّ الوطني أوّلًا"
         )
     if holding.official_id != official_id:
-        raise JudgeAppointmentError(
-            "تقليدُ المنصب يخصّ مسؤولًا آخر — المنصب والمسؤول يجب أن يتطابقا"
-        )
+        raise JudgeAppointmentError("تقليدُ المنصب يخصّ مسؤولًا آخر — المنصب والمسؤول يجب أن يتطابقا")
     if holding.institution_branch != _JUDICIAL_BRANCH:
         raise JudgeAppointmentError(
             f"المنصب في فرع '{holding.institution_branch}' لا '{_JUDICIAL_BRANCH}'"

@@ -142,7 +142,13 @@ PARTY_ROLES: tuple[str, ...] = ("PLAINTIFF", "DEFENDANT", "INTERVENOR", "WITNESS
 CLAIM_TYPES: tuple[str, ...] = ("MONETARY", "DECLARATORY", "INJUNCTIVE", "APPEAL", "SANCTION")
 
 #: نوع المرجع القانونيّ للمطالبة. `NONE` قيمةٌ صريحة — ولا مرجعَ مُختلق.
-LEGAL_BASIS_KINDS: tuple[str, ...] = ("NONE", "CONSTITUTION_ARTICLE", "LEGISLATION", "DECREE", "POLICY")
+LEGAL_BASIS_KINDS: tuple[str, ...] = (
+    "NONE",
+    "CONSTITUTION_ARTICLE",
+    "LEGISLATION",
+    "DECREE",
+    "POLICY",
+)
 
 EVIDENCE_TYPES: tuple[str, ...] = ("DOCUMENT", "RECORD", "TESTIMONY", "ARTIFACT", "AUDIT_ENTRY")
 EVIDENCE_STATUSES: tuple[str, ...] = ("submitted", "admitted", "excluded", "withdrawn")
@@ -608,7 +614,9 @@ class RulingEnforcementModel(Base):
     updated_at = Column(DateTime, default=_now, onupdate=_now)
 
     __table_args__ = (
-        CheckConstraint(_in_check("kind", ENFORCEMENT_KINDS), name="ck_state_ruling_enforcements_kind"),
+        CheckConstraint(
+            _in_check("kind", ENFORCEMENT_KINDS), name="ck_state_ruling_enforcements_kind"
+        ),
         CheckConstraint(
             _in_check("status", ENFORCEMENT_STATUSES), name="ck_state_ruling_enforcements_status"
         ),

@@ -805,9 +805,7 @@ class StateTreasury:
                 session.add(entry)
             session.flush()
             # إسناد السلطة يُكتب في **نفس** المعاملة — فلا حركة ملتزمة بلا من أجازها.
-            self._record_transaction_authority(
-                session, context, transaction=tx, decision=authority
-            )
+            self._record_transaction_authority(session, context, transaction=tx, decision=authority)
             session.flush()
             session.commit()
         except IntegrityError as exc:

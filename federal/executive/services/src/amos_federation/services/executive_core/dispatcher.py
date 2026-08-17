@@ -184,9 +184,7 @@ class CapabilityDispatcher:
         if row is None:
             raise NoEligibleAgentError(f"الوكيل غير مُسجَّل في السجل: {agent_id}")
         if row.status not in self._statuses:
-            raise NoEligibleAgentError(
-                f"حالة الوكيل {agent_id} غير قابلة للتشغيل: {row.status}"
-            )
+            raise NoEligibleAgentError(f"حالة الوكيل {agent_id} غير قابلة للتشغيل: {row.status}")
         return AgentAssignment(
             agent_id=row.id,
             agent_role=row.role,

@@ -87,9 +87,7 @@ def assert_jurisdiction_match(
         )
     if court_jurisdiction == "INSTITUTION":
         if not court_institution_id or not case_institution_id:
-            raise JurisdictionError(
-                "نطاق INSTITUTION يلزمه مؤسسةٌ محدَّدة للمحكمة وللقضية معًا"
-            )
+            raise JurisdictionError("نطاق INSTITUTION يلزمه مؤسسةٌ محدَّدة للمحكمة وللقضية معًا")
         if court_institution_id != case_institution_id:
             raise JurisdictionError(
                 f"محكمةُ المؤسسة '{court_institution_id}' لا تملك اختصاصًا على "

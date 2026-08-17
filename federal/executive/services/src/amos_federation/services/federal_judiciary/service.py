@@ -603,9 +603,7 @@ class FederalJudiciary:
         """
         require_domain_permission(context, "judiciary.proceeding.record", PERMISSIONS_DOCKET_WRITE)
         if proceeding_type == "RULING":
-            raise docket.JudiciaryError(
-                "إجراءُ نوع 'RULING' يُقيَّد مع الحكم في `issue_ruling` وحدها"
-            )
+            raise docket.JudiciaryError("إجراءُ نوع 'RULING' يُقيَّد مع الحكم في `issue_ruling` وحدها")
         session = self._session()
         try:
             identity_id = self._identity_of(session, context)
@@ -799,7 +797,9 @@ class FederalJudiciary:
             rulings.mark_ruling_enforced(session, ruling_id=ruling_id, tenant_id=tenant)
             case = docket.load_case(session, case_id, tenant_id=tenant)
             if case.status == "decided":
-                docket.advance_case(session, case_id=case_id, target="enforcement", tenant_id=tenant)
+                docket.advance_case(
+                    session, case_id=case_id, target="enforcement", tenant_id=tenant
+                )
             payload = enforcement.enforcement_dict(row)
             session.commit()
         finally:
@@ -890,7 +890,9 @@ class FederalJudiciary:
             rulings.mark_ruling_enforced(session, ruling_id=ruling_id, tenant_id=tenant)
             case = docket.load_case(session, case_id, tenant_id=tenant)
             if case.status == "decided":
-                docket.advance_case(session, case_id=case_id, target="enforcement", tenant_id=tenant)
+                docket.advance_case(
+                    session, case_id=case_id, target="enforcement", tenant_id=tenant
+                )
             payload = enforcement.enforcement_dict(row)
             session.commit()
         finally:

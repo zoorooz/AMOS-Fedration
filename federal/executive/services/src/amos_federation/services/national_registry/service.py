@@ -275,9 +275,13 @@ class NationalRegistry:
         """
         require_domain_permission(context, "identity.create", PERMISSIONS_IDENTITY_WRITE)
         if identity_type not in IDENTITY_TYPES:
-            raise ValueError(f"نوع هوية غير معروف '{identity_type}' — المفردة: {list(IDENTITY_TYPES)}")
+            raise ValueError(
+                f"نوع هوية غير معروف '{identity_type}' — المفردة: {list(IDENTITY_TYPES)}"
+            )
         if status not in IDENTITY_STATUSES:
-            raise ValueError(f"حالة هوية غير معروفة '{status}' — المفردة: {list(IDENTITY_STATUSES)}")
+            raise ValueError(
+                f"حالة هوية غير معروفة '{status}' — المفردة: {list(IDENTITY_STATUSES)}"
+            )
         if status == "unresolved" and not status_reason:
             raise ValueError("الهوية غير المحلولة تلزمها كتابة سببها — الغموض يُسمّى ولا يُترك فراغًا")
 
@@ -323,7 +327,9 @@ class NationalRegistry:
         """غيّر حالة هوية — تعليقًا أو تقاعدًا أو حلًّا لغموضٍ سابق."""
         require_domain_permission(context, "identity.status", PERMISSIONS_IDENTITY_WRITE)
         if status not in IDENTITY_STATUSES:
-            raise ValueError(f"حالة هوية غير معروفة '{status}' — المفردة: {list(IDENTITY_STATUSES)}")
+            raise ValueError(
+                f"حالة هوية غير معروفة '{status}' — المفردة: {list(IDENTITY_STATUSES)}"
+            )
         if not reason:
             raise ValueError("تغيير حالة الهوية يلزمه سبب مكتوب")
 
@@ -1089,9 +1095,7 @@ class NationalRegistry:
                     "department_id": h.department_id,
                     "authority_scope": h.authority_scope,
                 }
-                for h in resolve_positions(
-                    session, identity_id, tenant_id=self._tenant_of(context)
-                )
+                for h in resolve_positions(session, identity_id, tenant_id=self._tenant_of(context))
             ]
         finally:
             session.close()

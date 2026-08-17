@@ -321,9 +321,7 @@ def test_all_steps_skipped_fails_the_task_instead_of_declaring_success() -> None
     register_agent("r3-skip", "عامل متخطٍّ", "worker", allowed_tools=[WILDCARD], status="active")
 
     class SkippingAgent:
-        async def execute(
-            self, task: dict[str, Any], plan: list[dict[str, Any]]
-        ) -> dict[str, Any]:
+        async def execute(self, task: dict[str, Any], plan: list[dict[str, Any]]) -> dict[str, Any]:
             return {
                 "status": "completed",  # ادّعاء الوكيل
                 "steps": [{**step, "status": "skipped"} for step in plan],
@@ -384,9 +382,7 @@ def test_dispatch_does_not_raise_on_runtime_failure_silently() -> None:
     """فشل داخل بيئة التشغيل يُرفع كما هو ويُسجَّل — لا يُقلب نتيجة ناجحة."""
 
     class ExplodingAgent:
-        async def execute(
-            self, task: dict[str, Any], plan: list[dict[str, Any]]
-        ) -> dict[str, Any]:
+        async def execute(self, task: dict[str, Any], plan: list[dict[str, Any]]) -> dict[str, Any]:
             raise RuntimeError("الأداة سقطت فعلًا")
 
     register_agent("r3-boom", "عامل ساقط", "worker", allowed_tools=[WILDCARD], status="active")

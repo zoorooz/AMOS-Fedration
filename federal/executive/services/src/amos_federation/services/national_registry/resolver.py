@@ -116,7 +116,6 @@ class ForgedAuthorityError(PermissionError):  # noqa: N818 — رفض سلطة،
         )
 
 
-
 def has_sovereign_authority(context: Any) -> bool:
     """يفحص السيادة بتحميلٍ متأخّر لكسر حلقة استيرادٍ حقيقية.
 
@@ -395,8 +394,7 @@ def _grant_covers(
         if department_id is None:
             return (
                 False,
-                "سلطة إدارة لا تُغطّي موردًا على مستوى المؤسسة — "
-                "لا ترقية من الإدارة إلى المؤسسة",
+                "سلطة إدارة لا تُغطّي موردًا على مستوى المؤسسة — " "لا ترقية من الإدارة إلى المؤسسة",
             )
         if grant.department_id != department_id:
             return False, "المورد في إدارة أخرى"
@@ -458,9 +456,7 @@ def resolve_authority(
         ForgedAuthorityError: ادّعاء منصبٍ لا يشغله المُنادي.
     """
     if operation not in GRANTABLE_OPERATIONS:
-        raise ValueError(
-            f"عملية غير معروفة '{operation}' — المفردة: {list(GRANTABLE_OPERATIONS)}"
-        )
+        raise ValueError(f"عملية غير معروفة '{operation}' — المفردة: {list(GRANTABLE_OPERATIONS)}")
 
     institution = session.get(InstitutionModel, institution_id)
     branch = institution.branch if institution is not None else None

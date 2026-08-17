@@ -166,9 +166,7 @@ class SubsystemBoundary:
         try:
             self._repo.require(task_id)
         except TaskNotFoundError as exc:
-            _logger.warning(
-                "مرجعُ مهمّةٍ غيرُ مُتحقَّق task_id=%s — %s", task_id, exc
-            )
+            _logger.warning("مرجعُ مهمّةٍ غيرُ مُتحقَّق task_id=%s — %s", task_id, exc)
             return "unverified", None
         return "canonical", task_id
 

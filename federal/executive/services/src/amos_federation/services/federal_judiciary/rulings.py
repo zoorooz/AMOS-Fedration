@@ -104,9 +104,7 @@ def load_ruling(session: Session, ruling_id: str, *, tenant_id: str) -> RulingMo
     return row
 
 
-def active_ruling_for_stage(
-    session: Session, *, case_id: str, stage: str
-) -> RulingModel | None:
+def active_ruling_for_stage(session: Session, *, case_id: str, stage: str) -> RulingModel | None:
     """اقرأ الحكم القائم لمرحلةٍ قضائية إن وُجد — القراءةُ التي تسبق الفهرس."""
     return session.execute(
         select(RulingModel).where(
@@ -211,9 +209,7 @@ def vacate_ruling(
     if row.status == "vacated":
         raise RulingError(f"الحكم '{ruling_id}' مُلغىً أصلًا")
     if row.status == "enforced":
-        raise RulingError(
-            f"الحكم '{ruling_id}' نُفِّذ — عكسُ أثرٍ تنفيذيّ ليس مبنيًّا في هذه الوحدة"
-        )
+        raise RulingError(f"الحكم '{ruling_id}' نُفِّذ — عكسُ أثرٍ تنفيذيّ ليس مبنيًّا في هذه الوحدة")
     previous = row.status
     row.status = "vacated"
     row.vacated_at = _now()

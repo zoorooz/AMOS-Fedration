@@ -42,14 +42,14 @@ from amos_federation.services.state_registry.authorization import (
     require_tenant,
 )
 
+# `AuthorityDecision` وحدَه يُستعمل تلميحَ نوع. و`ForgedAuthorityError` اسمٌ مُعاد
+# تصديره وقت التشغيل عبر `__getattr__` أدناه، فلا يُستورد هنا — استيرادُ اسمٍ
+# تشغيليٍ في كتلة التحقّق من الأنواع تناقضٌ ترفعه بوابة الفحص (ruff · TCH004).
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
     from amos_federation.common.principal import AuthorizationContext
-    from amos_federation.services.national_registry.resolver import (
-        AuthorityDecision,
-        ForgedAuthorityError,
-    )
+    from amos_federation.services.national_registry.resolver import AuthorityDecision
 
 #: أسماءٌ تُعاد من `resolver` بتحميلٍ متأخّر — انظر `__getattr__` في آخر الوحدة.
 _RESOLVER_REEXPORTS: tuple[str, ...] = ("AuthorityDecision", "ForgedAuthorityError")
@@ -72,6 +72,7 @@ def __getattr__(name: str) -> Any:
 
         return getattr(resolver, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 # === الصلاحيات — من `DEFAULT_ROLES` القائمة حصرًا ===
 
@@ -167,9 +168,11 @@ __all__ = [
     "PERMISSIONS_POSITION_WRITE",
     "PERMISSIONS_PRINCIPAL_LINK",
     "AuthorityDeniedError",
-    "ForgedAuthorityError",
     "RegistryAuthorizationError",
     "require_authority",
     "require_domain_permission",
     "require_tenant",
+    # والأسماءُ المُعادةُ من `resolver` تُضمّ أدناه من مصدرٍ واحد لا بنسخة ثانية،
+    # فلا ينقطع أحدُهما عن `__getattr__`.
+    *_RESOLVER_REEXPORTS,
 ]

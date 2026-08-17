@@ -563,9 +563,7 @@ async def dismiss_agent(
     engine = _get_pg_engine()
     with engine.begin() as conn:
         result = conn.execute(
-            text(
-                "UPDATE agents SET status='retired' WHERE id=:id AND status != 'retired'"
-            ),
+            text("UPDATE agents SET status='retired' WHERE id=:id AND status != 'retired'"),
             {"id": agent_id},
         )
         if result.rowcount == 0:
@@ -582,9 +580,7 @@ async def restore_agent(
     engine = _get_pg_engine()
     with engine.begin() as conn:
         result = conn.execute(
-            text(
-                "UPDATE agents SET status='active' WHERE id=:id AND status='retired'"
-            ),
+            text("UPDATE agents SET status='active' WHERE id=:id AND status='retired'"),
             {"id": agent_id},
         )
         if result.rowcount == 0:

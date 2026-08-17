@@ -182,7 +182,9 @@ class IdentityModel(Base):
     updated_at = Column(DateTime, default=_now, onupdate=_now)
 
     __table_args__ = (
-        CheckConstraint(_in_check("identity_type", IDENTITY_TYPES), name="ck_state_identities_type"),
+        CheckConstraint(
+            _in_check("identity_type", IDENTITY_TYPES), name="ck_state_identities_type"
+        ),
         CheckConstraint(_in_check("status", IDENTITY_STATUSES), name="ck_state_identities_status"),
         Index("ix_state_identities_tenant_type", "tenant_id", "identity_type", "status"),
     )
@@ -309,7 +311,9 @@ class OfficialPositionModel(Base):
     identity_id = Column(
         String, ForeignKey("state_identities.id", ondelete="RESTRICT"), nullable=False
     )
-    position_id = Column(String, ForeignKey("state_positions.id", ondelete="RESTRICT"), nullable=False)
+    position_id = Column(
+        String, ForeignKey("state_positions.id", ondelete="RESTRICT"), nullable=False
+    )
     status = Column(String, nullable=False, default="active")
     assigned_by = Column(String, nullable=False)
     assigned_at = Column(DateTime, default=_now)
@@ -354,7 +358,9 @@ class AuthorityGrantModel(Base):
     __tablename__ = "state_authority_grants"
 
     id = Column(String, primary_key=True)
-    position_id = Column(String, ForeignKey("state_positions.id", ondelete="RESTRICT"), nullable=False)
+    position_id = Column(
+        String, ForeignKey("state_positions.id", ondelete="RESTRICT"), nullable=False
+    )
     operation = Column(String, nullable=False)
     scope = Column(String, nullable=False)
     institution_id = Column(
@@ -379,7 +385,9 @@ class AuthorityGrantModel(Base):
         CheckConstraint(
             _in_check("operation", GRANTABLE_OPERATIONS), name="ck_state_authority_grants_operation"
         ),
-        CheckConstraint(_in_check("scope", AUTHORITY_SCOPES), name="ck_state_authority_grants_scope"),
+        CheckConstraint(
+            _in_check("scope", AUTHORITY_SCOPES), name="ck_state_authority_grants_scope"
+        ),
         CheckConstraint(
             _in_check("status", GRANT_STATUSES), name="ck_state_authority_grants_status"
         ),
@@ -414,7 +422,9 @@ class DecisionProvenanceModel(Base):
     official_id = Column(
         String, ForeignKey("state_officials.id", ondelete="RESTRICT"), nullable=True
     )
-    position_id = Column(String, ForeignKey("state_positions.id", ondelete="RESTRICT"), nullable=True)
+    position_id = Column(
+        String, ForeignKey("state_positions.id", ondelete="RESTRICT"), nullable=True
+    )
     institution_id = Column(
         String, ForeignKey("state_institutions.id", ondelete="RESTRICT"), nullable=False
     )
@@ -454,7 +464,9 @@ class TransactionAuthorityModel(Base):
     official_id = Column(
         String, ForeignKey("state_officials.id", ondelete="RESTRICT"), nullable=False
     )
-    position_id = Column(String, ForeignKey("state_positions.id", ondelete="RESTRICT"), nullable=True)
+    position_id = Column(
+        String, ForeignKey("state_positions.id", ondelete="RESTRICT"), nullable=True
+    )
     grant_id = Column(
         String, ForeignKey("state_authority_grants.id", ondelete="RESTRICT"), nullable=True
     )

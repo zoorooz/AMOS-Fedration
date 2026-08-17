@@ -203,9 +203,7 @@ def load_case(session: Session, case_id: str, *, tenant_id: str) -> LegalCaseMod
 def _load_identity(session: Session, identity_id: str, *, tenant_id: str) -> IdentityModel:
     row = session.get(IdentityModel, identity_id)
     if row is None or row.tenant_id != tenant_id:
-        raise PartyIdentityError(
-            f"لا هوية كانونية بالمعرّف '{identity_id}' في مستأجر '{tenant_id}'"
-        )
+        raise PartyIdentityError(f"لا هوية كانونية بالمعرّف '{identity_id}' في مستأجر '{tenant_id}'")
     return row
 
 
@@ -291,9 +289,7 @@ def file_case(session: Session, *, case_id: str, tenant_id: str) -> LegalCaseMod
     return row
 
 
-def assign_case(
-    session: Session, *, case_id: str, judge_id: str, tenant_id: str
-) -> LegalCaseModel:
+def assign_case(session: Session, *, case_id: str, judge_id: str, tenant_id: str) -> LegalCaseModel:
     """`filed → assigned` بقاضٍ مُقلَّدٍ نشطٍ في محكمة القضية بالذات."""
     row = load_case(session, case_id, tenant_id=tenant_id)
     assert_transition(row.status, "assigned")
@@ -364,7 +360,9 @@ def add_party(
 ) -> CasePartyModel:
     """أضِف طرفًا بهويةٍ كانونية — ولا يُقبَل اسمٌ نصّيّ بديلًا عنها."""
     if party_role not in PARTY_ROLES:
-        raise JudiciaryError(f"دورُ طرفٍ غير معروف '{party_role}' — المسموح: {', '.join(PARTY_ROLES)}")
+        raise JudiciaryError(
+            f"دورُ طرفٍ غير معروف '{party_role}' — المسموح: {', '.join(PARTY_ROLES)}"
+        )
     case = load_case(session, case_id, tenant_id=tenant_id)
     if case.status == "closed":
         raise JudiciaryError("لا تُضاف أطرافٌ إلى قضيةٍ مُغلقة")
@@ -535,9 +533,7 @@ def record_proceeding(
     _load_identity(session, actor_identity_id, tenant_id=tenant_id)
 
     current_max = session.execute(
-        select(func.max(CaseProceedingModel.sequence)).where(
-            CaseProceedingModel.case_id == case.id
-        )
+        select(func.max(CaseProceedingModel.sequence)).where(CaseProceedingModel.case_id == case.id)
     ).scalar()
     row = CaseProceedingModel(
         id=f"prc-{uuid.uuid4()}",
@@ -556,7 +552,9 @@ def record_proceeding(
     return row
 
 
-def list_proceedings(session: Session, *, case_id: str, tenant_id: str) -> list[CaseProceedingModel]:
+def list_proceedings(
+    session: Session, *, case_id: str, tenant_id: str
+) -> list[CaseProceedingModel]:
     return list(
         session.execute(
             select(CaseProceedingModel)

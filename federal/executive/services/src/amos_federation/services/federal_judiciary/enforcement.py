@@ -116,7 +116,9 @@ def record_enforcement(
             (`TASK` بلا `task_id`، أو `TREASURY` بلا مرجع حركة).
     """
     if kind not in ENFORCEMENT_KINDS:
-        raise EnforcementError(f"نوعُ تنفيذٍ غير معروف '{kind}' — المسموح: {', '.join(ENFORCEMENT_KINDS)}")
+        raise EnforcementError(
+            f"نوعُ تنفيذٍ غير معروف '{kind}' — المسموح: {', '.join(ENFORCEMENT_KINDS)}"
+        )
     if status not in ("requested", "executed", "failed"):
         raise EnforcementError(f"حالةُ تنفيذٍ غير معروفة '{status}'")
     if status == "executed":
