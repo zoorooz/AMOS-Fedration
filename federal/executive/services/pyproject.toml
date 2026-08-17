@@ -47,6 +47,10 @@ dependencies = [
     "httpx>=0.27.2",
     # Logging
     "structlog>=24.4.0",
+    # Charting — تعتمدها أداة `chart_generate` في tool_registry/sandbox.py.
+    # كانت مستخدَمةً في الكود وغيرَ مُعلَنةٍ هنا، فكان الفحصان
+    # `test_chart_generate_*` يفشلان بـ ModuleNotFoundError في بيئةٍ نظيفة.
+    "matplotlib>=3.9.0",
 ]
 
 [project.optional-dependencies]
