@@ -24,6 +24,7 @@ E2B و Modal ليسا نسخة واحدة باسمين، والفرق يظهر �
 from __future__ import annotations
 
 import contextlib
+import logging
 import os
 import time
 import uuid
@@ -40,6 +41,8 @@ from amos_federation.services.tool_registry.providers.contract import (
     SandboxProvider,
     SandboxSpec,
 )
+
+_logger = logging.getLogger(__name__)
 
 #: متغيّر البيئة الذي يلزمه E2B — يُسمّى ولا تُقرأ قيمته في أي سجل.
 E2B_CREDENTIAL_VARS: tuple[str, ...] = ("E2B_API_KEY",)
@@ -100,7 +103,8 @@ class E2BProvider(SandboxProvider):
         except ImportError:
             try:
                 from e2b import Sandbox  # type: ignore[no-redef]
-            except ImportError:
+            except ImportError as exc:
+                _logger.warning("حزمةُ E2B غائبة — المزوِّد UNAVAILABLE. %s", exc)
                 return None
         return Sandbox
 

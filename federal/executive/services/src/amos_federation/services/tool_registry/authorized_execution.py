@@ -31,6 +31,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -46,6 +47,8 @@ from amos_federation.services.tool_registry.providers.contract import (
     ExecutionResult,
     SandboxSpec,
 )
+
+_logger = logging.getLogger(__name__)
 
 #: أسماء حلقات السلسلة بترتيبها — تُفحَص في الاختبارات ضدّ إعادة الترتيب.
 AUTHORIZATION_CHAIN: tuple[str, ...] = (
@@ -132,7 +135,8 @@ def _known_tools() -> tuple[str, ...]:
         from amos_federation.services.tool_registry.catalog import TOOL_CATALOG
 
         return tuple(TOOL_CATALOG)
-    except Exception:  # noqa: BLE001 — تعذُّر القراءة = رفض لا سماح
+    except Exception as exc:  # noqa: BLE001 — تعذُّر القراءة = رفض لا سماح
+        _logger.warning("تعذّرت قراءةُ سجلّ الأدوات — الرفضُ لكلّ أداة. %s", exc)
         return ()
 
 
@@ -413,5 +417,5 @@ def _publish_execution(result: ExecutionResult, decision: AuthorizationDecision)
         payload["principal_id"] = decision.principal_id
         payload["principal_verification"] = decision.principal_verification
         get_event_bus().publish("amos_federation.tool.executed", payload)
-    except Exception:  # noqa: BLE001 — الناقل قد يكون غير مُهيّأ
-        pass
+    except Exception as exc:  # noqa: BLE001 — الناقل قد يكون غير مُهيّأ
+        _logger.warning("تعذّر نشرُ حدث tool.executed — %s", exc)

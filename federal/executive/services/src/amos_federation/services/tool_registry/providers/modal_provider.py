@@ -26,6 +26,7 @@
 from __future__ import annotations
 
 import contextlib
+import logging
 import os
 import time
 import uuid
@@ -42,6 +43,8 @@ from amos_federation.services.tool_registry.providers.contract import (
     SandboxProvider,
     SandboxSpec,
 )
+
+_logger = logging.getLogger(__name__)
 
 #: متغيّرات البيئة التي يلزمها Modal — تُسمّى ولا تُقرأ قيمها في أي سجل.
 MODAL_CREDENTIAL_VARS: tuple[str, ...] = ("MODAL_TOKEN_ID", "MODAL_TOKEN_SECRET")
@@ -97,7 +100,8 @@ class ModalProvider(SandboxProvider):
         """استيراد مؤجَّل للحزمة — غيابها `UNAVAILABLE` لا انهيار إقلاع."""
         try:
             import modal
-        except ImportError:
+        except ImportError as exc:
+            _logger.warning("حزمةُ Modal غائبة — المزوِّد UNAVAILABLE. %s", exc)
             return None
         return modal
 
@@ -191,7 +195,8 @@ class ModalProvider(SandboxProvider):
                 chunk.decode("utf-8", errors="replace") if isinstance(chunk, bytes) else str(chunk)
                 for chunk in stream
             )
-        except TypeError:
+        except TypeError as exc:
+            _logger.warning("مَجرى مخرجاتٍ غيرُ قابلٍ للتكرار — %s", exc)
             return str(stream)
 
     @staticmethod

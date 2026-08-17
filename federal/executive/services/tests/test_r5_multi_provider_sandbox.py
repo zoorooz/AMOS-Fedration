@@ -552,6 +552,8 @@ def test_authorization_denial_fails_closed_before_any_sandbox_exists() -> None:
 
 def test_sandbox_never_inherits_host_secrets() -> None:
     """بيئة الصندوق تُبنى من الفراغ: لا DB ولا Supabase ولا تاج ولا مزوِّد."""
+    # truth-audit: not-a-secret — قيمٌ مُختَرَعةٌ لاختبارٍ سلبيّ: الغرضُ إثباتُ أن
+    # الصندوق لا يُورّث أيًّا منها. لا سرَّ حقيقيًّا هنا.
     hostile = {
         "AMOS_DATABASE_URL": "postgresql://u:p@h/db",
         "DATABASE_URL": "postgresql://u:p@h/db",

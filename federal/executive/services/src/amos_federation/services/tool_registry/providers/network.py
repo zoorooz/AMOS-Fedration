@@ -28,9 +28,12 @@
 
 from __future__ import annotations
 
+import logging
 import shutil
 import subprocess
 from dataclasses import dataclass
+
+_logger = logging.getLogger(__name__)
 
 #: القيم المسموحة لـ`SandboxSpec.network_policy`.
 NETWORK_POLICIES: tuple[str, ...] = ("DENY", "ALLOWLIST", "ALLOW_ALL")
@@ -107,7 +110,8 @@ def isolation_available(*, force_probe: bool = False) -> bool:
             check=False,
         )
         _ISOLATION_PROBE = probe.returncode == 0
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError) as exc:
+        _logger.warning("تعذّر سبرُ عزل الشبكة — يُعَدُّ غيرَ مُتاح. %s", exc)
         _ISOLATION_PROBE = False
     return _ISOLATION_PROBE
 

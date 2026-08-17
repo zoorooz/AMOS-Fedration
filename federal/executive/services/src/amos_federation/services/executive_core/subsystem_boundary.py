@@ -31,6 +31,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass
 from enum import StrEnum
@@ -46,6 +47,8 @@ from amos_federation.services.executive_core.sovereignty_bridge import (
     AuthorityEvidence,
     ConstitutionalAuthorizer,
 )
+
+_logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:  # تُستعمل في التوقيعات فقط — قيمتها تأتي من المُنادي
     from amos_federation.services.executive_core.fidelity import ExecutionFidelity
@@ -162,7 +165,10 @@ class SubsystemBoundary:
             return "none", None
         try:
             self._repo.require(task_id)
-        except TaskNotFoundError:
+        except TaskNotFoundError as exc:
+            _logger.warning(
+                "مرجعُ مهمّةٍ غيرُ مُتحقَّق task_id=%s — %s", task_id, exc
+            )
             return "unverified", None
         return "canonical", task_id
 

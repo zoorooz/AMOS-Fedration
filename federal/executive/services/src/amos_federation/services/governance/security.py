@@ -18,6 +18,7 @@ AMOS-Federation Phase 16 — Production Security
 
 import hashlib
 import json
+import logging
 import os
 import uuid
 from datetime import UTC, datetime
@@ -30,6 +31,8 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from amos_federation.common.database import get_database_url
 from amos_federation.common.persistent import PersistentAuditStore
 from amos_federation.common.principal import DEFAULT_TENANT
+
+_logger = logging.getLogger(__name__)
 
 
 class SecurityBase(DeclarativeBase):
@@ -187,11 +190,12 @@ class RBACSystem:
                         f"SET tenant_id = '{DEFAULT_TENANT}' WHERE tenant_id IS NULL"
                     )
                 )
-        except SQLAlchemyError:
+        except SQLAlchemyError as exc:
             # الهجرة محاولة حسنة النيّة: فشلها يظهر فورًا عند أول استعلام جلسة
             # بخطأ واضح، ولا يُسكَت عنه بإدراج مستأجر وهمي. وإسقاط النظام كلّه
             # عند الإنشاء لأجل قاعدة لا تدعم ALTER أقسى من اللازم.
-            pass
+            # لكنه يُسجَّل: الفشلُ الصامت مخالفةٌ في ذاته.
+            _logger.warning("تعذّرت هجرةُ tenant_id لجداول الأمن — %s", exc)
 
     def _init_roles(self) -> None:
         session = self._Session()

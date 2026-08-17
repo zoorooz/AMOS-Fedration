@@ -55,6 +55,7 @@ AMOS-Federation National Registry — Authority Resolver
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
@@ -76,6 +77,8 @@ from amos_federation.services.state_registry.models import (
     InstitutionModel,
     OfficialModel,
 )
+
+_logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -348,7 +351,13 @@ def _amount_within(grant_max: str | None, amount: str | int | None) -> tuple[boo
     try:
         limit = Decimal(str(grant_max))
         value = Decimal(str(amount))
-    except (ArithmeticError, ValueError):  # pragma: no cover — قيمة غير رقمية
+    except (ArithmeticError, ValueError) as exc:  # pragma: no cover — قيمة غير رقمية
+        _logger.warning(
+            "حدُّ مِنحةٍ أو مبلغٌ غيرُ رقميّ grant_max=%s amount=%s — %s",
+            grant_max,
+            amount,
+            exc,
+        )
         return False, "حدّ المِنحة أو المبلغ ليس عددًا صالحًا — الرفض هو الافتراض"
     if value > limit:
         return False, f"المبلغ {value} يتجاوز حدّ المِنحة {limit}"

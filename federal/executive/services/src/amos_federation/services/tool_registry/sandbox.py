@@ -7,6 +7,7 @@ AMOS-Federation Real Tool Sandbox
 """
 
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -16,6 +17,8 @@ from pathlib import Path
 from typing import Any
 
 from amos_federation.common.principal import AuthorizationContext, policy_role
+
+_logger = logging.getLogger(__name__)
 
 
 class ToolSandbox:
@@ -116,7 +119,8 @@ with open({repr(result_path)}, "w") as f:
             result["returncode"] = proc.returncode
             result["tool"] = self.tool_id
             return result
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as exc:
+            _logger.warning("انتهت مهلةُ تنفيذ الأداة %s — %s", self.tool_id, exc)
             return {"error": "timeout", "tool": self.tool_id, "timeout_seconds": self.timeout}
         except Exception as e:
             return {"error": str(e), "tool": self.tool_id}
@@ -245,7 +249,8 @@ with open({repr(result_path)}, "w") as f:
                 "data_points": len(labels),
                 "tool": self.tool_id,
             }
-        except ImportError:
+        except ImportError as exc:
+            _logger.warning("matplotlib غيرُ مُتاحة — لا رسمَ بيانيًّا. %s", exc)
             return {"error": "matplotlib_not_available", "tool": self.tool_id}
         except Exception as e:
             return {"error": str(e), "tool": self.tool_id}

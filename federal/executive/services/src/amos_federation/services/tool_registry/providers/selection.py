@@ -25,6 +25,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from typing import Any
@@ -46,6 +47,8 @@ from amos_federation.services.tool_registry.providers.modal_provider import Moda
 from amos_federation.services.tool_registry.providers.simulation_provider import (
     SimulationProvider,
 )
+
+_logger = logging.getLogger(__name__)
 
 #: المزوِّد الافتراضي حين لا إعداد — سلوك ما قبل R5 نفسه.
 DEFAULT_PROVIDER = "local"
@@ -229,8 +232,8 @@ def _publish_fallback(source: str, target: str, reason: str) -> None:
             "amos_federation.sandbox.fallback",
             {"from_provider": source, "to_provider": target, "reason": reason},
         )
-    except Exception:  # noqa: BLE001 — الناقل قد يكون غير مُهيّأ في الاختبارات
-        pass
+    except Exception as exc:  # noqa: BLE001 — الناقل قد يكون غير مُهيّأ في الاختبارات
+        _logger.warning("تعذّر نشرُ حدث sandbox.fallback — %s", exc)
 
 
 def execute_in_sandbox(

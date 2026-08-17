@@ -30,6 +30,7 @@ AMOS-Federation Federal/State Integration — Explicit Delegation
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
@@ -42,6 +43,8 @@ from amos_federation.services.federal_state.models import (
     SCOPE_LEVELS,
     GovernmentDelegationModel,
 )
+
+_logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -94,7 +97,12 @@ def _within_amount(delegation: GovernmentDelegationModel, amount: Decimal | None
         return delegation.max_amount is None
     try:
         return amount <= Decimal(str(delegation.max_amount))
-    except (InvalidOperation, ValueError):
+    except (InvalidOperation, ValueError) as exc:
+        _logger.warning(
+            "سقفُ تفويضٍ غيرُ رقميّ delegation_id=%s — %s الرفضُ هو الافتراض",
+            getattr(delegation, "id", None),
+            exc,
+        )
         return False
 
 
