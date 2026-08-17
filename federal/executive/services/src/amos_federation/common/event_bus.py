@@ -331,6 +331,87 @@ EVENT_CONTRACTS = {
         "required_fields": ["case_id", "reference", "decision_id", "actor"],
         "optional_fields": ["task_id", "tenant_id", "actor_role", "session_id", "audit_id"],
     },
+    # === الخزانة الفدرالية (R7-B) — لا ناقل جديد، عقودٌ على الناقل الدائم القائم ===
+    "amos_federation.treasury.treasury_established": {
+        "required_fields": ["treasury_id", "code", "currency", "actor"],
+        "optional_fields": [
+            "institution_id",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    "amos_federation.treasury.account_opened": {
+        "required_fields": ["account_id", "code", "treasury_id", "kind", "currency", "actor"],
+        "optional_fields": ["tenant_id", "actor_role", "session_id", "audit_id"],
+    },
+    "amos_federation.treasury.budget_created": {
+        "required_fields": [
+            "budget_id",
+            "code",
+            "institution_id",
+            "period",
+            "currency",
+            "limit_amount",
+            "actor",
+        ],
+        "optional_fields": ["tenant_id", "actor_role", "session_id", "audit_id"],
+    },
+    "amos_federation.treasury.allocation_created": {
+        "required_fields": [
+            "allocation_id",
+            "budget_id",
+            "account_id",
+            "amount",
+            "currency",
+            "official_id",
+            "actor",
+        ],
+        "optional_fields": ["decision_id", "tenant_id", "actor_role", "session_id", "audit_id"],
+    },
+    "amos_federation.treasury.transaction_posted": {
+        "required_fields": [
+            "transaction_id",
+            "reference",
+            "treasury_id",
+            "kind",
+            "amount",
+            "currency",
+            "official_id",
+            "actor",
+        ],
+        "optional_fields": [
+            "budget_id",
+            "allocation_id",
+            "task_id",
+            "decision_id",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
+    "amos_federation.treasury.transaction_reversed": {
+        "required_fields": [
+            "transaction_id",
+            "reference",
+            "reverses_transaction_id",
+            "amount",
+            "currency",
+            "official_id",
+            "actor",
+        ],
+        "optional_fields": [
+            "reversed_reference",
+            "treasury_id",
+            "reason",
+            "tenant_id",
+            "actor_role",
+            "session_id",
+            "audit_id",
+        ],
+    },
 }
 
 

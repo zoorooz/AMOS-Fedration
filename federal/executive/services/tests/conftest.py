@@ -85,16 +85,30 @@ def postgres_url(monkeypatch: pytest.MonkeyPatch) -> str:
 # حتى لا يُكرَّر الترتيب في ثمانية ملفات وينساه تاسعٌ غدًا.
 # الترتيب مقصود: القرار يشير إلى القضية والمنصب، والقضية تشير إلى المنصب والوكيل،
 # والمنصب يشير إلى الوكيل. فالحذف من الأخصّ إلى الأعمّ وإلّا رفضه قيدٌ مرجعي مفروض.
+# ومنذ R7-B دخل المال في الرسم: `state_transactions` تشير إلى `state_officials`
+# و`tasks` و`state_decisions`، و`state_ledger_entries` تشير إلى الحركات. فصار
+# الأخصّ هو القيد ثم الحركة، وقبل القرار لا بعده.
 AGENT_DEPENDENT_TABLES: tuple[str, ...] = (
+    "state_ledger_entries",
+    "state_transactions",
+    "state_allocations",
     "state_decisions",
     "state_cases",
     "state_officials",
 )
 
 
-#: ما يشير إلى `tasks` بمفتاح مفروض — القضايا وقراراتها (R7-A، الوحدة 2).
-#: كل قضية تحمل `task_id NOT NULL`، فحذف صفوف المهامّ قبلها يرفضه القيد.
-TASK_DEPENDENT_TABLES: tuple[str, ...] = ("state_decisions", "state_cases")
+#: ما يشير إلى `tasks` بمفتاح مفروض — القضايا وقراراتها (R7-A، الوحدة 2)
+#: وحركات الخزانة (R7-B). كل قضية تحمل `task_id NOT NULL`، وكل حركةٍ نتجت عن
+#: تنفيذ مهمّة تحمل `task_id`، فحذف صفوف المهامّ قبلها يرفضه القيد.
+#: و`state_allocations` قبل `state_decisions` لأن التخصيص قد يشير إلى قرار.
+TASK_DEPENDENT_TABLES: tuple[str, ...] = (
+    "state_ledger_entries",
+    "state_transactions",
+    "state_allocations",
+    "state_decisions",
+    "state_cases",
+)
 
 
 def _delete_existing(session, tables: tuple[str, ...]) -> None:  # noqa: ANN001

@@ -104,6 +104,13 @@ SERVICES: dict[str, ServiceDefinition] = {
         "store": "PostgreSQL",
         "slo": "p99 < 200ms لكل قراءة",
     },
+    "state-treasury": {
+        "name": "state-treasury",
+        "port": 8012,
+        "responsibility": "الخزانة الفدرالية: الحسابات والموازنات والتخصيصات ودفتر الحركات",
+        "store": "PostgreSQL",
+        "slo": "p99 < 200ms لكل قراءة",
+    },
     "control-console": {
         "name": "control-console",
         "port": 3000,
