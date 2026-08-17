@@ -197,9 +197,7 @@ def _service(
     )
 
 
-def _official(
-    registry: StateRegistry, crown: AuthorizationContext, institution_code: str
-) -> dict:
+def _official(registry: StateRegistry, crown: AuthorizationContext, institution_code: str) -> dict:
     return registry.appoint_official(
         context=crown,
         agent_id=_agent(),
@@ -651,9 +649,7 @@ def test_21_duplicate_service_code_and_unknown_institution_are_refused(
     """رمز الخدمة فريد في مؤسستها، ولا خدمة تحت مؤسسة غير موجودة."""
     institution = _institution(registry, crown)
     code = _code("SVC")
-    gov.publish_service(
-        context=crown, institution_code=institution["code"], code=code, name="خدمة"
-    )
+    gov.publish_service(context=crown, institution_code=institution["code"], code=code, name="خدمة")
     with pytest.raises(DuplicateServiceCodeError):
         gov.publish_service(
             context=crown, institution_code=institution["code"], code=code, name="خدمة مكرَّرة"
