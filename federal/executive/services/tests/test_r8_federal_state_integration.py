@@ -47,6 +47,17 @@ from amos_federation.common.principal import (
 from amos_federation.services.executive_core.agent_identity import register_identity
 from amos_federation.services.executive_core.dispatcher import WILDCARD, register_agent
 from amos_federation.services.executive_core.engine import reset_executive_core
+from amos_federation.services.federal_judiciary.models import (
+    CaseClaimModel,
+    CaseEvidenceModel,
+    CasePartyModel,
+    CaseProceedingModel,
+    CourtJudgeModel,
+    CourtModel,
+    LegalCaseModel,
+    RulingEnforcementModel,
+    RulingModel,
+)
 from amos_federation.services.federal_state import (
     DuplicateGovernmentError,
     FederalStateGovernment,
@@ -68,7 +79,7 @@ from amos_federation.services.federal_state.models import (
     ServiceScopeModel,
 )
 from amos_federation.services.governance.security import DEFAULT_ROLES
-from amos_federation.services.government_services.models import CaseModel
+from amos_federation.services.government_services.models import CaseModel, DecisionModel
 from amos_federation.services.government_services.service import (
     get_government_services,
     reset_government_services,
@@ -164,6 +175,18 @@ def _fresh_state() -> None:
     init_db()
     session = get_session_factory()()
     try:
+        # صفوفُ القضاء أوّلًا: `court_judges` يشير إلى `positions` بمفتاحٍ أجنبيّ،
+        # فحذفُ المناصب قبلها يكسر القيدَ المرجعيّ إن سبقت ملفّةُ القضاء هذه الملفّة
+        # في التشغيل الكامل. النطاقُ ليس نطاقَنا لكنّ القاعدةَ واحدة.
+        session.query(RulingEnforcementModel).delete()
+        session.query(RulingModel).delete()
+        session.query(CaseProceedingModel).delete()
+        session.query(CaseEvidenceModel).delete()
+        session.query(CaseClaimModel).delete()
+        session.query(CasePartyModel).delete()
+        session.query(LegalCaseModel).delete()
+        session.query(CourtJudgeModel).delete()
+        session.query(CourtModel).delete()
         session.query(GovernmentOperationModel).delete()
         session.query(CaseScopeModel).delete()
         session.query(ServiceScopeModel).delete()
@@ -183,6 +206,7 @@ def _fresh_state() -> None:
         session.query(BudgetModel).delete()
         session.query(AccountModel).delete()
         session.query(TreasuryModel).delete()
+        session.query(DecisionModel).delete()
         session.query(CaseModel).delete()
         session.query(AuthorityGrantModel).delete()
         session.query(OfficialPositionModel).delete()
@@ -1613,3 +1637,234 @@ def test_28_every_write_correlates_audit_and_durable_event(
     assert any(
         entry["audit_id"] == scoped["audit_id"] for entry in audit
     ), "سلسلةُ التدقيق كُتبت قبل الحدث لا بعده"
+
+
+# ── 29+. حرّاسُ المدخلات: الرفضُ مسارٌ مُشغَّلٌ لا سطرٌ مكتوب ───────────────
+
+
+def test_29_closed_vocabularies_are_rejected_at_the_door(
+    federation: FederalStateGovernment, registry: StateRegistry, crown: AuthorizationContext
+) -> None:
+    """مستوى الحكومة وحالتُها وعلاقةُ الوحدة ونوعُ الطرف ودلالتُه: مفرداتٌ مغلقة."""
+    federal, (state, _other) = _federal_and_states(federation, crown)
+
+    with pytest.raises(FederationError, match="مستوى حكومةٍ مجهول"):
+        federation.register_government(
+            crown, code=_code("GOV"), name="حكومةٌ بمستوى مُخترَع", level="MUNICIPAL"
+        )
+    with pytest.raises(FederationError, match="حالةُ حكومةٍ مجهولة"):
+        federation.set_government_status(
+            crown, code=state["code"], status="hibernating", reason="سببٌ مُدوَّن"
+        )
+    with pytest.raises(FederationError, match="علاقةُ وحدةٍ مجهولة"):
+        federation.bind_institution(
+            crown,
+            institution_code="INS-LA-YUJAD",
+            government_code=state["code"],
+            relation="owns",
+        )
+    with pytest.raises(FederationError, match="نوعُ طرفٍ مجهول"):
+        federation.record_relation(
+            crown,
+            from_kind="PLANET",
+            from_ref=federal["code"],
+            to_kind="GOVERNMENT",
+            to_ref=state["code"],
+            relation="governs",
+        )
+    with pytest.raises(FederationError, match="دلالةُ علاقةٍ مجهولة"):
+        federation.record_relation(
+            crown,
+            from_kind="GOVERNMENT",
+            from_ref=federal["code"],
+            to_kind="GOVERNMENT",
+            to_ref=state["code"],
+            relation="devours",
+        )
+    with pytest.raises(FederationError, match="بنفسه"):
+        federation.record_relation(
+            crown,
+            from_kind="GOVERNMENT",
+            from_ref=state["code"],
+            to_kind="GOVERNMENT",
+            to_ref=state["code"],
+            relation="governs",
+        )
+
+
+def test_30_unknown_scope_levels_are_refused_in_every_scoped_entry(
+    federation: FederalStateGovernment,
+    registry: StateRegistry,
+    national: NationalRegistry,
+    treasury: StateTreasury,
+    crown: AuthorizationContext,
+) -> None:
+    """كلُّ مدخلٍ ينطق بمستوى نطاقٍ يرفض المجهولَ قبل أن يقرأ صفًّا."""
+    _federal, (state, _other) = _federal_and_states(federation, crown)
+    officer = _context("official", username="r8g30")
+    chain = _authority_chain(
+        registry, national, federation, crown, officer, government_code=state["code"]
+    )
+    dead_level = "CONTINENTAL"
+
+    with pytest.raises(FederationError, match="نطاقٌ مجهول|مستوى نطاقٍ مجهول"):
+        federation.grant_delegation(
+            crown,
+            from_government_code=state["code"],
+            operation="gov.case.decide",
+            scope=dead_level,
+            to_institution_code=chain.institution["code"],
+        )
+    with pytest.raises(FederationError, match="مستوى نطاقٍ مجهول"):
+        federation.scope_service(
+            crown,
+            institution_code=chain.institution["code"],
+            service_code="SRV-LA-YUJAD",
+            level=dead_level,
+        )
+    with pytest.raises(FederationError, match="مستوى نطاقٍ مجهول"):
+        federation.scope_case(crown, case_reference="GC-LA-YUJAD", level=dead_level)
+    with pytest.raises(FederationError, match="مستوى نطاقٍ مجهول"):
+        federation.execute_scoped_operation(
+            crown,
+            institution_code=chain.institution["code"],
+            level=dead_level,
+            summary="ملخّصٌ مكتوب",
+        )
+    with pytest.raises(FederationError, match="مستوى نطاقٍ مجهول"):
+        federation.execute_scoped_disbursement(
+            crown,
+            treasury=treasury,
+            institution_code=chain.institution["code"],
+            level=dead_level,
+            allocation_id="00000000-0000-0000-0000-000000000000",
+            expense_account_code="ACC-LA-YUJAD",
+            amount="100.0000",
+            purpose="غرضٌ مكتوب",
+            idempotency_key=f"idem-{uuid.uuid4().hex[:8]}",
+        )
+
+
+def test_31_revoking_a_delegation_needs_a_reason_and_happens_once(
+    federation: FederalStateGovernment,
+    registry: StateRegistry,
+    national: NationalRegistry,
+    crown: AuthorizationContext,
+) -> None:
+    """النقضُ يلزمه سببٌ مُصرَّحٌ ومعرِّفٌ موجود — ولا يُنقَض المنقوضُ ثانيًا."""
+    _federal, (state, _other) = _federal_and_states(federation, crown)
+    officer = _context("official", username="r8g31")
+    chain = _authority_chain(
+        registry, national, federation, crown, officer, government_code=state["code"]
+    )
+    delegation = federation.grant_delegation(
+        crown,
+        from_government_code=state["code"],
+        operation="gov.case.decide",
+        scope="INSTITUTION",
+        to_institution_code=chain.institution["code"],
+        reason="تفويضٌ مُسبَّب",
+    )
+
+    with pytest.raises(FederationError, match="سببٌ مُصرَّح"):
+        federation.revoke_delegation(crown, delegation_id=delegation["id"], reason="  ")
+    with pytest.raises(FederationError, match="لا تفويضَ بمعرّف"):
+        federation.revoke_delegation(
+            crown,
+            delegation_id="00000000-0000-0000-0000-000000000000",
+            reason="سببٌ مُدوَّن",
+        )
+
+    federation.revoke_delegation(crown, delegation_id=delegation["id"], reason="سببٌ مُدوَّن")
+    with pytest.raises(FederationError, match="منقوضٌ سابقًا"):
+        federation.revoke_delegation(crown, delegation_id=delegation["id"], reason="سببٌ مُدوَّن")
+
+
+def test_32_scoping_reads_the_rows_it_names_and_invents_none(
+    federation: FederalStateGovernment,
+    registry: StateRegistry,
+    national: NationalRegistry,
+    services: GovernmentServices,
+    crown: AuthorizationContext,
+) -> None:
+    """خدمةٌ وقضيةٌ ومنصبٌ وإدارةٌ: كلُّ اسمٍ يُقرأ من القاعدة أو يُرفَض."""
+    _federal, (state, _other) = _federal_and_states(federation, crown)
+    officer = _context("official", username="r8g32")
+    chain = _authority_chain(
+        registry, national, federation, crown, officer, government_code=state["code"]
+    )
+
+    with pytest.raises(FederationError):
+        federation.scope_service(
+            crown,
+            institution_code=chain.institution["code"],
+            service_code="SRV-LA-YUJAD",
+            level="STATE",
+        )
+    with pytest.raises(FederationError, match="لا قضية بمرجع"):
+        federation.scope_case(crown, case_reference="GC-LA-YUJAD", level="STATE")
+
+    bundle = _open_case(services, registry, crown, chain)
+    with pytest.raises(FederationError, match="لا منصبَ بمعرّف"):
+        federation.scope_case(
+            crown,
+            case_reference=bundle["case"]["reference"],
+            level="STATE",
+            responsible_official_id="00000000-0000-0000-0000-000000000000",
+        )
+
+    service = services.publish_service(
+        context=crown,
+        institution_code=chain.institution["code"],
+        code=_code("SRV"),
+        name="خدمةٌ بإدارة",
+    )
+    with pytest.raises(FederationError, match="`department_id`"):
+        federation.scope_service(
+            crown,
+            institution_code=chain.institution["code"],
+            service_code=service["code"],
+            level="DEPARTMENT",
+        )
+    with pytest.raises(FederationError, match="ليست في مؤسسة الخدمة"):
+        federation.scope_service(
+            crown,
+            institution_code=chain.institution["code"],
+            service_code=service["code"],
+            level="DEPARTMENT",
+            department_id="00000000-0000-0000-0000-000000000000",
+        )
+
+    scoped = federation.scope_service(
+        crown,
+        institution_code=chain.institution["code"],
+        service_code=service["code"],
+        level="STATE",
+    )
+    rescoped = federation.scope_service(
+        crown,
+        institution_code=chain.institution["code"],
+        service_code=service["code"],
+        level="STATE",
+    )
+    assert rescoped["id"] == scoped["id"], "إعادةُ النطاق تُحدِّث الصفَّ ولا تُنشئ ثانيًا"
+
+
+def test_33_an_unbound_institution_has_no_invented_government_scope(
+    federation: FederalStateGovernment,
+    registry: StateRegistry,
+    national: NationalRegistry,
+    crown: AuthorizationContext,
+) -> None:
+    """مؤسسةٌ بلا ربطٍ حكوميٍّ تُوصَف بلا حكومة — لا تُنسَب إلى واحدةٍ مُخترَعة."""
+    _federal, _states = _federal_and_states(federation, crown)
+    officer = _context("official", username="r8g33")
+    chain = _authority_chain(registry, national, federation, crown, officer, government_code=None)
+    described = federation.describe_institution_scope(
+        crown, institution_code=chain.institution["code"]
+    )
+    assert described["government_id"] is None, "لا حكومةَ تُنسَب بلا ربط"
+    assert described["classification"] == "UNRESOLVED"
+
+    with pytest.raises(FederationError, match="لا مؤسسة برمز"):
+        federation.describe_institution_scope(crown, institution_code="INS-LA-YUJAD")

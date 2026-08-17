@@ -73,10 +73,16 @@ from amos_federation.services.national_registry.resolver import (
     resolve_positions,
 )
 from amos_federation.services.national_registry.service import (
+    AssignmentNotFoundError,
     DuplicateAssignmentError,
+    GrantNotFoundError,
     IdentityConflictError,
+    IdentityNotFoundError,
     InvalidGrantTargetError,
     NationalRegistry,
+    NationalRegistryError,
+    PositionInactiveError,
+    PositionNotFoundError,
     UnknownAgentError,
     get_national_registry,
     reset_national_registry,
@@ -160,6 +166,8 @@ def _fresh_state() -> None:
     try:
         session.query(TransactionAuthorityModel).delete()
         session.query(DecisionProvenanceModel).delete()
+        # المِنحةُ قد تُصوَّب على موازنةٍ أو حساب، فتُحذَف قبلهما لا بعدهما.
+        session.query(AuthorityGrantModel).delete()
         session.query(LedgerEntryModel).delete()
         session.query(TransactionModel).filter(
             TransactionModel.reverses_transaction_id.isnot(None)
@@ -172,7 +180,6 @@ def _fresh_state() -> None:
         session.query(TreasuryModel).delete()
         session.query(DecisionModel).delete()
         session.query(CaseModel).delete()
-        session.query(AuthorityGrantModel).delete()
         session.query(OfficialPositionModel).delete()
         session.query(PositionModel).delete()
         session.query(IdentityAgentModel).delete()
@@ -1222,3 +1229,367 @@ def test_26_the_registry_invents_no_permission_vocabulary_and_no_third_registry(
         "treasury.transaction.reverse",
         "gov.case.decide",
     }
+
+
+# ── 27+. حرّاسُ المدخلات: الرفضُ مسارٌ مُشغَّلٌ لا سطرٌ مكتوب ───────────────
+#
+# ما سبق يفحص ما يُنجَز؛ وهذا يفحص ما يُرفَض. كلُّ حارسٍ في `national_registry`
+# يُنادى بمدخلٍ يخالفه فعلًا، ليكون الرفضُ سلوكًا مقيسًا لا نيّةً في الشيفرة.
+
+
+def test_27_identity_status_vocabulary_is_closed_and_change_needs_a_reason(
+    national: NationalRegistry, crown: AuthorizationContext
+) -> None:
+    """الحالةُ من المفردة الأربعة، وتغييرُها يلزمه سببٌ مكتوبٌ لا فراغ."""
+    with pytest.raises(ValueError, match="حالة"):
+        national.create_identity(
+            context=crown, identity_type="PERSON", label="هوية", status="deceased"
+        )
+
+    identity = national.create_identity(context=crown, identity_type="PERSON", label="هوية")
+
+    with pytest.raises(ValueError, match="حالة"):
+        national.set_identity_status(
+            context=crown, identity_id=identity["id"], status="deceased", reason="سبب"
+        )
+    with pytest.raises(ValueError, match="سبب"):
+        national.set_identity_status(
+            context=crown, identity_id=identity["id"], status="suspended", reason=""
+        )
+
+    changed = national.set_identity_status(
+        context=crown, identity_id=identity["id"], status="suspended", reason="سببٌ مُدوَّن"
+    )
+    assert changed["status"] == "suspended", "التغييرُ المشروعُ يمرّ"
+
+
+def test_28_unknown_identity_or_institution_is_never_invented(
+    national: NationalRegistry, crown: AuthorizationContext
+) -> None:
+    """معرِّفٌ أو رمزٌ لا صفَّ له يرفع «لا يوجد» ولا يُنشئ صفًّا ليكمل الفعل."""
+    with pytest.raises(IdentityNotFoundError):
+        national.set_identity_status(
+            context=crown,
+            identity_id="00000000-0000-0000-0000-000000000000",
+            status="suspended",
+            reason="سببٌ مُدوَّن",
+        )
+    with pytest.raises(NationalRegistryError, match="مؤسسة"):
+        national.create_position(
+            context=crown,
+            code=_code("POS"),
+            title="منصبٌ بلا مؤسسة",
+            institution_code="INST-LA-YUJAD",
+            authority_scope="INSTITUTION",
+        )
+
+
+def test_29_binding_is_idempotent_and_one_identity_holds_one_agent(
+    registry: StateRegistry, national: NationalRegistry, crown: AuthorizationContext
+) -> None:
+    """إعادةُ الربط نفسِه لا تُنشئ صفًّا ثانيًا، وهويةٌ لا تحمل وكيلين."""
+    identity = national.create_identity(context=crown, identity_type="PERSON", label="هوية")
+    principal_id = _worker()
+
+    first = national.link_principal(
+        context=crown, principal_id=principal_id, identity_id=identity["id"]
+    )
+    again = national.link_principal(
+        context=crown, principal_id=principal_id, identity_id=identity["id"]
+    )
+    assert first["created"] is True and again["created"] is False, "الربطُ نفسُه لا يُعاد إنشاؤه"
+
+    agent_id = _agent()
+    linked = national.link_agent(context=crown, agent_id=agent_id, identity_id=identity["id"])
+    relinked = national.link_agent(context=crown, agent_id=agent_id, identity_id=identity["id"])
+    assert linked["created"] is True and relinked["created"] is False
+
+    second_agent = _agent()
+    with pytest.raises(IdentityConflictError):
+        national.link_agent(context=crown, agent_id=second_agent, identity_id=identity["id"])
+
+
+def test_30_position_guards_hold_scope_institution_department_and_uniqueness(
+    registry: StateRegistry, national: NationalRegistry, crown: AuthorizationContext
+) -> None:
+    """المنصب: نطاقٌ من المفردة · مؤسسةٌ عاملة · إدارةٌ موجودةٌ فيها · رمزٌ فريد."""
+    institution = registry.register_institution(
+        context=crown, code=_code("INST"), name="وزارة", kind="ministry", branch="executive"
+    )
+    code = institution["code"]
+
+    with pytest.raises(ValueError, match="نطاق"):
+        national.create_position(
+            context=crown,
+            code=_code("POS"),
+            title="منصبٌ بنطاقٍ مُخترَع",
+            institution_code=code,
+            authority_scope="PLANETARY",
+        )
+
+    with pytest.raises(PositionNotFoundError, match="إدارة"):
+        national.create_position(
+            context=crown,
+            code=_code("POS"),
+            title="منصبٌ بإدارةٍ لا وجودَ لها",
+            institution_code=code,
+            authority_scope="DEPARTMENT",
+            department_code="DEP-LA-YUJAD",
+        )
+
+    dept = registry.create_department(
+        context=crown, institution_code=code, code=_code("DEP"), name="إدارة"
+    )
+    with pytest.raises(InvalidGrantTargetError):
+        national.create_position(
+            context=crown,
+            code=_code("POS"),
+            title="منصبُ مؤسسةٍ بإدارةٍ مُسمّاة",
+            institution_code=code,
+            authority_scope="INSTITUTION",
+            department_code=dept["code"],
+        )
+
+    first = national.create_position(
+        context=crown,
+        code=_code("POS"),
+        title="منصبٌ مشروع",
+        institution_code=code,
+        authority_scope="INSTITUTION",
+    )
+    with pytest.raises(NationalRegistryError):
+        national.create_position(
+            context=crown,
+            code=first["code"],
+            title="منصبٌ بالرمز نفسِه",
+            institution_code=code,
+            authority_scope="INSTITUTION",
+        )
+
+    registry.set_institution_status(context=crown, code=code, status="suspended", reason="سببٌ مُدوَّن")
+    with pytest.raises(NationalRegistryError):
+        national.create_position(
+            context=crown,
+            code=_code("POS"),
+            title="منصبٌ في مؤسسةٍ مُعلَّقة",
+            institution_code=code,
+            authority_scope="INSTITUTION",
+        )
+
+
+def test_31_assignment_guards_require_a_live_official_and_a_live_position(
+    registry: StateRegistry, national: NationalRegistry, crown: AuthorizationContext
+) -> None:
+    """التقليدُ يلزمه موظّفٌ مُعيَّنٌ ومنصبٌ عاملٌ — والمعزولُ لا يُقلَّد."""
+    chain = _chain(registry, national, crown, _context("official", username="r7c-g31"))
+    dead_id = "00000000-0000-0000-0000-000000000000"
+
+    with pytest.raises(AssignmentNotFoundError):
+        national.assign_position(
+            context=crown, official_id=dead_id, position_id=chain.position["id"]
+        )
+    with pytest.raises(PositionNotFoundError):
+        national.assign_position(
+            context=crown, official_id=chain.official["id"], position_id=dead_id
+        )
+
+    other_agent = _agent()
+    official = registry.appoint_official(
+        context=crown,
+        agent_id=other_agent,
+        institution_code=chain.institution["code"],
+        title="موظّفٌ سيُعزَل",
+    )
+    registry.revoke_official(context=crown, official_id=official["id"], reason="سببٌ مُدوَّن")
+    with pytest.raises(PositionInactiveError):
+        national.assign_position(
+            context=crown, official_id=official["id"], position_id=chain.position["id"]
+        )
+
+
+def test_32_revocation_needs_a_reason_and_repeats_without_a_second_row(
+    registry: StateRegistry, national: NationalRegistry, crown: AuthorizationContext
+) -> None:
+    """العزلُ والسحبُ: سببٌ مكتوبٌ · معرِّفٌ موجودٌ · وإعادةُ الفعل لا تُغيّر شيئًا."""
+    context = _context("official", username="r7c-g32")
+    chain = _chain(registry, national, crown, context)
+    grant = national.grant_authority(
+        context=crown,
+        position_id=chain.position["id"],
+        operation="treasury.disbursement.post",
+        scope="INSTITUTION",
+        max_amount="1000.0000",
+    )
+    dead_id = "00000000-0000-0000-0000-000000000000"
+
+    with pytest.raises(ValueError, match="سبب"):
+        national.revoke_assignment(context=crown, assignment_id=chain.assignment["id"], reason="")
+    with pytest.raises(AssignmentNotFoundError):
+        national.revoke_assignment(context=crown, assignment_id=dead_id, reason="سببٌ مُدوَّن")
+
+    with pytest.raises(ValueError, match="سبب"):
+        national.revoke_authority(context=crown, grant_id=grant["id"], reason="")
+    with pytest.raises(GrantNotFoundError):
+        national.revoke_authority(context=crown, grant_id=dead_id, reason="سببٌ مُدوَّن")
+
+    first = national.revoke_authority(context=crown, grant_id=grant["id"], reason="سببٌ مُدوَّن")
+    again = national.revoke_authority(context=crown, grant_id=grant["id"], reason="سببٌ مُدوَّن")
+    assert first["changed"] is True and again["changed"] is False, "السحبُ لا يُكرَّر"
+
+    revoked = national.revoke_assignment(
+        context=crown, assignment_id=chain.assignment["id"], reason="سببٌ مُدوَّن"
+    )
+    repeated = national.revoke_assignment(
+        context=crown, assignment_id=chain.assignment["id"], reason="سببٌ مُدوَّن"
+    )
+    assert revoked["changed"] is True and repeated["changed"] is False, "العزلُ لا يُكرَّر"
+
+
+def test_33_grant_target_guards_refuse_resources_outside_the_position(
+    registry: StateRegistry,
+    national: NationalRegistry,
+    treasury: StateTreasury,
+    crown: AuthorizationContext,
+) -> None:
+    """المِنحةُ لا تُصوَّب على موردٍ خارج مؤسسة المنصب ولا على موردٍ لا وجودَ له."""
+    context = _context("official", username="r7c-g33a")
+    chain = _fiscal(treasury, crown, _chain(registry, national, crown, context))
+    other = _fiscal(
+        treasury,
+        crown,
+        _chain(registry, national, crown, _context("official", username="r7c-g33b")),
+    )
+    position_id = chain.position["id"]
+    dead_id = "00000000-0000-0000-0000-000000000000"
+
+    with pytest.raises(ValueError, match="عملية|نطاق"):
+        national.grant_authority(
+            context=crown,
+            position_id=position_id,
+            operation="treasury.money.print",
+            scope="INSTITUTION",
+        )
+    with pytest.raises(ValueError, match="نطاق"):
+        national.grant_authority(
+            context=crown,
+            position_id=position_id,
+            operation="treasury.disbursement.post",
+            scope="PLANETARY",
+        )
+    with pytest.raises(PositionNotFoundError):
+        national.grant_authority(
+            context=crown,
+            position_id=dead_id,
+            operation="treasury.disbursement.post",
+            scope="INSTITUTION",
+        )
+    with pytest.raises(InvalidGrantTargetError):
+        national.grant_authority(
+            context=crown,
+            position_id=position_id,
+            operation="treasury.disbursement.post",
+            scope="INSTITUTION",
+            institution_id=other.institution["id"],
+        )
+    with pytest.raises(InvalidGrantTargetError, match="إدارة"):
+        national.grant_authority(
+            context=crown,
+            position_id=position_id,
+            operation="treasury.disbursement.post",
+            scope="DEPARTMENT",
+        )
+    with pytest.raises(InvalidGrantTargetError, match="إدارة"):
+        national.grant_authority(
+            context=crown,
+            position_id=position_id,
+            operation="treasury.disbursement.post",
+            scope="INSTITUTION",
+            department_id=dead_id,
+        )
+    with pytest.raises(InvalidGrantTargetError, match="موازنة"):
+        national.grant_authority(
+            context=crown,
+            position_id=position_id,
+            operation="treasury.disbursement.post",
+            scope="INSTITUTION",
+            budget_id=dead_id,
+        )
+    with pytest.raises(InvalidGrantTargetError, match="موازنة"):
+        national.grant_authority(
+            context=crown,
+            position_id=position_id,
+            operation="treasury.disbursement.post",
+            scope="INSTITUTION",
+            budget_id=other.budget["id"],
+        )
+    with pytest.raises(InvalidGrantTargetError, match="حساب"):
+        national.grant_authority(
+            context=crown,
+            position_id=position_id,
+            operation="treasury.disbursement.post",
+            scope="INSTITUTION",
+            account_id=dead_id,
+        )
+
+    ok = national.grant_authority(
+        context=crown,
+        position_id=position_id,
+        operation="treasury.disbursement.post",
+        scope="INSTITUTION",
+        budget_id=chain.budget["id"],
+        account_id=chain.cash["id"],
+        max_amount="1000.0000",
+    )
+    assert ok["status"] == "active", "المِنحةُ على موردٍ داخليٍّ تمرّ"
+
+
+def test_34_an_unlinked_principal_resolves_to_unresolved_not_to_a_guess(
+    registry: StateRegistry, national: NationalRegistry, crown: AuthorizationContext
+) -> None:
+    """مبدأٌ بلا ربطٍ يُصنَّف «غيرَ محلول» ولا تُخترَع له هوية."""
+    orphan = national.get_identity_of_principal(context=crown, principal_id="principal-la-yujad")
+    assert orphan.get("identity_id") is None, "لا هويةَ تُخترَع لمبدأٍ غيرِ مربوط"
+
+    context = _context("official", username="r7c-g35")
+    chain = _chain(registry, national, crown, context)
+    mine = national.get_identity_of_principal(context=context)
+    assert mine.get("identity_id") == chain.identity["id"], "المبدأُ المربوطُ يُحلّ إلى هويته"
+    explicit = national.get_identity_of_principal(context=crown, principal_id=context.principal_id)
+    assert explicit["identity_id"] == chain.identity["id"], "الحلُّ الصريحُ يوافق الضمنيّ"
+    assert explicit["resolved"] is True, "الهويةُ النشطةُ تُصنَّف محلولة"
+
+
+def test_35_listings_and_health_read_the_rows_they_claim_to_count(
+    registry: StateRegistry, national: NationalRegistry, crown: AuthorizationContext
+) -> None:
+    """القوائمُ والصحّةُ تُقرأ من الجداول: المُلغى يظهر بطلبٍ صريحٍ لا افتراضًا."""
+    context = _context("official", username="r7c-g36")
+    chain = _chain(registry, national, crown, context)
+    grant = national.grant_authority(
+        context=crown,
+        position_id=chain.position["id"],
+        operation="treasury.disbursement.post",
+        scope="INSTITUTION",
+    )
+
+    scoped = national.list_positions(context=crown, institution_code=chain.institution["code"])
+    assert [row["id"] for row in scoped] == [chain.position["id"]]
+
+    national.revoke_authority(context=crown, grant_id=grant["id"], reason="سببٌ مُدوَّن")
+    active = national.list_grants(context=crown, position_id=chain.position["id"])
+    with_revoked = national.list_grants(
+        context=crown, position_id=chain.position["id"], include_revoked=True
+    )
+    assert active == [], "المسحوبُ لا يُعَدّ نشطًا"
+    assert [row["id"] for row in with_revoked] == [grant["id"]], "وتاريخُه باقٍ بطلبٍ صريح"
+
+    including_inactive = national.list_positions(
+        context=crown, institution_code=chain.institution["code"], include_inactive=True
+    )
+    assert len(including_inactive) >= len(scoped)
+
+    health = national.registry_health(context=crown)
+    assert health["identities"] >= 1, "الصحّةُ تَعُدّ صفوفًا موجودة"
+    assert health["positions_active"] >= 1
+    assert health["grants_active"] == 0, "المسحوبُ لا يُعَدّ نشطًا في الصحّة"
+    assert sum(health["identities_by_status"].values()) == health["identities"]

@@ -64,11 +64,14 @@ from amos_federation.services.government_services.service import (
     EVENT_CASE_REVIEWED,
     EVENT_SERVICE_PUBLISHED,
     GOVERNMENT_EVENTS,
+    CaseNotFoundError,
     CaseStateError,
     DecisionExistsError,
+    DuplicateReferenceError,
     DuplicateServiceCodeError,
     GovernmentServiceError,
     GovernmentServices,
+    OfficialNotFoundError,
     ReviewIncompleteError,
     ServiceInactiveError,
     ServiceNotFoundError,
@@ -841,3 +844,227 @@ def test_27_service_is_registered_and_app_mounts(gov: GovernmentServices) -> Non
         # بلا رمز: تُرفَض، ولا تُرجَع 200 بجسم خطأ.
         assert client.get("/gov/services").status_code in {401, 403}
         assert client.post("/gov/cases/REF-X/process").status_code in {401, 403}
+
+
+# ── 28+. حرّاسُ المدخلات: الرفضُ مسارٌ مُشغَّلٌ لا سطرٌ مكتوب ───────────────
+
+
+def test_28_vocabularies_and_written_text_are_enforced_before_any_row(
+    gov: GovernmentServices, registry: StateRegistry, crown: AuthorizationContext
+) -> None:
+    """المفرداتُ مغلقةٌ والنصوصُ مكتوبة: الأولويةُ والنتيجةُ والموضوعُ والتسبيبُ والسبب."""
+    institution = _institution(registry, crown)
+    service = _service(gov, crown, institution["code"])
+
+    with pytest.raises(GovernmentServiceError, match="ساعات"):
+        gov.publish_service(
+            context=crown,
+            institution_code=institution["code"],
+            code=_code("SVC"),
+            name="خدمةٌ بمدّةٍ صفرية",
+            sla_hours=0,
+        )
+    with pytest.raises(GovernmentServiceError, match="أولوية|priority|مجهول"):
+        gov.open_case(
+            context=crown,
+            institution_code=institution["code"],
+            service_code=service["code"],
+            applicant_agent_id=_agent(),
+            subject="موضوعٌ مكتوب",
+            priority="cosmic",
+        )
+    with pytest.raises(GovernmentServiceError, match="موضوع مكتوب"):
+        gov.open_case(
+            context=crown,
+            institution_code=institution["code"],
+            service_code=service["code"],
+            applicant_agent_id=_agent(),
+            subject="   ",
+        )
+    with pytest.raises(GovernmentServiceError, match="سبب مكتوب"):
+        gov.set_service_status(
+            context=crown,
+            institution_code=institution["code"],
+            code=service["code"],
+            status="suspended",
+            reason="",
+        )
+
+    case = gov.open_case(
+        context=crown,
+        institution_code=institution["code"],
+        service_code=service["code"],
+        applicant_agent_id=_agent(),
+        subject="موضوعٌ مكتوب",
+    )
+    gov.process_case(context=crown, reference=case["reference"])
+    with pytest.raises(GovernmentServiceError, match="نتيجة|مجهول"):
+        gov.decide_case(
+            context=crown,
+            reference=case["reference"],
+            outcome="maybe",
+            rationale="تسبيبٌ مكتوب",
+        )
+    with pytest.raises(GovernmentServiceError, match="بلا تسبيب"):
+        gov.decide_case(
+            context=crown, reference=case["reference"], outcome="approved", rationale="  "
+        )
+
+
+def test_29_unknown_codes_departments_and_references_are_not_invented(
+    gov: GovernmentServices, registry: StateRegistry, crown: AuthorizationContext
+) -> None:
+    """رمزٌ أو مرجعٌ أو إدارةٌ لا صفَّ لها تُوقِف الفعل ولا تُخترَع."""
+    institution = _institution(registry, crown)
+
+    with pytest.raises(ServiceNotFoundError, match="إدارة|خدمة"):
+        gov.publish_service(
+            context=crown,
+            institution_code=institution["code"],
+            code=_code("SVC"),
+            name="خدمةٌ لإدارةٍ لا وجودَ لها",
+            department_code="DEP-LA-YUJAD",
+        )
+    with pytest.raises(ServiceNotFoundError, match="خدمة برمز"):
+        gov.open_case(
+            context=crown,
+            institution_code=institution["code"],
+            service_code="SVC-LA-YUJAD",
+            applicant_agent_id=_agent(),
+            subject="موضوعٌ مكتوب",
+        )
+    with pytest.raises(CaseNotFoundError, match="قضية بمرجع"):
+        gov.get_case(context=crown, reference="CASE-LA-YUJAD")
+    with pytest.raises(OfficialNotFoundError, match="منصب بمعرّف"):
+        service = _service(gov, crown, institution["code"])
+        case = gov.open_case(
+            context=crown,
+            institution_code=institution["code"],
+            service_code=service["code"],
+            applicant_agent_id=_agent(),
+            subject="موضوعٌ مكتوب",
+        )
+        gov.assign_case(
+            context=crown,
+            reference=case["reference"],
+            official_id="00000000-0000-0000-0000-000000000000",
+        )
+
+
+def test_30_a_suspended_institution_publishes_no_service_and_a_retired_service_stays_retired(
+    gov: GovernmentServices, registry: StateRegistry, crown: AuthorizationContext
+) -> None:
+    """المؤسسةُ غيرُ العاملةِ لا تُصدر خدمة، والخدمةُ المُتقاعدةُ لا تُعاد بأمرٍ عابر."""
+    institution = _institution(registry, crown)
+    service = _service(gov, crown, institution["code"])
+
+    gov.set_service_status(
+        context=crown,
+        institution_code=institution["code"],
+        code=service["code"],
+        status="retired",
+        reason="سببٌ مُدوَّن",
+    )
+    with pytest.raises(GovernmentServiceError):
+        gov.set_service_status(
+            context=crown,
+            institution_code=institution["code"],
+            code=service["code"],
+            status="active",
+            reason="سببٌ مُدوَّن",
+        )
+
+    registry.set_institution_status(
+        context=crown, code=institution["code"], status="suspended", reason="سببٌ مُدوَّن"
+    )
+    with pytest.raises(ServiceInactiveError):
+        gov.publish_service(
+            context=crown,
+            institution_code=institution["code"],
+            code=_code("SVC"),
+            name="خدمةٌ في مؤسسةٍ مُعلَّقة",
+        )
+
+
+def test_31_a_duplicate_reference_is_refused_and_a_closed_case_is_final(
+    gov: GovernmentServices, registry: StateRegistry, crown: AuthorizationContext
+) -> None:
+    """المرجعُ فريد، والمغلقةُ لا تُقرَّر ولا تُغلَق ثانيًا."""
+    institution = _institution(registry, crown)
+    service = _service(gov, crown, institution["code"])
+    official = _official(registry, crown, institution["code"])
+    reference = f"CASE-{uuid.uuid4().hex[:10].upper()}"
+
+    first = gov.open_case(
+        context=crown,
+        institution_code=institution["code"],
+        service_code=service["code"],
+        applicant_agent_id=_agent(),
+        subject="موضوعٌ مكتوب",
+        reference=reference,
+    )
+    with pytest.raises(DuplicateReferenceError):
+        gov.open_case(
+            context=crown,
+            institution_code=institution["code"],
+            service_code=service["code"],
+            applicant_agent_id=_agent(),
+            subject="موضوعٌ آخر",
+            reference=reference,
+        )
+
+    gov.process_case(context=crown, reference=first["reference"])
+    gov.decide_case(
+        context=crown,
+        reference=first["reference"],
+        outcome="approved",
+        rationale="تسبيبٌ مكتوب",
+        official_id=official["id"],
+    )
+    gov.close_case(context=crown, reference=first["reference"])
+
+    with pytest.raises(CaseStateError, match="مغلقة"):
+        gov.close_case(context=crown, reference=first["reference"])
+    with pytest.raises(CaseStateError, match="مغلقة"):
+        gov.decide_case(
+            context=crown,
+            reference=first["reference"],
+            outcome="rejected",
+            rationale="تسبيبٌ مكتوب",
+            official_id=official["id"],
+        )
+    with pytest.raises(CaseStateError):
+        gov.assign_case(context=crown, reference=first["reference"], official_id=official["id"])
+
+
+def test_32_listings_filter_by_institution_and_status_they_claim(
+    gov: GovernmentServices, registry: StateRegistry, crown: AuthorizationContext
+) -> None:
+    """القوائمُ تُرشَّح فعلًا بالمؤسسة والحالة — لا تُعيد كلَّ شيءٍ وتزعم الترشيح."""
+    first = _institution(registry, crown)
+    second = _institution(registry, crown)
+    mine = _service(gov, crown, first["code"])
+    theirs = _service(gov, crown, second["code"])
+    case = gov.open_case(
+        context=crown,
+        institution_code=first["code"],
+        service_code=mine["code"],
+        applicant_agent_id=_agent(),
+        subject="موضوعٌ مكتوب",
+    )
+
+    scoped = gov.list_services(context=crown, institution_code=first["code"])
+    codes = [row["code"] for row in scoped]
+    assert mine["code"] in codes and theirs["code"] not in codes
+
+    active = gov.list_services(context=crown, institution_code=first["code"], status="active")
+    retired = gov.list_services(context=crown, institution_code=first["code"], status="retired")
+    assert [row["code"] for row in active] == [mine["code"]]
+    assert retired == []
+
+    cases_here = gov.list_cases(context=crown, institution_code=first["code"])
+    cases_there = gov.list_cases(context=crown, institution_code=second["code"])
+    submitted = gov.list_cases(context=crown, institution_code=first["code"], status="submitted")
+    assert [row["reference"] for row in cases_here] == [case["reference"]]
+    assert cases_there == []
+    assert [row["reference"] for row in submitted] == [case["reference"]]

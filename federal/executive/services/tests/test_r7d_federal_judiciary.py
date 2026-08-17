@@ -43,11 +43,14 @@ from amos_federation.services.executive_core.agent_identity import register_iden
 from amos_federation.services.executive_core.dispatcher import WILDCARD, register_agent
 from amos_federation.services.executive_core.engine import reset_executive_core
 from amos_federation.services.federal_judiciary import (
+    CaseNotFoundError,
     CaseTransitionError,
+    CourtNotFoundError,
     DuplicateRulingError,
     EnforcementError,
     EvidenceError,
     FederalJudiciary,
+    InvalidCourtError,
     JudgeAppointmentError,
     JudicialAuthorityError,
     JudiciaryError,
@@ -1449,3 +1452,424 @@ def test_19_static_guards_forbid_parallel_executors_and_schema_rewrites() -> Non
     # ولا سيادةَ تُنتزَع: لا نقضَ قضائيًّا لأمرٍ سياديّ صحيح في مصدر القضاء.
     for forbidden in ("veto", "override_sovereign", "revoke_crown"):
         assert forbidden not in joined.lower(), f"لا {forbidden} في القضاء (R7-D13)"
+
+
+# ── 20+. حرّاسُ المدخلات: الرفضُ مسارٌ مُشغَّلٌ لا سطرٌ مكتوب ───────────────
+
+
+def test_20_court_registration_rejects_unknown_levels_codes_and_institutions(
+    registry: StateRegistry,
+    national: NationalRegistry,
+    judiciary: FederalJudiciary,
+    crown: AuthorizationContext,
+) -> None:
+    """درجةٌ مجهولةٌ أو مؤسسةٌ لا صفَّ لها أو رمزٌ مستعمَل: كلُّها تُوقِف التسجيل."""
+    chain = _judicial_chain(registry, national, crown, _context("official", username="jg20"))
+
+    with pytest.raises(JudiciaryError, match="درجةٌ غير معروفة"):
+        judiciary.register_court(
+            context=crown,
+            code=_code("CRT"),
+            name="محكمةٌ بدرجةٍ مُخترَعة",
+            level="INTERGALACTIC",
+            jurisdiction="FEDERAL",
+            institution_code=chain.institution["code"],
+        )
+    with pytest.raises(JudiciaryError, match="لا مؤسسة برمز"):
+        judiciary.register_court(
+            context=crown,
+            code=_code("CRT"),
+            name="محكمةٌ بلا مؤسسة",
+            level="FIRST_INSTANCE",
+            jurisdiction="FEDERAL",
+            institution_code="JUD-LA-YUJAD",
+        )
+
+    code = _code("CRT")
+    judiciary.register_court(
+        context=crown,
+        code=code,
+        name="محكمةٌ قائمة",
+        level="FIRST_INSTANCE",
+        jurisdiction="FEDERAL",
+        institution_code=chain.institution["code"],
+    )
+    with pytest.raises(JudiciaryError, match="مستعمَلٌ في مستأجر"):
+        judiciary.register_court(
+            context=crown,
+            code=code,
+            name="محكمةٌ برمزٍ مكرَّر",
+            level="FIRST_INSTANCE",
+            jurisdiction="FEDERAL",
+            institution_code=chain.institution["code"],
+        )
+
+    suspended = registry.register_institution(
+        context=crown,
+        code=_code("JUD"),
+        name="مؤسسةٌ قضائيةٌ مُعلَّقة",
+        kind="court",
+        branch="judicial",
+    )
+    registry.set_institution_status(
+        context=crown, code=suspended["code"], status="suspended", reason="سببٌ مُدوَّن"
+    )
+    with pytest.raises(JudiciaryError, match="لا 'active'"):
+        judiciary.register_court(
+            context=crown,
+            code=_code("CRT"),
+            name="محكمةٌ في مؤسسةٍ مُعلَّقة",
+            level="FIRST_INSTANCE",
+            jurisdiction="FEDERAL",
+            institution_code=suspended["code"],
+        )
+
+
+def test_21_status_changes_need_a_written_reason_and_a_known_vocabulary(
+    registry: StateRegistry,
+    national: NationalRegistry,
+    judiciary: FederalJudiciary,
+    crown: AuthorizationContext,
+) -> None:
+    """حالةُ المحكمةِ وحالةُ التقليدِ: مفردةٌ مغلقةٌ وسببٌ مكتوبٌ ومعرِّفٌ موجود."""
+    bench = _bench(registry, national, judiciary, crown, _context("official", username="jg21"))
+
+    with pytest.raises(JudiciaryError, match="حالةٌ غير معروفة"):
+        judiciary.set_court_status(
+            context=crown, court_id=bench.court["id"], status="hibernating", reason="سببٌ مُدوَّن"
+        )
+    with pytest.raises(JudiciaryError, match="سببٌ مكتوب"):
+        judiciary.set_court_status(
+            context=crown, court_id=bench.court["id"], status="suspended", reason="   "
+        )
+    with pytest.raises(JudiciaryError, match="حالةُ تقليدٍ غير معروفة"):
+        judiciary.set_judge_status(
+            context=crown, judge_id=bench.judge["id"], status="emeritus", reason="سببٌ مُدوَّن"
+        )
+    with pytest.raises(JudiciaryError, match="سببٌ مكتوب"):
+        judiciary.set_judge_status(
+            context=crown, judge_id=bench.judge["id"], status="suspended", reason=""
+        )
+    with pytest.raises(JudiciaryError, match="لا تقليدَ قضاءٍ بالمعرّف"):
+        judiciary.set_judge_status(
+            context=crown,
+            judge_id="00000000-0000-0000-0000-000000000000",
+            status="suspended",
+            reason="سببٌ مُدوَّن",
+        )
+
+
+def test_22_appointing_a_judge_reads_the_whole_chain_from_the_database(
+    registry: StateRegistry,
+    national: NationalRegistry,
+    judiciary: FederalJudiciary,
+    crown: AuthorizationContext,
+) -> None:
+    """التقليدُ يقرأ المسؤولَ والهويةَ والمنصبَ والمطابقة — لا يقبل اسمًا."""
+    bench = _bench(registry, national, judiciary, crown, _context("official", username="jg22"))
+
+    with pytest.raises(JudgeAppointmentError, match="لا مسؤول بالمعرّف"):
+        judiciary.appoint_judge(
+            context=crown,
+            court_id=bench.court["id"],
+            official_id="00000000-0000-0000-0000-000000000000",
+            position_id=bench.position["id"],
+        )
+
+    other = _judicial_chain(registry, national, crown, _context("official", username="jg22b"))
+    with pytest.raises(JudgeAppointmentError, match="غير مُقلَّدٍ نشطًا|المنصب والمسؤول"):
+        judiciary.appoint_judge(
+            context=crown,
+            court_id=bench.court["id"],
+            official_id=other.official["id"],
+            position_id=bench.position["id"],
+        )
+
+    judiciary.set_court_status(
+        context=crown, court_id=bench.court["id"], status="suspended", reason="سببٌ مُدوَّن"
+    )
+    with pytest.raises(InvalidCourtError):
+        judiciary.appoint_judge(
+            context=crown,
+            court_id=bench.court["id"],
+            official_id=other.official["id"],
+            position_id=other.position["id"],
+        )
+
+
+def test_23_opening_and_assigning_a_case_enforces_every_named_row(
+    registry: StateRegistry,
+    national: NationalRegistry,
+    judiciary: FederalJudiciary,
+    crown: AuthorizationContext,
+) -> None:
+    """نوعُ القضيةِ وموضوعُها ومرجعُها ومحكمتُها وقاضيها: كلُّها مقروءةٌ أو مرفوضة."""
+    filer = _context("official", username="jg23")
+    bench = _bench(registry, national, judiciary, crown, filer)
+    _party_identity(national, crown, _context("official", username="jg23p"))
+
+    with pytest.raises(JudiciaryError, match="نوعُ قضيةٍ غير معروف"):
+        judiciary.open_case(
+            context=filer,
+            court_id=bench.court["id"],
+            case_type="INTERPLANETARY",
+            subject="موضوعٌ مكتوب",
+            reference=_code("CASE"),
+        )
+    with pytest.raises(JudiciaryError, match="موضوعُ القضية لا يكون فارغًا"):
+        judiciary.open_case(
+            context=filer,
+            court_id=bench.court["id"],
+            case_type="CIVIL",
+            subject="   ",
+            reference=_code("CASE"),
+        )
+    with pytest.raises(CourtNotFoundError, match="لا محكمة"):
+        judiciary.open_case(
+            context=filer,
+            court_id="00000000-0000-0000-0000-000000000000",
+            case_type="CIVIL",
+            subject="موضوعٌ مكتوب",
+            reference=_code("CASE"),
+        )
+
+    reference = _code("CASE")
+    first = judiciary.open_case(
+        context=filer,
+        court_id=bench.court["id"],
+        case_type="CIVIL",
+        subject="موضوعٌ مكتوب",
+        reference=reference,
+    )
+    with pytest.raises(JudiciaryError, match="مرجعُ القضية"):
+        judiciary.open_case(
+            context=filer,
+            court_id=bench.court["id"],
+            case_type="CIVIL",
+            subject="موضوعٌ آخر",
+            reference=reference,
+        )
+
+    judiciary.file_case(context=filer, case_id=first["id"])
+    with pytest.raises(JudiciaryError, match="لا تقليدَ قضاءٍ بالمعرّف"):
+        judiciary.assign_case(
+            context=crown,
+            case_id=first["id"],
+            judge_id="00000000-0000-0000-0000-000000000000",
+        )
+
+    elsewhere = _bench(registry, national, judiciary, crown, _context("official", username="jg23b"))
+    with pytest.raises(JudiciaryError, match="عبر المحاكم"):
+        judiciary.assign_case(context=crown, case_id=first["id"], judge_id=elsewhere.judge["id"])
+
+    judiciary.set_judge_status(
+        context=crown, judge_id=bench.judge["id"], status="suspended", reason="سببٌ مُدوَّن"
+    )
+    with pytest.raises(JudiciaryError, match="لا 'active' — لا إسنادَ"):
+        judiciary.assign_case(context=crown, case_id=first["id"], judge_id=bench.judge["id"])
+
+
+def test_24_a_case_is_never_closed_by_a_plain_transition_and_never_without_a_reason(
+    registry: StateRegistry,
+    national: NationalRegistry,
+    judiciary: FederalJudiciary,
+    crown: AuthorizationContext,
+) -> None:
+    """`closed` بابُها `close_case` وحدها بسببٍ مكتوب — ولا قضيةً مُختلَقة."""
+    filer = _context("official", username="jg24")
+    bench = _bench(registry, national, judiciary, crown, filer)
+    _party_identity(national, crown, _context("official", username="jg24p"))
+    case = _open_and_assign(judiciary, filer, crown, bench)
+
+    with pytest.raises(JudiciaryError, match="سببٌ مكتوب"):
+        judiciary.close_case(context=crown, case_id=case["id"], reason="  ")
+    with pytest.raises(CaseNotFoundError, match="لا قضية بالمعرّف"):
+        judiciary.close_case(
+            context=crown,
+            case_id="00000000-0000-0000-0000-000000000000",
+            reason="سببٌ مُدوَّن",
+        )
+    assert "closed" not in ALLOWED_TRANSITIONS.get(
+        "assigned", ()
+    ), "لا انتقالَ عاديًّا إلى `closed` — البابُ `close_case` وحدها"
+
+
+def test_25_parties_claims_evidence_and_proceedings_enforce_closed_vocabularies(
+    registry: StateRegistry,
+    national: NationalRegistry,
+    judiciary: FederalJudiciary,
+    crown: AuthorizationContext,
+) -> None:
+    """كلُّ إضافةٍ إلى ملفّ القضية تُرفَض إن جاءت بمفردةٍ أو مرجعٍ لا وجودَ له."""
+    filer = _context("official", username="jg25")
+    bench = _bench(registry, national, judiciary, crown, filer)
+    identity = _party_identity(national, crown, _context("official", username="jg25p"))
+    case = _open_and_assign(judiciary, filer, crown, bench)
+
+    with pytest.raises(JudiciaryError, match="دورٌ|PARTY|غير معروف"):
+        judiciary.add_party(
+            context=crown, case_id=case["id"], party_role="ORACLE", identity_id=identity["id"]
+        )
+    party = judiciary.add_party(
+        context=crown, case_id=case["id"], party_role="PLAINTIFF", identity_id=identity["id"]
+    )
+
+    with pytest.raises(JudiciaryError, match="نوعُ مطالبةٍ غير معروف"):
+        judiciary.add_claim(
+            context=crown,
+            case_id=case["id"],
+            claimant_party_id=party["id"],
+            claim_type="REVENGE",
+            statement="نصٌّ مكتوب",
+        )
+    with pytest.raises(JudiciaryError, match="نوعُ مرجعٍ قانونيّ غير معروف"):
+        judiciary.add_claim(
+            context=crown,
+            case_id=case["id"],
+            claimant_party_id=party["id"],
+            claim_type="MONETARY",
+            statement="نصٌّ مكتوب",
+            legal_basis_kind="FOLKLORE",
+        )
+    with pytest.raises(JudiciaryError, match="نصُّ المطالبة لا يكون فارغًا"):
+        judiciary.add_claim(
+            context=crown,
+            case_id=case["id"],
+            claimant_party_id=party["id"],
+            claim_type="MONETARY",
+            statement="  ",
+        )
+    with pytest.raises(JudiciaryError, match="مرجعٌ قانونيّ بلا نوع"):
+        judiciary.add_claim(
+            context=crown,
+            case_id=case["id"],
+            claimant_party_id=party["id"],
+            claim_type="MONETARY",
+            statement="نصٌّ مكتوب",
+            legal_basis_kind="NONE",
+            legal_basis_ref="مادةٌ مُختلقة",
+        )
+    with pytest.raises(JudiciaryError, match="ليس طرفًا مُسجَّلًا"):
+        judiciary.add_claim(
+            context=crown,
+            case_id=case["id"],
+            claimant_party_id="00000000-0000-0000-0000-000000000000",
+            claim_type="MONETARY",
+            statement="نصٌّ مكتوب",
+        )
+
+    with pytest.raises(EvidenceError, match="نوعُ دليلٍ غير معروف"):
+        judiciary.submit_evidence(
+            context=crown, case_id=case["id"], evidence_type="RUMOUR", source="مصدرٌ مكتوب"
+        )
+    with pytest.raises(EvidenceError, match="مصدرُ الدليل لا يكون فارغًا"):
+        judiciary.submit_evidence(
+            context=crown, case_id=case["id"], evidence_type="DOCUMENT", source="   "
+        )
+    with pytest.raises(EvidenceError, match="sha256 سِتّينيةً"):
+        judiciary.submit_evidence(
+            context=crown,
+            case_id=case["id"],
+            evidence_type="DOCUMENT",
+            source="مصدرٌ مكتوب",
+            content_hash="ليست-بصمة",
+        )
+    with pytest.raises(EvidenceError, match="بلا بصمة"):
+        judiciary.submit_evidence(
+            context=crown,
+            case_id=case["id"],
+            evidence_type="DOCUMENT",
+            source="مصدرٌ مكتوب",
+            fingerprint_algo="sha256",
+        )
+
+    evidence = judiciary.submit_evidence(
+        context=crown,
+        case_id=case["id"],
+        evidence_type="DOCUMENT",
+        source="مصدرٌ مكتوب",
+        content_hash="a" * 64,
+    )
+    with pytest.raises(EvidenceError, match="حالةُ دليلٍ غير مسموحة"):
+        judiciary.set_evidence_status(
+            context=crown, evidence_id=evidence["id"], status="blessed", reason="سببٌ مُدوَّن"
+        )
+    with pytest.raises(EvidenceError, match="سببٌ مكتوب"):
+        judiciary.set_evidence_status(
+            context=crown, evidence_id=evidence["id"], status="admitted", reason=" "
+        )
+    with pytest.raises(EvidenceError, match="لا دليل بالمعرّف"):
+        judiciary.set_evidence_status(
+            context=crown,
+            evidence_id="00000000-0000-0000-0000-000000000000",
+            status="admitted",
+            reason="سببٌ مُدوَّن",
+        )
+
+    with pytest.raises(JudiciaryError, match="نوعُ إجراءٍ غير معروف"):
+        judiciary.record_proceeding(
+            context=crown, case_id=case["id"], proceeding_type="SEANCE", summary="خلاصةٌ مكتوبة"
+        )
+    with pytest.raises(JudiciaryError, match="خلاصةُ الإجراء لا تكون فارغة"):
+        judiciary.record_proceeding(
+            context=crown, case_id=case["id"], proceeding_type="MOTION", summary="  "
+        )
+
+
+def test_26_a_closed_case_accepts_no_new_parties_or_evidence(
+    registry: StateRegistry,
+    national: NationalRegistry,
+    judiciary: FederalJudiciary,
+    crown: AuthorizationContext,
+) -> None:
+    """الملفُّ المُغلق مُغلق: لا طرفَ جديدًا ولا دليلًا جديدًا يُودَع فيه."""
+    filer = _context("official", username="jg26")
+    bench = _bench(registry, national, judiciary, crown, filer)
+    identity = _party_identity(national, crown, _context("official", username="jg26p"))
+    case = _open_and_assign(judiciary, filer, crown, bench)
+    judiciary.open_hearing(context=filer, case_id=case["id"])
+    judiciary.issue_ruling(
+        context=filer,
+        case_id=case["id"],
+        decision="GRANTED",
+        disposition="أُجيبت الدعوى",
+    )
+    judiciary.close_case(context=crown, case_id=case["id"], reason="سببٌ مُدوَّن")
+
+    with pytest.raises(JudiciaryError, match="قضيةٍ مُغلقة"):
+        judiciary.add_party(
+            context=crown, case_id=case["id"], party_role="WITNESS", identity_id=identity["id"]
+        )
+    with pytest.raises(EvidenceError, match="قضيةٍ مُغلقة"):
+        judiciary.submit_evidence(
+            context=crown, case_id=case["id"], evidence_type="RECORD", source="مصدرٌ مكتوب"
+        )
+
+
+def test_27_listings_filter_by_jurisdiction_status_and_inactive_judges(
+    registry: StateRegistry,
+    national: NationalRegistry,
+    judiciary: FederalJudiciary,
+    crown: AuthorizationContext,
+) -> None:
+    """القوائمُ تُرشَّح فعلًا — والقاضي المُعلَّق يغيب حتى يُطلَب صريحًا."""
+    bench = _bench(registry, national, judiciary, crown, _context("official", username="jg27"))
+
+    federal = judiciary.list_courts(context=crown, jurisdiction="FEDERAL")
+    assert bench.court["id"] in [row["id"] for row in federal]
+    active = judiciary.list_courts(context=crown, jurisdiction="FEDERAL", status="active")
+    dissolved = judiciary.list_courts(context=crown, jurisdiction="FEDERAL", status="dissolved")
+    assert bench.court["id"] in [row["id"] for row in active]
+    assert dissolved == []
+
+    judges = judiciary.list_judges(context=crown, court_id=bench.court["id"])
+    assert [row["id"] for row in judges] == [bench.judge["id"]]
+
+    judiciary.set_judge_status(
+        context=crown, judge_id=bench.judge["id"], status="suspended", reason="سببٌ مُدوَّن"
+    )
+    assert judiciary.list_judges(context=crown, court_id=bench.court["id"]) == []
+    including = judiciary.list_judges(
+        context=crown, court_id=bench.court["id"], include_inactive=True
+    )
+    assert [row["id"] for row in including] == [bench.judge["id"]]

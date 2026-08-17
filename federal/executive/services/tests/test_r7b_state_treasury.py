@@ -105,8 +105,11 @@ from amos_federation.services.state_treasury.service import (
     LOCK_TIMEOUT,
     PG_LOCK_NOT_AVAILABLE,
     TREASURY_EVENTS,
+    AccountNotFoundError,
     AllocationExceededError,
+    AllocationNotFoundError,
     BudgetExceededError,
+    BudgetNotFoundError,
     CurrencyMismatchError,
     DecisionNotAuthorizingError,
     DuplicateCodeError,
@@ -114,9 +117,11 @@ from amos_federation.services.state_treasury.service import (
     InsufficientFundsError,
     OfficialNotFoundError,
     StateTreasury,
+    TransactionNotFoundError,
     TransactionReversedError,
     TreasuryContentionError,
     TreasuryError,
+    TreasuryNotFoundError,
     _row_locks_supported,
     get_state_treasury,
     lock_query,
@@ -1574,3 +1579,312 @@ def test_29_locking_does_not_reintroduce_a_stored_total_or_a_sql_sum() -> None:
     # تحت صفٍّ مقفول، فوجودُه هنا يعني ضمانًا أقلّ ممّا تقوله الوثيقة.
     assert "with_for_update()" in source
     assert "FOR NO KEY UPDATE" not in source
+
+
+# ── 30+. حرّاسُ المدخلات: كلُّ رفضٍ مسارٌ مُشغَّلٌ لا سطرٌ مكتوب ─────────────
+#
+# ما سبق يفحص ما يُنجَز؛ وهذا يفحص ما يُرفَض. الحارسُ الذي لم يُشغَّل قطُّ يُحذَف
+# يومًا فلا يفشل شيء — وبعد هذا القسم يفشل هنا.
+
+
+def test_30_unknown_codes_and_references_raise_instead_of_being_created(
+    treasury: StateTreasury, registry: StateRegistry, crown: AuthorizationContext
+) -> None:
+    """رمزٌ أو مرجعٌ لا صفَّ له يرفع «لا يوجد» ولا يُنشئ الصفَّ ليكمل الفعل."""
+    fiscal = _fiscal(treasury, registry, crown)
+
+    with pytest.raises(TreasuryNotFoundError, match="خزانة برمز"):
+        treasury.account_balance(
+            context=crown, treasury_code="TRS-LA-YUJAD", account_code=fiscal.cash["code"]
+        )
+    with pytest.raises(AccountNotFoundError, match="حساب برمز"):
+        treasury.account_balance(
+            context=crown, treasury_code=fiscal.treasury["code"], account_code="ACC-LA-YUJAD"
+        )
+    with pytest.raises(BudgetNotFoundError, match="موازنة برمز"):
+        treasury.budget_balance(context=crown, budget_code="BDG-LA-YUJAD")
+    with pytest.raises(TransactionNotFoundError, match="حركة بمرجع"):
+        treasury.transaction_file(context=crown, reference="TRX-LA-YUJAD")
+    with pytest.raises(TransactionNotFoundError, match="حركة بمرجع"):
+        treasury.reverse_transaction(
+            context=crown,
+            reference="TRX-LA-YUJAD",
+            reason="سببٌ مُدوَّن",
+            official_id=fiscal.official["id"],
+        )
+    with pytest.raises(AllocationNotFoundError, match="تخصيص بمعرّف"):
+        treasury.disburse(
+            context=crown,
+            allocation_id="00000000-0000-0000-0000-000000000000",
+            expense_account_code=fiscal.expense["code"],
+            amount="100.0000",
+            purpose="غرضٌ مكتوب",
+            official_id=fiscal.official["id"],
+        )
+
+
+def test_31_names_purposes_and_reasons_must_be_written_not_blank(
+    treasury: StateTreasury, registry: StateRegistry, crown: AuthorizationContext
+) -> None:
+    """التسميةُ والغرضُ والسببُ نصوصٌ مكتوبة — والفراغُ رفضٌ قبل أيّ كتابة."""
+    fiscal = _fiscal(treasury, registry, crown)
+    allocation = _allocate(treasury, crown, fiscal)
+
+    with pytest.raises(TreasuryError, match="تسمية"):
+        treasury.establish_treasury(context=crown, code=_code("TRS"), name="   ", currency="SAR")
+    with pytest.raises(TreasuryError, match="تسمية"):
+        treasury.open_account(
+            context=crown,
+            treasury_code=fiscal.treasury["code"],
+            code=_code("ACC"),
+            name="",
+            kind="cash",
+        )
+    with pytest.raises(TreasuryError, match="غرض مكتوب"):
+        treasury.allocate(
+            context=crown,
+            budget_code=fiscal.budget["code"],
+            account_code=fiscal.cash["code"],
+            purpose="  ",
+            amount="100.0000",
+            official_id=fiscal.official["id"],
+        )
+    with pytest.raises(TreasuryError, match="غرض مكتوب"):
+        treasury.post_funding(
+            context=crown,
+            treasury_code=fiscal.treasury["code"],
+            cash_account_code=fiscal.cash["code"],
+            revenue_account_code=fiscal.revenue["code"],
+            amount="100.0000",
+            purpose="",
+            official_id=fiscal.official["id"],
+        )
+    with pytest.raises(TreasuryError, match="غرض مكتوب"):
+        treasury.disburse(
+            context=crown,
+            allocation_id=allocation["id"],
+            expense_account_code=fiscal.expense["code"],
+            amount="100.0000",
+            purpose="   ",
+            official_id=fiscal.official["id"],
+        )
+
+    posted = treasury.disburse(
+        context=crown,
+        allocation_id=allocation["id"],
+        expense_account_code=fiscal.expense["code"],
+        amount="100.0000",
+        purpose="غرضٌ مكتوب",
+        official_id=fiscal.official["id"],
+    )
+    with pytest.raises(TreasuryError, match="سبب مكتوب"):
+        treasury.reverse_transaction(
+            context=crown,
+            reference=posted["reference"],
+            reason="  ",
+            official_id=fiscal.official["id"],
+        )
+
+
+def test_32_account_kinds_are_enforced_on_both_sides_of_a_movement(
+    treasury: StateTreasury, registry: StateRegistry, crown: AuthorizationContext
+) -> None:
+    """النقدُ نقديٌّ والمصروفُ مصروفٌ: الطرفُ الخطأُ يُرفَض ولا يُعاد تصنيفُه."""
+    fiscal = _fiscal(treasury, registry, crown)
+    allocation = _allocate(treasury, crown, fiscal)
+
+    with pytest.raises(TreasuryError, match="ليس نقديًّا"):
+        treasury.post_funding(
+            context=crown,
+            treasury_code=fiscal.treasury["code"],
+            cash_account_code=fiscal.expense["code"],
+            revenue_account_code=fiscal.revenue["code"],
+            amount="100.0000",
+            purpose="غرضٌ مكتوب",
+            official_id=fiscal.official["id"],
+        )
+    with pytest.raises(TreasuryError):
+        treasury.disburse(
+            context=crown,
+            allocation_id=allocation["id"],
+            expense_account_code=fiscal.cash["code"],
+            amount="100.0000",
+            purpose="غرضٌ مكتوب",
+            official_id=fiscal.official["id"],
+        )
+    with pytest.raises(TreasuryError, match="نوع حساب"):
+        treasury.open_account(
+            context=crown,
+            treasury_code=fiscal.treasury["code"],
+            code=_code("ACC"),
+            name="حسابٌ بنوعٍ مُخترَع",
+            kind="crypto",
+        )
+
+
+def test_33_a_treasury_without_an_institution_is_not_funded(
+    treasury: StateTreasury, registry: StateRegistry, crown: AuthorizationContext
+) -> None:
+    """خزانةٌ بلا جهةٍ مسؤولةٍ لا تُموَّل — ولا تُنسَب لمؤسسةٍ مُخترَعة."""
+    orphan = treasury.establish_treasury(
+        context=crown, code=_code("TRS"), name="خزانةٌ بلا مؤسسة", currency="SAR"
+    )
+    assert orphan["institution_id"] is None, "أُسِّست بلا مؤسسةٍ بقصد"
+
+    cash = treasury.open_account(
+        context=crown,
+        treasury_code=orphan["code"],
+        code=_code("CASH"),
+        name="النقد",
+        kind="cash",
+    )
+    revenue = treasury.open_account(
+        context=crown,
+        treasury_code=orphan["code"],
+        code=_code("REV"),
+        name="الإيرادات",
+        kind="revenue",
+    )
+    fiscal = _fiscal(treasury, registry, crown)
+
+    with pytest.raises(TreasuryError, match="بلا مؤسسة"):
+        treasury.post_funding(
+            context=crown,
+            treasury_code=orphan["code"],
+            cash_account_code=cash["code"],
+            revenue_account_code=revenue["code"],
+            amount="100.0000",
+            purpose="غرضٌ مكتوب",
+            official_id=fiscal.official["id"],
+        )
+
+
+def test_34_a_department_scoped_row_needs_a_department_that_exists(
+    treasury: StateTreasury, registry: StateRegistry, crown: AuthorizationContext
+) -> None:
+    """إدارةٌ لا صفَّ لها تُوقِف فتحَ الحساب وإنشاءَ الموازنة — ولا تُخترَع."""
+    fiscal = _fiscal(treasury, registry, crown)
+
+    with pytest.raises(AccountNotFoundError, match="إدارة"):
+        treasury.open_account(
+            context=crown,
+            treasury_code=fiscal.treasury["code"],
+            code=_code("ACC"),
+            name="حسابُ إدارةٍ لا وجودَ لها",
+            kind="cash",
+            institution_code=fiscal.institution["code"],
+            department_code="DEP-LA-YUJAD",
+        )
+    with pytest.raises(BudgetNotFoundError, match="إدارة"):
+        treasury.create_budget(
+            context=crown,
+            treasury_code=fiscal.treasury["code"],
+            institution_code=fiscal.institution["code"],
+            code=_code("BDG"),
+            period="2026",
+            limit_amount="1000.0000",
+            department_code="DEP-LA-YUJAD",
+        )
+
+    dept = registry.create_department(
+        context=crown,
+        institution_code=fiscal.institution["code"],
+        code=_code("DEP"),
+        name="إدارةٌ حقيقية",
+    )
+    account = treasury.open_account(
+        context=crown,
+        treasury_code=fiscal.treasury["code"],
+        code=_code("ACC"),
+        name="حسابُ إدارةٍ موجودة",
+        kind="cash",
+        institution_code=fiscal.institution["code"],
+        department_code=dept["code"],
+    )
+    assert account["department_id"] == dept["id"], "الإدارةُ الموجودةُ تُربَط فعلًا"
+
+
+def test_35_an_allocation_decision_must_be_a_real_decision_of_the_same_institution(
+    treasury: StateTreasury,
+    registry: StateRegistry,
+    gov: GovernmentServices,
+    crown: AuthorizationContext,
+) -> None:
+    """قرارُ التخصيص صفٌّ حقيقيٌّ في مؤسسة الموازنة — لا معرِّفٌ حرٌّ ولا قرارُ جهةٍ أخرى."""
+    fiscal = _fiscal(treasury, registry, crown)
+    other = _fiscal(treasury, registry, crown)
+
+    with pytest.raises(DecisionNotAuthorizingError, match="قرار بمعرّف"):
+        treasury.allocate(
+            context=crown,
+            budget_code=fiscal.budget["code"],
+            account_code=fiscal.cash["code"],
+            purpose="تشغيل",
+            amount="100.0000",
+            official_id=fiscal.official["id"],
+            decision_id="00000000-0000-0000-0000-000000000000",
+        )
+
+    foreign = _approved_decision(gov, registry, crown, other)
+    with pytest.raises(DecisionNotAuthorizingError):
+        treasury.allocate(
+            context=crown,
+            budget_code=fiscal.budget["code"],
+            account_code=fiscal.cash["code"],
+            purpose="تشغيل",
+            amount="100.0000",
+            official_id=fiscal.official["id"],
+            decision_id=foreign["id"],
+        )
+
+    own = _approved_decision(gov, registry, crown, fiscal)
+    allocated = treasury.allocate(
+        context=crown,
+        budget_code=fiscal.budget["code"],
+        account_code=fiscal.cash["code"],
+        purpose="تشغيل",
+        amount="100.0000",
+        official_id=fiscal.official["id"],
+        decision_id=own["id"],
+    )
+    assert allocated["decision_id"] == own["id"], "قرارُ المؤسسة نفسِها يُقبَل ويُنسَب"
+
+
+def test_36_funding_is_idempotent_and_listings_filter_by_what_they_claim(
+    treasury: StateTreasury, registry: StateRegistry, crown: AuthorizationContext
+) -> None:
+    """مفتاحُ التكرار يمنع تمويلًا ثانيًا، والقوائمُ تُرشَّح بالخزانة والموازنة فعلًا."""
+    fiscal = _fiscal(treasury, registry, crown)
+    other = _fiscal(treasury, registry, crown)
+    key = f"idem-{uuid.uuid4().hex[:10]}"
+
+    first = treasury.post_funding(
+        context=crown,
+        treasury_code=fiscal.treasury["code"],
+        cash_account_code=fiscal.cash["code"],
+        revenue_account_code=fiscal.revenue["code"],
+        amount="100.0000",
+        purpose="غرضٌ مكتوب",
+        official_id=fiscal.official["id"],
+        idempotency_key=key,
+    )
+    again = treasury.post_funding(
+        context=crown,
+        treasury_code=fiscal.treasury["code"],
+        cash_account_code=fiscal.cash["code"],
+        revenue_account_code=fiscal.revenue["code"],
+        amount="100.0000",
+        purpose="غرضٌ مكتوب",
+        official_id=fiscal.official["id"],
+        idempotency_key=key,
+    )
+    assert again["idempotent"] is True, "النداءُ الثاني يُعيد الحركةَ الأولى"
+    assert again["reference"] == first["reference"], "ولا يُنشئ مرجعًا ثانيًا"
+
+    scoped = treasury.list_transactions(context=crown, treasury_code=fiscal.treasury["code"])
+    foreign = treasury.list_transactions(context=crown, treasury_code=other.treasury["code"])
+    assert first["reference"] in [row["reference"] for row in scoped]
+    assert first["reference"] not in [row["reference"] for row in foreign]
+
+    by_budget = treasury.list_transactions(context=crown, budget_code=fiscal.budget["code"])
+    assert isinstance(by_budget, list), "الترشيحُ بالموازنة مسارٌ مُشغَّل"

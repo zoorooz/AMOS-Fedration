@@ -49,6 +49,17 @@ from amos_federation.common.principal import (
 from amos_federation.services.executive_core.agent_identity import register_identity
 from amos_federation.services.executive_core.dispatcher import WILDCARD, register_agent
 from amos_federation.services.executive_core.engine import reset_executive_core
+from amos_federation.services.federal_judiciary.models import (
+    CaseClaimModel,
+    CaseEvidenceModel,
+    CasePartyModel,
+    CaseProceedingModel,
+    CourtJudgeModel,
+    CourtModel,
+    LegalCaseModel,
+    RulingEnforcementModel,
+    RulingModel,
+)
 from amos_federation.services.federal_state.authority import GovernmentAuthorityError
 from amos_federation.services.federal_state.models import (
     CaseScopeModel,
@@ -65,7 +76,7 @@ from amos_federation.services.federal_state.service import (
     reset_federal_state,
 )
 from amos_federation.services.governance.security import DEFAULT_ROLES
-from amos_federation.services.government_services.models import CaseModel
+from amos_federation.services.government_services.models import CaseModel, DecisionModel
 from amos_federation.services.government_services.service import reset_government_services
 from amos_federation.services.national_economy import (
     EconomicCategoryModel,
@@ -208,6 +219,18 @@ def _fresh_state() -> None:
     init_db()
     session = get_session_factory()()
     try:
+        # صفوفُ القضاء أوّلًا: `court_judges` يشير إلى `positions` بمفتاحٍ أجنبيّ،
+        # فحذفُ المناصب قبلها يكسر القيدَ المرجعيّ إن سبقت ملفّةُ القضاء هذه الملفّة
+        # في التشغيل الكامل. النطاقُ ليس نطاقَنا لكنّ القاعدةَ واحدة.
+        session.query(RulingEnforcementModel).delete()
+        session.query(RulingModel).delete()
+        session.query(CaseProceedingModel).delete()
+        session.query(CaseEvidenceModel).delete()
+        session.query(CaseClaimModel).delete()
+        session.query(CasePartyModel).delete()
+        session.query(LegalCaseModel).delete()
+        session.query(CourtJudgeModel).delete()
+        session.query(CourtModel).delete()
         for model in _ECONOMY_MODELS:
             session.query(model).delete()
         session.flush()
@@ -230,6 +253,7 @@ def _fresh_state() -> None:
         session.query(BudgetModel).delete()
         session.query(AccountModel).delete()
         session.query(TreasuryModel).delete()
+        session.query(DecisionModel).delete()
         session.query(CaseModel).delete()
         session.query(AuthorityGrantModel).delete()
         session.query(OfficialPositionModel).delete()
@@ -1778,3 +1802,517 @@ def test_32_capability_classifications_are_stated_honestly(
     assert capabilities["treasury_execution"] == "REAL", "الخزانةُ مُلاحَظةٌ في هذه الحزمة"
     assert capabilities["executive_core_execution"] == "REAL"
     assert set(registry_view["counts"]) >= {"sectors", "programs", "decisions"}
+
+
+# ── 33+. حرّاسُ المدخلات: كلُّ رفضٍ مسارٌ مقيسٌ لا تعليقٌ في الشيفرة ─────────
+#
+# القسمُ السابقُ يفحص ما **يُنجَز**. وهذا القسمُ يفحص ما **يُرفَض**: كلُّ حارسٍ
+# في `national_economy/service.py` يُنادى بمدخلٍ يخالفه فعلًا، فيُثبَت أن الرفضَ
+# مسارٌ مُشغَّلٌ لا سطرٌ مكتوب. والفرقُ عمليّ: حارسٌ لم يُشغَّل قطُّ يُحذَف يومًا
+# فلا يفشل شيء — وبعد هذا القسم يفشل هنا.
+
+
+def test_33_currency_code_must_be_three_upper_letters(
+    economy: NationalEconomy, crown: AuthorizationContext
+) -> None:
+    """رمزُ العملة ثلاثةُ أحرفٍ كبيرة — لا 'sar' ولا 'SARX' ولا فراغ."""
+    for bad in ("sar", "SARX", "SA", "", "   "):
+        with pytest.raises(EconomicStateError, match="عملة"):
+            economy.register_public_liability(
+                crown,
+                code=_code("LIA"),
+                name="التزامٌ مرفوض",
+                liability_class="BOND",
+                institution_code="INS-LA-YUJAD",
+                scope_level="STATE",
+                creditor_identity_id="ident-la-yujad",
+                principal_amount="100.0000",
+                currency=bad,
+            )
+
+
+def test_34_unknown_government_or_institution_is_not_invented(
+    economy: NationalEconomy, crown: AuthorizationContext
+) -> None:
+    """رمزٌ لا صفَّ له يرفع «غيرُ موجود» ولا يُنشئ الصفَّ ليكمل الفعل."""
+    with pytest.raises(EconomicEntityNotFoundError, match="حكومة"):
+        economy.register_sector(
+            crown,
+            code=_code("SEC"),
+            name="قطاعٌ بلا حكومة",
+            government_code="GOV-LA-YUJAD",
+            scope_level="STATE",
+        )
+    with pytest.raises(EconomicEntityNotFoundError, match="قطاع"):
+        economy.register_category(
+            crown, sector_code="SEC-LA-YUJAD", code=_code("CAT"), name="فئةٌ بلا قطاع"
+        )
+
+
+def test_35_sector_scope_is_a_government_level_not_an_institution_one(
+    economy: NationalEconomy, federation: FederalStateGovernment, crown: AuthorizationContext
+) -> None:
+    """القطاعُ لحكومةٍ لا لمؤسسة، ومستواه يطابق مستوى حكومته لا يخالفه."""
+    federal, (state, _other) = _federal_and_states(federation, crown)
+
+    for bad_level in ("INSTITUTION", "DEPARTMENT", "GALAXY"):
+        with pytest.raises(EconomicStateError, match="مستوى قطاع"):
+            economy.register_sector(
+                crown,
+                code=_code("SEC"),
+                name="قطاعٌ بمستوى مؤسسة",
+                government_code=state["code"],
+                scope_level=bad_level,
+            )
+
+    with pytest.raises(EconomicStateError, match="يخالف مستوى حكومته"):
+        economy.register_sector(
+            crown,
+            code=_code("SEC"),
+            name="قطاعٌ فدراليٌّ في ولاية",
+            government_code=state["code"],
+            scope_level="FEDERAL",
+        )
+    # والعكسُ مرفوضٌ كذلك — فليست القاعدةُ في اتجاهٍ واحد.
+    with pytest.raises(EconomicStateError, match="يخالف مستوى حكومته"):
+        economy.register_sector(
+            crown,
+            code=_code("SEC"),
+            name="قطاعُ ولايةٍ في الفدرالية",
+            government_code=federal["code"],
+            scope_level="STATE",
+        )
+
+
+def test_36_category_code_is_unique_within_its_sector(
+    economy: NationalEconomy, federation: FederalStateGovernment, crown: AuthorizationContext
+) -> None:
+    """الفئةُ فريدةٌ في قطاعها — ويجوز تكرارُ الرمز في قطاعٍ آخر."""
+    _federal, (state, _other) = _federal_and_states(federation, crown)
+    first = _sector(economy, crown, state["code"], "STATE")
+    second = _sector(economy, crown, state["code"], "STATE")
+    economy.register_category(crown, sector_code=first["code"], code="CAT-X", name="فئة")
+
+    with pytest.raises(DuplicateEconomicEntityError, match="مُستعملة"):
+        economy.register_category(
+            crown, sector_code=first["code"], code="CAT-X", name="فئةٌ باسمٍ آخر"
+        )
+
+    other = economy.register_category(
+        crown, sector_code=second["code"], code="CAT-X", name="فئةٌ في قطاعٍ آخر"
+    )
+    assert other["sector_id"] == second["id"], "الرمزُ نفسُه مقبولٌ في قطاعٍ آخر"
+
+
+def test_37_indicator_definition_cannot_claim_a_real_measurement(
+    economy: NationalEconomy, federation: FederalStateGovernment, crown: AuthorizationContext
+) -> None:
+    """`REAL` ليست في مفردة القياس، فلا نداءَ يُعلن مؤشّرًا مقيسًا."""
+    _federal, (state, _other) = _federal_and_states(federation, crown)
+
+    with pytest.raises(EconomicStateError, match="مستوى نطاق"):
+        economy.define_indicator(
+            crown,
+            code=_code("IND"),
+            name="مؤشّر",
+            unit="نسبة",
+            method="طريقةٌ مُعلَنة",
+            government_code=state["code"],
+            scope_level="PLANETARY",
+        )
+
+    for claimed in ("REAL", "MEASURED", "real"):
+        with pytest.raises(EconomicStateError, match="حالةُ قياس"):
+            economy.define_indicator(
+                crown,
+                code=_code("IND"),
+                name="مؤشّر",
+                unit="نسبة",
+                method="طريقةٌ مُعلَنة",
+                government_code=state["code"],
+                scope_level="STATE",
+                measurement_status=claimed,
+            )
+
+
+def test_38_unknown_vocabularies_are_rejected_not_widened(
+    economy: NationalEconomy, crown: AuthorizationContext
+) -> None:
+    """كلُّ مفردةٍ مغلقةٌ عند النداء: نوعُ كيانٍ وسياسةٍ وإيرادٍ وأصلٍ والتزامٍ وتحويل."""
+    dead_institution = "INS-LA-YUJAD"
+
+    with pytest.raises(EconomicStateError, match="نوعُ كيانٍ عامٍّ مجهول"):
+        economy.register_public_entity(
+            crown,
+            code=_code("PUB"),
+            name="كيانٌ مُخترَع",
+            entity_kind="SOVEREIGN_WEALTH_ORACLE",
+            institution_code=dead_institution,
+            scope_level="STATE",
+            identity_id="ident-la-yujad",
+        )
+
+    with pytest.raises(EconomicStateError, match="نوعُ سياسةٍ مجهول"):
+        economy.issue_policy(
+            crown,
+            code=_code("POL"),
+            title="سياسةٌ مُخترَعة",
+            policy_type="MONETARY",  # النقديةُ النافذةُ ليست في R9 — الاستشاريةُ وحدها
+            institution_code=dead_institution,
+            scope_level="STATE",
+        )
+
+    with pytest.raises(EconomicStateError, match="نوعُ إيرادٍ مجهول"):
+        economy.register_revenue_source(
+            crown,
+            code=_code("REV"),
+            name="إيرادٌ مُخترَع",
+            revenue_kind="SEIGNIORAGE",
+            basis="أساسٌ مُعلَن",
+            institution_code=dead_institution,
+            scope_level="STATE",
+        )
+
+    with pytest.raises(EconomicStateError, match="حالةُ تحصيلٍ"):
+        economy.register_revenue_source(
+            crown,
+            code=_code("REV"),
+            name="إيرادٌ مُدَّعى تحصيلُه",
+            revenue_kind="TAX",
+            basis="أساسٌ مُعلَن",
+            institution_code=dead_institution,
+            scope_level="STATE",
+            collection_status="REAL",
+        )
+
+    with pytest.raises(EconomicStateError, match="صنفُ أصلٍ مجهول"):
+        economy.register_public_asset(
+            crown,
+            code=_code("AST"),
+            name="أصلٌ مُخترَع",
+            asset_class="ORBITAL",
+            institution_code=dead_institution,
+            scope_level="STATE",
+            custodian_identity_id="ident-la-yujad",
+        )
+
+    with pytest.raises(EconomicStateError, match="صنفُ التزامٍ مجهول"):
+        economy.register_public_liability(
+            crown,
+            code=_code("LIA"),
+            name="التزامٌ مُخترَع",
+            liability_class="DERIVATIVE",
+            institution_code=dead_institution,
+            scope_level="STATE",
+            creditor_identity_id="ident-la-yujad",
+            principal_amount="100.0000",
+        )
+
+    with pytest.raises(EconomicStateError, match="نوعُ تحويلٍ مجهول"):
+        economy.authorize_transfer(
+            crown,
+            transfer_kind="BAILOUT",
+            program_code="PRG-LA-YUJAD",
+            beneficiary_identity_id="ident-la-yujad",
+            allocation_id="alloc-la-yujad",
+            institution_code=dead_institution,
+            scope_level="STATE",
+            amount="100.0000",
+            purpose="غرضٌ مُعلَن",
+        )
+
+
+def test_39_money_guards_reject_non_positive_amounts_and_empty_purpose(
+    economy: NationalEconomy, crown: AuthorizationContext
+) -> None:
+    """لا حركةَ مالٍ بمبلغٍ غيرِ موجبٍ ولا بغرضٍ فارغ — قبل أيّ لمسٍ للخزانة."""
+    dead = "INS-LA-YUJAD"
+
+    for amount in ("0.0000", "-1.0000"):
+        with pytest.raises(EconomicStateError, match="موجب"):
+            economy.authorize_expenditure(
+                crown,
+                program_code="PRG-LA-YUJAD",
+                allocation_id="alloc-la-yujad",
+                institution_code=dead,
+                scope_level="STATE",
+                amount=amount,
+                purpose="غرضٌ مُعلَن",
+            )
+    with pytest.raises(EconomicStateError, match="غرضٌ مكتوب"):
+        economy.authorize_expenditure(
+            crown,
+            program_code="PRG-LA-YUJAD",
+            allocation_id="alloc-la-yujad",
+            institution_code=dead,
+            scope_level="STATE",
+            amount="100.0000",
+            purpose="   ",
+        )
+
+    with pytest.raises(EconomicStateError, match="موجب"):
+        economy.authorize_transfer(
+            crown,
+            transfer_kind="GRANT",
+            program_code="PRG-LA-YUJAD",
+            beneficiary_identity_id="ident-la-yujad",
+            allocation_id="alloc-la-yujad",
+            institution_code=dead,
+            scope_level="STATE",
+            amount="0.0000",
+            purpose="غرضٌ مُعلَن",
+        )
+    with pytest.raises(EconomicStateError, match="غرضٌ مكتوب"):
+        economy.authorize_transfer(
+            crown,
+            transfer_kind="GRANT",
+            program_code="PRG-LA-YUJAD",
+            beneficiary_identity_id="ident-la-yujad",
+            allocation_id="alloc-la-yujad",
+            institution_code=dead,
+            scope_level="STATE",
+            amount="100.0000",
+            purpose="",
+        )
+
+    with pytest.raises(EconomicStateError, match="موجبة"):
+        economy.authorize_procurement(
+            crown,
+            title="مشترياتٌ بمبلغٍ صفريّ",
+            program_code="PRG-LA-YUJAD",
+            institution_code=dead,
+            scope_level="STATE",
+            supplier_identity_id="ident-la-yujad",
+            estimated_amount="0.0000",
+            specification="مواصفةٌ مكتوبة",
+        )
+    with pytest.raises(EconomicStateError, match="مواصفةٌ مكتوبة"):
+        economy.authorize_procurement(
+            crown,
+            title="مشترياتٌ بلا مواصفة",
+            program_code="PRG-LA-YUJAD",
+            institution_code=dead,
+            scope_level="STATE",
+            supplier_identity_id="ident-la-yujad",
+            estimated_amount="100.0000",
+            specification="  ",
+        )
+
+    with pytest.raises(EconomicStateError, match="موجبًا"):
+        economy.register_public_liability(
+            crown,
+            code=_code("LIA"),
+            name="التزامٌ بأصلٍ صفريّ",
+            liability_class="BOND",
+            institution_code=dead,
+            scope_level="STATE",
+            creditor_identity_id="ident-la-yujad",
+            principal_amount="0.0000",
+        )
+
+
+def test_40_asset_book_value_and_currency_are_declared_together_or_not_at_all(
+    economy: NationalEconomy, crown: AuthorizationContext
+) -> None:
+    """قيمةٌ دفتريةٌ بلا عملةٍ ادّعاءٌ ناقص، وعملةٌ بلا قيمةٍ كذلك."""
+    dead = "INS-LA-YUJAD"
+
+    with pytest.raises(EconomicStateError, match="موجبةً أو غائبة"):
+        economy.register_public_asset(
+            crown,
+            code=_code("AST"),
+            name="أصلٌ بقيمةٍ صفرية",
+            asset_class="LAND",
+            institution_code=dead,
+            scope_level="STATE",
+            custodian_identity_id="ident-la-yujad",
+            book_value="0.0000",
+            currency="SAR",
+        )
+
+    with pytest.raises(EconomicStateError, match="معًا"):
+        economy.register_public_asset(
+            crown,
+            code=_code("AST"),
+            name="أصلٌ بقيمةٍ بلا عملة",
+            asset_class="LAND",
+            institution_code=dead,
+            scope_level="STATE",
+            custodian_identity_id="ident-la-yujad",
+            book_value="100.0000",
+            currency=None,
+        )
+
+    with pytest.raises(EconomicStateError, match="معًا"):
+        economy.register_public_asset(
+            crown,
+            code=_code("AST"),
+            name="أصلٌ بعملةٍ بلا قيمة",
+            asset_class="LAND",
+            institution_code=dead,
+            scope_level="STATE",
+            custodian_identity_id="ident-la-yujad",
+            book_value=None,
+            currency="SAR",
+        )
+
+
+def test_41_references_that_do_not_exist_are_not_fabricated(
+    economy: NationalEconomy, crown: AuthorizationContext
+) -> None:
+    """مرجعٌ لا صفَّ له يرفع «غيرُ موجود» في كلِّ مدخلٍ يقرأ مرجعًا."""
+    with pytest.raises(EconomicEntityNotFoundError, match="سياسة"):
+        economy.activate_policy(crown, policy_code="POL-LA-YUJAD")
+
+    with pytest.raises(EconomicEntityNotFoundError, match="إجازةَ إنفاقٍ"):
+        economy.execute_expenditure(
+            crown, treasury=None, reference="EXP-LA-YUJAD", expense_account_code="ACC-LA-YUJAD"
+        )
+
+    with pytest.raises(EconomicEntityNotFoundError, match="تحويلَ"):
+        economy.execute_transfer(
+            crown, treasury=None, reference="TRF-LA-YUJAD", expense_account_code="ACC-LA-YUJAD"
+        )
+
+    with pytest.raises(EconomicEntityNotFoundError, match="قرارَ اقتصاديًّا"):
+        economy.execute_economic_decision(crown, decision_reference="ECD-LA-YUJAD")
+
+    with pytest.raises(EconomicEntityNotFoundError, match="برنامج"):
+        economy.authorize_expenditure(
+            crown,
+            program_code="PRG-LA-YUJAD",
+            allocation_id="alloc-la-yujad",
+            institution_code="INS-LA-YUJAD",
+            scope_level="STATE",
+            amount="100.0000",
+            purpose="غرضٌ مُعلَن",
+        )
+
+
+def test_42_program_scope_and_category_guards_run_before_any_row_is_written(
+    economy: NationalEconomy,
+    registry: StateRegistry,
+    national: NationalRegistry,
+    federation: FederalStateGovernment,
+    crown: AuthorizationContext,
+) -> None:
+    """حرّاسُ البرنامج: نطاقٌ مجهول · إدارةٌ بلا معرِّف · فئةٌ بلا قطاعها · فئةٌ غريبة."""
+    _federal, (state, _other) = _federal_and_states(federation, crown)
+    chain = _authority_chain(
+        registry,
+        national,
+        federation,
+        crown,
+        crown,
+        government_code=state["code"],
+        scope="STATE",
+        operations=("economy.program.create",),
+    )
+    sector = _sector(economy, crown, state["code"], "STATE")
+    other_sector = _sector(economy, crown, state["code"], "STATE")
+    economy.register_category(crown, sector_code=other_sector["code"], code="CAT-Y", name="فئة")
+
+    with pytest.raises(EconomicStateError, match="مستوى نطاقٍ مجهول"):
+        economy.create_program(
+            crown,
+            code=_code("PRG"),
+            name="برنامجٌ بنطاقٍ مُخترَع",
+            institution_code=chain.institution["code"],
+            scope_level="CONTINENTAL",
+            sector_code=sector["code"],
+        )
+
+    with pytest.raises(EconomicStateError, match="`department_id`"):
+        economy.create_program(
+            crown,
+            code=_code("PRG"),
+            name="برنامجٌ إداريٌّ بلا إدارة",
+            institution_code=chain.institution["code"],
+            scope_level="DEPARTMENT",
+            sector_code=sector["code"],
+            department_id=None,
+        )
+
+    with pytest.raises(EconomicStateError, match="بلا قطاعها"):
+        economy.create_program(
+            crown,
+            code=_code("PRG"),
+            name="برنامجٌ بفئةٍ بلا قطاع",
+            institution_code=chain.institution["code"],
+            scope_level="STATE",
+            sector_code=None,
+            category_code="CAT-Y",
+        )
+
+    with pytest.raises(EconomicEntityNotFoundError, match="فئة"):
+        economy.create_program(
+            crown,
+            code=_code("PRG"),
+            name="برنامجٌ بفئةٍ من قطاعٍ آخر",
+            institution_code=chain.institution["code"],
+            scope_level="STATE",
+            sector_code=sector["code"],
+            category_code="CAT-Y",
+        )
+
+    session = _session()
+    try:
+        assert session.query(EconomicProgramModel).count() == 0, "لا صفَّ كُتب قبل الرفض"
+    finally:
+        session.close()
+
+
+def test_43_an_institution_with_no_government_yields_no_invented_one(
+    economy: NationalEconomy,
+    registry: StateRegistry,
+    national: NationalRegistry,
+    federation: FederalStateGovernment,
+    crown: AuthorizationContext,
+) -> None:
+    """مؤسسةٌ غيرُ مربوطةٍ بحكومةٍ تُوقِف الفعل — ولا تُخترَع لها حكومة."""
+    chain = _authority_chain(
+        registry,
+        national,
+        federation,
+        crown,
+        crown,
+        government_code=None,
+        scope="INSTITUTION",
+        operations=("economy.program.create",),
+    )
+    assert chain.binding is None, "لم يُربَط بحكومةٍ بقصد"
+
+    with pytest.raises(EconomicStateError, match="UNRESOLVED"):
+        economy.create_program(
+            crown,
+            code=_code("PRG"),
+            name="برنامجٌ لمؤسسةٍ بلا حكومة",
+            institution_code=chain.institution["code"],
+            scope_level="INSTITUTION",
+        )
+
+    session = _session()
+    try:
+        assert session.query(GovernmentModel).count() == 0, "لا حكومةَ اختُرِعت"
+    finally:
+        session.close()
+
+
+def test_44_unknown_institution_code_stops_the_authorization_chain(
+    economy: NationalEconomy, crown: AuthorizationContext
+) -> None:
+    """مؤسسةٌ لا صفَّ لها تُوقِف السلسلةَ عند قراءتها، لا بعد كتابةِ صفّ."""
+    with pytest.raises(EconomicEntityNotFoundError, match="مؤسسة"):
+        economy.create_program(
+            crown,
+            code=_code("PRG"),
+            name="برنامجٌ لمؤسسةٍ لا وجودَ لها",
+            institution_code="INS-LA-YUJAD",
+            scope_level="STATE",
+        )
+
+    session = _session()
+    try:
+        assert session.query(EconomicProgramModel).count() == 0
+    finally:
+        session.close()
