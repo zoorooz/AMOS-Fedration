@@ -19,7 +19,13 @@
 | `judicial_gate_matrix.json` | `tools/audit/judicial_gate_probe.py` | حكمُ البوابةِ على 32 فعلًا قضائيًّا وتشريعيًّا × 4 فاعلين (P7) |
 | `write_inventory_p13.json` | `tools/audit/sovereign_write_inventory.py --json` | جردُ 203 موضعِ كتابةٍ بعدَ P13 (الدَّينُ 168) · مُدخَلُ التدقيقِ النهائيّ |
 | `final_audit_p14.json` | `tools/audit/final_audit.py` | 21 قياسَ مطابقةٍ بينَ المستودعِ والوثيقةِ (P14) |
+| `decision_wave_map.json` | `tools/audit/decision_gate.py --map` | تقسيمُ الدَّينِ 168 على موجاتِ القرارِ (52 + 34 + 82) بلا تكرارٍ ولا متروك (P15) |
+| `decision_gate_ledger.json` | `tools/audit/decision_gate.py --record` | لقطةُ جردٍ بعدَ كلِّ قرارٍ بشريٍّ يُغلَق · **مخزنُ قياسٍ لا مصدرُ حقيقةٍ للقرارات** · يُنشَأُ عندَ أوّلِ قرارٍ (P15) |
 
 ## الحدّ
+`decision_gate_ledger.json` لا يحملُ نصَّ قرارٍ ولا حالتَه: مصدرُ الحقيقةِ للقراراتِ هو
+`SOVEREIGN_DECISION_REGISTER.md` وحدَه، وإن خالفَه الدفترُ فالسجلُّ هو الحاكم. وبوابةُ
+القرارِ بوابةُ **إجراءٍ** لا بوابةُ سيادة: لا تُخوِّلُ كتابةً ولا تمنعُها ولا تُنتِجُ دليلًا.
+
 هذه مُخرَجاتُ قياسٍ لا أحكامَ قدرات. لا تُقرأُ شهادةَ نجاحٍ لأيِّ إقليم، ولا تُغني عن
 `evidence_registry.jsonl`، ولا يُبنى عليها ادّعاءُ سيادةٍ لأيِّ خدمة.
