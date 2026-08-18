@@ -61,7 +61,7 @@
 
 | الإقليم | md | py | yaml | أسطر كود | نوى | بلا ترويسة هوية | حالات النوى |
 |---|---:|---:|---:|---:|---:|---:|---|
-| `core/` | 67 | 37 | 0 | 11670 | 14 | 2 | unspecified=14 |
+| `core/` | 67 | 38 | 0 | 12383 | 14 | 2 | unspecified=14 |
 | `royal/` | 51 | 2 | 1 | 92 | 14 | 3 | unspecified=14 |
 | `federal/` | 60 | 208 | 3 | 56408 | 7 | 2 | unspecified=7 |
 | `states/` | 47 | 2 | 0 | 32 | 7 | 2 | unspecified=7 |
@@ -70,9 +70,9 @@
 | `tools/` | 39 | 17 | 2 | 5092 | 12 | 3 | unspecified=12 |
 | `interfaces/` | 14 | 2 | 0 | 30 | 4 | 2 | unspecified=4 |
 | `runtime/` | 20 | 2 | 0 | 71 | 7 | 2 | unspecified=7 |
-| `docs/` | 65 | 2 | 0 | 47 | 7 | 2 | unspecified=7 |
+| `docs/` | 66 | 2 | 0 | 47 | 7 | 2 | unspecified=7 |
 | `ops/` | 38 | 2 | 0 | 93 | 12 | 1 | unspecified=12 |
-| `tests/` | 14 | 34 | 0 | 10610 | 5 | 1 | unspecified=5 |
+| `tests/` | 14 | 35 | 0 | 11524 | 5 | 1 | unspecified=5 |
 
 ---
 
