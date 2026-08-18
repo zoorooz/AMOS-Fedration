@@ -23,8 +23,9 @@ import pytest
 # سقطَ `create_all`. يُستوردُ هنا صريحًا لأنّ الملفَّ يجبُ أن يعملَ وحدَه، والعلّةُ
 # مُقيَّدةٌ في الجردِ ومؤجَّلةٌ إلى P12 — لا تُصلَحُ بترتيبِ نماذجَ من تلقاءِ النفس.
 import amos_federation.services.state_treasury.models  # noqa: F401
-from amos_federation.common.database import get_session_factory, init_db
+from amos_federation.common.database import TaskModel, get_session_factory, init_db
 from amos_federation.common.principal import DEFAULT_TENANT, AuthorizationContext, Principal
+from amos_federation.services.executive_core.agent_identity import register_identity
 from amos_federation.services.executive_core.engine import reset_executive_core
 from amos_federation.services.executive_core.sovereignty_bridge import (
     FORBIDDEN_BYPASS_PARAMS,
@@ -35,10 +36,12 @@ from amos_federation.services.governance.security import DEFAULT_ROLES
 from amos_federation.services.government_services.authorization import RegistryAuthorizationError
 from amos_federation.services.government_services.models import CaseModel, DecisionModel, ServiceModel
 from amos_federation.services.government_services.service import (
+    ACTION_CASE_OPEN,
     ACTION_SERVICE_PUBLISH,
     ACTION_SERVICE_STATUS,
     SERVICE_PUBLISH_SCOPE,
     SERVICE_STATUS_SCOPE,
+    CASE_TASK_TYPE,
     DuplicateServiceCodeError,
     GovernmentServiceError,
     GovernmentServices,
@@ -581,3 +584,165 @@ def test_21_publishing_writes_no_row_outside_the_boundary(gov: GovernmentService
     assert "guard_declared" in body
     for parameter in FORBIDDEN_BYPASS_PARAMS:
         assert parameter not in body
+
+# ── 8. فتحُ القضيّة: أثرانِ لا أثرٌ واحد (P5ج) ──────────────────────────────
+
+
+@pytest.fixture
+def applicant() -> str:
+    """طالبٌ حقيقيٌّ في `agents` — المفتاحُ الأجنبيُّ يفرضُ ذلك ولا يُخترَع."""
+    agent_id = f"agent-p5c-{uuid.uuid4().hex[:10]}"
+    register_identity(agent_id, f"وكيل {agent_id}", "executor", tenant_id=DEFAULT_TENANT)
+    return agent_id
+
+
+def _open(
+    gov: GovernmentServices,
+    crown: AuthorizationContext,
+    institution_code: str,
+    service_code: str,
+    applicant_agent_id: str,
+    **kw: object,
+) -> dict:
+    return gov.open_case(
+        context=crown,
+        institution_code=institution_code,
+        service_code=service_code,
+        applicant_agent_id=applicant_agent_id,
+        subject="طلب وثيقة",
+        **kw,  # type: ignore[arg-type]
+    )
+
+
+def _task_row(task_id: str):  # noqa: ANN202
+    session = get_session_factory()()
+    try:
+        return session.query(TaskModel).filter(TaskModel.id == task_id).first()
+    finally:
+        session.close()
+
+
+def test_22_opening_a_case_declares_two_effects_not_one(
+    gov: GovernmentServices,
+    crown: AuthorizationContext,
+    published: dict,
+    applicant: str,
+    authorizer: RecordingAuthorizer,
+) -> None:
+    """المهمّةُ والصفُّ أثرانِ مُعلَنانِ — ودمجُهما في واحدٍ يُخفي أخطرَ ما يجري."""
+    case = _open(
+        gov, crown, published["institution_code"], published["service"]["code"], applicant
+    )
+    outcome = authorizer.results[-1].outcome  # type: ignore[union-attr]
+    target = (
+        f"services/{DEFAULT_TENANT}/{published['institution_code']}"
+        f"/{published['service']['code']}/cases/{case['reference']}"
+    )
+    signatures = [effect.signature for effect in outcome.applied_effects]
+    assert signatures == [f"CREATE:{target}/task", f"CREATE:{target}"]
+    assert _mandatory_stages() <= set(outcome.stages)
+    assert outcome.contract.action == ACTION_CASE_OPEN
+
+
+def test_23_the_task_effect_is_a_real_row_in_tasks(
+    gov: GovernmentServices, crown: AuthorizationContext, published: dict, applicant: str
+) -> None:
+    """أثرُ المهمّةِ صفٌّ حقيقيٌّ في `tasks` — لا «عمليّةٌ» بلا أثر."""
+    case = _open(
+        gov, crown, published["institution_code"], published["service"]["code"], applicant
+    )
+    row = _task_row(case["task_id"])
+    assert row is not None
+    assert row.type == CASE_TASK_TYPE
+
+
+def test_24_both_compensators_are_planned_and_both_really_reverse(
+    gov: GovernmentServices,
+    crown: AuthorizationContext,
+    published: dict,
+    applicant: str,
+    authorizer: RecordingAuthorizer,
+) -> None:
+    """لكلِّ أثرٍ مُعوِّضٌ يعملُ فعلًا: الصفُّ يُحذَفُ والمهمّةُ تُلغى في النواة.
+
+    وإلغاءُ المهمّةِ يمرُّ بـ`ExecutiveCore.cancel` لا بكتابةٍ في `tasks`: تغييرُ صفٍّ
+    بيدِنا لا يوقفُ عملًا جاريًا، وآلةُ الحالاتِ هي التي تعرفُ ما يُلغى وما لا يُلغى.
+    """
+    case = _open(
+        gov, crown, published["institution_code"], published["service"]["code"], applicant
+    )
+    outcome = authorizer.results[-1].outcome  # type: ignore[union-attr]
+    plan = outcome.compensation_plan
+    for effect in outcome.applied_effects:
+        assert plan.covers(effect.signature)
+
+    task_signature, case_signature = (
+        effect.signature for effect in outcome.applied_effects
+    )
+    plan.compensator_for(case_signature).apply()
+    session = get_session_factory()()
+    try:
+        assert session.query(CaseModel).filter(CaseModel.id == case["id"]).first() is None
+    finally:
+        session.close()
+
+    plan.compensator_for(task_signature).apply()
+    assert _task_row(case["task_id"]).status == "cancelled"
+
+
+def test_25_case_invariants_are_refused_before_the_gateway(
+    gov: GovernmentServices,
+    crown: AuthorizationContext,
+    published: dict,
+    applicant: str,
+    authorizer: RecordingAuthorizer,
+) -> None:
+    """أولويّةٌ مجهولةٌ وموضوعٌ فارغٌ وطالبٌ لا وجودَ له — كلُّها قبلَ العبور."""
+    args = (gov, crown, published["institution_code"], published["service"]["code"])
+    before = len(authorizer.decisions)
+    with pytest.raises(GovernmentServiceError):
+        _open(*args, applicant, priority="عاجلٌ جدًّا")
+    with pytest.raises(GovernmentServiceError):
+        gov.open_case(
+            context=crown,
+            institution_code=published["institution_code"],
+            service_code=published["service"]["code"],
+            applicant_agent_id=applicant,
+            subject="   ",
+        )
+    with pytest.raises(GovernmentServiceError):
+        _open(*args, "agent-la-wujud")
+    assert len(authorizer.decisions) == before
+
+
+def test_26_no_case_row_is_written_outside_the_boundary(gov: GovernmentServices) -> None:
+    """الحرسُ الساكن: جسدُ فتحِ القضيّةِ لا يُقدِّمُ مهمّةً ولا يُضيفُ صفًّا بنفسِه."""
+    body = _own_body(GovernmentServices.open_case)
+    assert "self._core.submit(" not in body
+    assert "session.add(" not in body
+    assert "session.commit()" not in body
+    assert "guard_declared" in body
+    for parameter in FORBIDDEN_BYPASS_PARAMS:
+        assert parameter not in body
+
+
+def test_27_the_applier_writes_one_effect_per_call(
+    gov: GovernmentServices, crown: AuthorizationContext, published: dict, applicant: str
+) -> None:
+    """قضيّةٌ واحدةٌ ومهمّةٌ واحدةٌ لكلِّ نداء — لا صفَّانِ ولا مهمّتان.
+
+    وهذه ليست دعوى تجميليّة: المُطبِّقُ يُنادى مرّةً لكلِّ أثرٍ مُعلَن، فمُطبِّقٌ
+    يفعلُ كلَّ شيءٍ في نداءٍ واحدٍ كانَ يُدخِلُ الصفَّ مرّتين. وقد قِيسَ ذلك خطأً
+    حقيقيًّا قبلَ التصحيح، فبقيَ الاختبارُ حرسًا عليه.
+    """
+    case = _open(
+        gov, crown, published["institution_code"], published["service"]["code"], applicant
+    )
+    session = get_session_factory()()
+    try:
+        assert (
+            session.query(CaseModel).filter(CaseModel.reference == case["reference"]).count() == 1
+        )
+        assert session.query(TaskModel).filter(TaskModel.id == case["task_id"]).count() == 1
+    finally:
+        session.close()

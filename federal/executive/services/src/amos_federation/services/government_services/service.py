@@ -93,6 +93,12 @@ EVENT_SERVICE_STATUS_CHANGED = "amos_federation.gov.service_status_changed"
 #: نطاقُ مفاتيحِ الذرّيّة (1H) لإعلانِ خدمةٍ حكوميّة.
 SERVICE_PUBLISH_SCOPE = "government_services.service.publish"
 
+#: نطاقُ مفاتيحِ الذرّيّة (1H) لفتحِ قضيّة.
+CASE_OPEN_SCOPE = "government_services.case.open"
+
+#: فعلُ فتحِ القضيّةِ كما تراه البوابة — نصُّ الصلاحيّةِ المحلّيِّ القائمُ نفسُه.
+ACTION_CASE_OPEN = "gov.case.open"
+
 #: فعلُ إعلانِ الخدمةِ كما تراه البوابة — نصُّ الصلاحيّةِ المحلّيِّ القائمُ نفسُه.
 ACTION_SERVICE_PUBLISH = "gov.service.publish"
 
@@ -210,6 +216,31 @@ class GovernmentServices:
 
             self._authorizer = get_authorizer()
         return self._authorizer
+
+    def _delete_case_row(self, case_id: str) -> bool:
+        """احذفْ صفَّ قضيّةٍ أُنشِئَ في هذه العمليّة — عكسُ الإنشاءِ حذفُه.
+
+        وترجعُ `False` إن غابَ الصفُّ فلا يُزعَمُ عكسٌ لما لا وجودَ له.
+        """
+        session = self._session()
+        try:
+            row = session.query(CaseModel).filter(CaseModel.id == case_id).first()
+            if row is None:
+                return False
+            session.delete(row)
+            session.commit()
+            return True
+        finally:
+            session.close()
+
+    def _cancel_case_task(self, task_id: str, reference: str) -> None:
+        """ألغِ مهمّةَ القضيّةِ في النواةِ التنفيذيّة — عبرَ `cancel` لا بكتابةٍ مباشرة.
+
+        وإن رفضتْ آلةُ الحالاتِ الإلغاءَ (مهمّةٌ بدأتْ تنفيذَها) فالخطأُ **يُرفَعُ**
+        ولا يُكتَمُ: تعويضٌ يُبلِّغُ نجاحًا وهو لم يوقفْ عملًا جاريًا كذبٌ تشغيليّ،
+        وسجلُّ التعويضِ يجبُ أن يقولَ `COMPENSATION_FAILED` حين يفشلُ فعلًا.
+        """
+        self._core.cancel(task_id, f"تعويضُ فتحِ القضيّةِ '{reference}'")
 
     def _delete_service_row(self, service_id: str) -> bool:
         """احذفْ صفَّ خدمةٍ أُنشِئَ في هذه العمليّة — عكسُ الإنشاءِ حذفُه لا سحبُه.
@@ -642,12 +673,19 @@ class GovernmentServices:
         priority: str = "normal",
         reference: str | None = None,
     ) -> dict[str, Any]:
-        """افتح قضية على خدمة نشطة، وقدِّم مهمّتها إلى العمود التنفيذي.
+        """افتح قضية على خدمة نشطة، وقدِّم مهمّتها إلى العمود التنفيذي — عبرَ الحدِّ.
 
-        الأثر التنفيذي يُقدَّم عبر `ExecutiveCore.submit` (R7-E)، و`task_id`
-        يُخزَّن مفتاحًا أجنبيًّا. فالقضية لا تدّعي عملًا لا صفَّ له في `tasks`.
+        هذه العمليّةُ تكتبُ **أثرينِ** لا أثرًا واحدًا: مهمّةٌ في النواةِ التنفيذيّةِ
+        (R7-E) وصفُّ قضيّةٍ يشيرُ إليها بمفتاحٍ أجنبيّ. فيُعلَنانِ اثنينِ بمُعوِّضينِ
+        اثنين — ودمجُهما في «أثرٍ» واحدٍ يُخفي أخطرَ ما يجري، وهو المهمّةُ التي قد
+        تكونُ بدأتْ تنفيذَها فلا تُلغى.
+
+        والترتيبُ محفوظٌ كما كان: المهمّةُ أوّلًا لأنَّ `task_id` مفتاحٌ أجنبيٌّ
+        مفروضٌ في صفِّ القضيّة. والفحوصُ كلُّها **قبلَ** العبور: الصلاحيّةُ، والأولويّةُ
+        من مفردتِها، ولزومُ موضوعٍ مكتوب، ونشاطُ الخدمة، وقيامُ الطالبِ في `agents`
+        وحدُّ مستأجرِه، ومنعُ تكرارِ المرجع.
         """
-        require_domain_permission(context, "gov.case.open", PERMISSIONS_CASE_OPEN)
+        require_domain_permission(context, ACTION_CASE_OPEN, PERMISSIONS_CASE_OPEN)
         if priority not in CASE_PRIORITIES:
             raise GovernmentServiceError(
                 f"أولوية غير معروفة: '{priority}' — المسموح {list(CASE_PRIORITIES)}"
@@ -687,59 +725,145 @@ class GovernmentServices:
         finally:
             session.close()
 
-        # المهمّة تُقدَّم إلى النواة القائمة — لا مُنفِّذ خاصّ بهذا النطاق.
-        task = self._core.submit(
-            CASE_TASK_TYPE,
-            f"مراجعة قضية {case_reference}: {subject}",
-            priority=priority,
-            domain=CASE_TASK_DOMAIN,
-            tenant_id=tenant,
+        from amos_federation.services.executive_core.sovereignty_bridge import (
+            compensator,
+            declared_effect,
+            operation_key,
         )
-        task_id = task["id"]
 
-        session = self._session()
-        try:
-            row = CaseModel(
-                id=f"case-{uuid.uuid4()}",
-                reference=case_reference,
-                service_id=service_id,
-                institution_id=institution_id,
-                applicant_agent_id=applicant_agent_id,
-                task_id=task_id,
-                subject=subject,
-                payload=payload or {},
-                status="submitted",
-                priority=priority,
-                tenant_id=tenant,
-                opened_by=context.principal_id,
+        case_id = f"case-{uuid.uuid4()}"
+        target = f"services/{tenant}/{institution_code}/{service_code}/cases/{case_reference}"
+        task_effect = declared_effect(
+            "CREATE", f"{target}/task", f"مهمّةُ مراجعةِ القضيّةِ '{case_reference}' في النواة"
+        )
+        case_effect = declared_effect(
+            "CREATE", target, f"صفُّ القضيّةِ '{case_reference}' على الخدمةِ '{service_code}'"
+        )
+        submitted: dict[str, Any] = {}
+
+        def _apply(effect: Any) -> dict[str, Any] | None:
+            """التطبيقُ الحقيقيّ — **أثرٌ واحدٌ في كلِّ نداء**.
+
+            الحدُّ يُنادي المُطبِّقَ مرّةً لكلِّ أثرٍ مُعلَن (`_route_effect`)، فمُطبِّقٌ
+            يفعلُ كلَّ شيءٍ في نداءٍ واحدٍ يُنفَّذُ مرّتينِ فيُدخِلُ الصفَّ مرّتين. وهذا
+            ما قاسَه الاختبارُ فعلًا: `UNIQUE constraint failed` على مرجعٍ جديد. فصارَ
+            التوزيعُ على بصمةِ الأثرِ، والترتيبُ ترتيبُ الإعلان: المهمّةُ أوّلًا لأنَّ
+            `task_id` مفتاحٌ أجنبيٌّ مفروضٌ في صفِّ القضيّة.
+            """
+            if effect.signature == task_effect.signature:
+                return _submit_task()
+            if effect.signature == case_effect.signature:
+                return _write_case_row()
+            raise GovernmentServiceError(
+                f"أثرٌ غيرُ مُعلَنٍ وصلَ إلى مُطبِّقِ فتحِ القضيّة: '{effect.signature}'"
             )
-            session.add(row)
-            try:
-                session.commit()
-            except IntegrityError as exc:
-                session.rollback()
-                raise DuplicateReferenceError(
-                    f"تعذّر إدخال القضية '{case_reference}': {exc.orig}"
-                ) from exc
-            entity = self._case_dict(row)
-        finally:
-            session.close()
 
-        trace = record_domain_trace(
-            context,
-            "gov.case.open",
-            EVENT_CASE_OPENED,
-            {
-                "case_id": entity["id"],
-                "reference": entity["reference"],
-                "service_id": entity["service_id"],
-                "institution_id": entity["institution_id"],
-                "task_id": task_id,
-                "applicant_agent_id": applicant_agent_id,
+        def _submit_task() -> None:
+            """أثرُ المهمّة — تُقدَّم إلى النواةِ القائمةِ لا إلى مُنفِّذٍ خاصٍّ بالنطاق."""
+            task = self._core.submit(
+                CASE_TASK_TYPE,
+                f"مراجعة قضية {case_reference}: {subject}",
+                priority=priority,
+                domain=CASE_TASK_DOMAIN,
+                tenant_id=tenant,
+            )
+            submitted["task_id"] = task["id"]
+
+        def _write_case_row() -> dict[str, Any]:
+            """أثرُ صفِّ القضيّةِ ثمّ التدقيقُ — بترتيبِ R7-E نفسِه ولم يُقلَب."""
+            task_id = submitted.get("task_id")
+            if not task_id:
+                raise GovernmentServiceError(
+                    "صفُّ القضيّةِ قبلَ مهمّتِها — لا قضيّةَ تدّعي عملًا لا صفَّ له في `tasks`"
+                )
+
+            write_session = self._session()
+            try:
+                row = CaseModel(
+                    id=case_id,
+                    reference=case_reference,
+                    service_id=service_id,
+                    institution_id=institution_id,
+                    applicant_agent_id=applicant_agent_id,
+                    task_id=task_id,
+                    subject=subject,
+                    payload=payload or {},
+                    status="submitted",
+                    priority=priority,
+                    tenant_id=tenant,
+                    opened_by=context.principal_id,
+                )
+                write_session.add(row)
+                try:
+                    write_session.commit()
+                except IntegrityError as exc:
+                    write_session.rollback()
+                    raise DuplicateReferenceError(
+                        f"تعذّر إدخال القضية '{case_reference}': {exc.orig}"
+                    ) from exc
+                entity = self._case_dict(row)
+            finally:
+                write_session.close()
+
+            trace = record_domain_trace(
+                context,
+                ACTION_CASE_OPEN,
+                EVENT_CASE_OPENED,
+                {
+                    "case_id": entity["id"],
+                    "reference": entity["reference"],
+                    "service_id": entity["service_id"],
+                    "institution_id": entity["institution_id"],
+                    "task_id": task_id,
+                    "applicant_agent_id": applicant_agent_id,
+                    "tenant_id": tenant,
+                },
+            )
+            return {**entity, **trace}
+
+        def _cancel_submitted_task() -> None:
+            """عكسُ أثرِ المهمّة — ولا يُزعَمُ عكسٌ إن لم تُقدَّمْ مهمّةٌ أصلًا."""
+            task_id = submitted.get("task_id")
+            if task_id:
+                self._cancel_case_task(task_id, case_reference)
+
+        guarded = self.authorizer.guard_declared(
+            ACTION_CASE_OPEN,
+            target,
+            declared_effects=(task_effect, case_effect),
+            applier=_apply,
+            operation_key=operation_key(CASE_OPEN_SCOPE, f"{tenant}:{case_reference}"),
+            compensators=(
+                compensator(
+                    case_effect.signature,
+                    lambda: self._delete_case_row(case_id),
+                    f"حذفُ صفِّ القضيّةِ '{case_reference}'",
+                ),
+                compensator(
+                    task_effect.signature,
+                    _cancel_submitted_task,
+                    f"إلغاءُ مهمّةِ القضيّةِ '{case_reference}' في النواة",
+                ),
+            ),
+            metadata={
                 "tenant_id": tenant,
+                "institution_code": institution_code,
+                "service_code": service_code,
+                "reference": case_reference,
+                "priority": priority,
             },
         )
-        return {**entity, **trace}
+        if guarded.is_replay:
+            return {
+                "reference": case_reference,
+                "tenant_id": tenant,
+                "replayed": True,
+                "operation_key": guarded.outcome.operation_key,
+            }
+        # قيمةُ الحدِّ ثُنائيّةٌ لأنَّ الآثارَ اثنان: المهمّةُ لا تُرجِعُ شيئًا، والقضيّةُ
+        # تُرجِعُ صفَّها. فيُنتقى ما هو قاموسٌ فعلًا لا يُفترَضُ موضعُه.
+        entity = next(item for item in guarded.value if isinstance(item, dict))
+        return {**entity, "replayed": False}
 
     def assign_case(
         self, *, context: AuthorizationContext, reference: str, official_id: str

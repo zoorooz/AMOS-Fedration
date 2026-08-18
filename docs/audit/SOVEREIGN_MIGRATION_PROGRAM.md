@@ -229,7 +229,8 @@ python tools/audit/sovereign_write_inventory.py
 | P3 | State Runtime | **BLOCKED** (Q-13 · Q-14) | — | 177 | 177 | `8e93684` — مدفوعٌ |
 | P4 | هويّةُ الوكيلِ والسكّان | **BLOCKED** (Q-15) | — | 177 | 177 | `d0ce623` — مدفوعٌ |
 | P5أ | `set_service_status` (خدماتٌ حكوميّة) | **MIGRATED** | 13 | 177 | **176** | `df850ea` — مدفوعٌ |
-| P5ب | `publish_service` | **MIGRATED** | 21 (الملفُّ كلُّه) | 176 | **175** | يُسجَّلُ عند الدفع |
+| P5ب | `publish_service` | **MIGRATED** | 21 (الملفُّ كلُّه) | 176 | **175** | `1e9f817` — مدفوعٌ |
+| P5ج | `open_case` (أثرانِ مُعلَنان) | **MIGRATED** | 27 (الملفُّ كلُّه) | 175 | **174** | يُسجَّلُ عند الدفع |
 
 ---
 
