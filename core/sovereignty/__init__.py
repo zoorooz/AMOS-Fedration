@@ -141,6 +141,29 @@ _EXPORTS: dict[str, str] = {
     "GatewayError": "gateway",
     "SovereignGateway": "gateway",
     "SovereigntyViolation": "gateway",
+    # enforcement_boundary — حدُّ التنفيذِ السياديّ والحرسُ الساكن (1M)
+    # يعتمد على gateway وعلى كلِّ حُرَّاسِ 1E–1K، فموضعُه آخرُ السلسلة.
+    "BoundaryConfigurationError": "enforcement_boundary",
+    "BoundaryOutcome": "enforcement_boundary",
+    "BoundaryStage": "enforcement_boundary",
+    "CompensationNotDeclaredError": "enforcement_boundary",
+    "DEFAULT_GUARDED_SCOPE": "enforcement_boundary",
+    "DEFINING_MODULES": "enforcement_boundary",
+    "EnforcementBoundaryError": "enforcement_boundary",
+    "GUARD_EXCEPTION_NAMES": "enforcement_boundary",
+    "JurisdictionNotDeclaredError": "enforcement_boundary",
+    "MANDATORY_EXTERNAL_STAGES": "enforcement_boundary",
+    "MANDATORY_INTERNAL_STAGES": "enforcement_boundary",
+    "MixedEffectContractError": "enforcement_boundary",
+    "OperationKeyRequiredError": "enforcement_boundary",
+    "OutboxNotConfiguredError": "enforcement_boundary",
+    "SUCCESS_CLAIM_METHODS": "enforcement_boundary",
+    "SovereignExecutionBoundary": "enforcement_boundary",
+    "StaticEnforcementGuard": "enforcement_boundary",
+    "StaticFinding": "enforcement_boundary",
+    "StaticGuardError": "enforcement_boundary",
+    "TERMINAL_SUCCESS_STATUS": "enforcement_boundary",
+    "bypass_parameters_of": "enforcement_boundary",
 }
 
 __all__ = sorted(_EXPORTS)  # noqa: PLE0605 — sorted() returns list at runtime
