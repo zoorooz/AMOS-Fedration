@@ -493,6 +493,103 @@ def _r010_7(req: ActionRequest) -> str | None:
     )
 
 
+# ── المادة العاشرة · 8 و 9 والمادة الحادية عشرة (المرسوم AMD-003) ─────────────
+#
+# نصٌّ لا يقرؤه محرّكٌ ليس قدرة (القاعدة 12). فالمرسومُ الذي أثبت المرجعيّةَ
+# الملكيّةَ لا يُعَدُّ مُنفَّذًا بوجودِ ملفِّه، بل بقواعدَ تُقيَّم عند كلِّ فعل.
+
+ROYAL_TREASURY_ACTIONS = frozenset({
+    "reduce_royal_treasury_share",
+    "deny_royal_treasury_ownership",
+    "seize_royal_treasury_share",
+})
+
+ROYAL_INQUIRY_ACTIONS = frozenset({
+    "refuse_royal_inquiry",
+    "withhold_state_records_from_king",
+    "reject_royal_referendum",
+})
+
+ROYAL_NULLIFICATION_CONSTRAINTS = frozenset({
+    "require_royal_justification",
+    "require_council_consent_for_royal_nullification",
+    "block_royal_nullification",
+})
+
+INTERPRETATION_ACTIONS = frozenset({
+    "reinterpret_constitution",
+    "resolve_constitutional_conflict",
+    "declare_constitutional_interpretation",
+})
+
+SUPREMACY_INVERSION_ACTIONS = frozenset({
+    "subordinate_king_to_council",
+    "grant_council_supremacy_over_king",
+    "make_granted_authority_sovereign",
+})
+
+
+def _r010_8(req: ActionRequest) -> str | None:
+    """نصفُ الخزينة حقٌّ ملكيٌّ مقرَّر لا منحةُ مؤسّسة (العاشرة · 8 · 1)."""
+    if req.action not in ROYAL_TREASURY_ACTIONS:
+        return None
+    if req.royal_decree is not None and req.actor is Branch.ROYAL:
+        return None
+    return (
+        f"الفعل «{req.action}» يمسّ حقًّا ماليًّا ملكيًّا مقرَّرًا دستوريًّا "
+        "(نصف الخزينة ملكًا للملك). والقيود المحاسبية آلية إدارة لا نزع "
+        "للسلطة العليا، ولا يُستعمل «استقلال الخزانة» لإنشاء سلطة مالية "
+        "أعلى من الملك."
+    )
+
+
+def _r010_9(req: ActionRequest) -> str | None:
+    """الإجابة عن استفتاء الملك واجب، وحقُّ اطّلاعه شامل (العاشرة · 9)."""
+    if req.action not in ROYAL_INQUIRY_ACTIONS:
+        return None
+    return (
+        f"الفرع «{req.actor.value}» يمنع عن الملك اطّلاعًا أو استفتاءً عبر "
+        f"«{req.action}». ولا يُحجب عنه شيء بحجّة الاستقلال الإداري ولا "
+        "السرّية المؤسّسية، والامتناع مخالفة دستورية."
+    )
+
+
+def _r010_10(req: ActionRequest) -> str | None:
+    """لا يُلزَم الملك بتبريرٍ ولا بموافقة المجلس عند الإبطال (العاشرة · 11 · 2)."""
+    if req.action not in ROYAL_NULLIFICATION_CONSTRAINTS:
+        return None
+    return (
+        f"الفعل «{req.action}» ينشئ آلية تُوجِب على الملك تبريرًا أو موافقةً "
+        "لاستعمال حقّ الإبطال. والنص صريح: لا تُنشَأ آلية تُوجِب ذلك."
+    )
+
+
+def _r011_1(req: ActionRequest) -> str | None:
+    """حسمُ تعارضِ النصوص وتفسيرُها لا يقع إلا بمرسوم ملكي (الحادية عشرة · 3 · 5)."""
+    if req.action not in INTERPRETATION_ACTIONS:
+        return None
+    if req.royal_decree is not None and req.actor is Branch.ROYAL:
+        return None
+    return (
+        f"الفعل «{req.action}» اختيارُ تفسيرٍ أو حسمُ تعارضٍ دستوريّ بلا مرسوم "
+        "ملكي. والوكيل يرفع التعارض ولا يبتّ فيه: ممنوع أن يختار تفسيرًا "
+        "سياسيًّا جديدًا من تلقاء نفسه."
+    )
+
+
+def _r011_2(req: ActionRequest) -> str | None:
+    """لا تُفسَّر صلاحيةٌ مؤسّسيّةٌ سلطةً تعلو الملك (الحادية عشرة · 2 · 2)."""
+    if req.action not in SUPREMACY_INVERSION_ACTIONS:
+        return None
+    return (
+        f"الفعل «{req.action}» يقلب تسلسل التفسير الإلزامي: بقاء الدولة ثم "
+        "أهدافها ثم المرجعية الملكية ثم النص الصريح ثم الصلاحيات المؤسسية ثم "
+        "الإجراءات. والصلاحية الممنوحة لا تنقلب حقًّا سياديًّا ضدّ الملك إلا "
+        "بقيد دستوري صريح."
+    )
+
+
+
 RULES: tuple[ConstitutionalRule, ...] = (
     ConstitutionalRule("R-001-1", "A001", "الحقوق غير القابلة للتفاوض · 1 — الإنسان السلطة العليا",
                        Severity.FUNDAMENTAL, "ترقية/تكرار/إطلاق بلا موافقة بشرية", _r001_1,
@@ -571,6 +668,21 @@ RULES: tuple[ConstitutionalRule, ...] = (
                        CrownEffect.ADVISORY),
     ConstitutionalRule("R-010-7", "A010", "التاج فوق رقابة الفروع · 5",
                        Severity.CRITICAL, "فرع ينقض مرسومًا ملكيًا أو يراجعه", _r010_7,
+                       CrownEffect.ADVISORY),
+    ConstitutionalRule("R-010-8", "A010", "الحق المالي الملكي · 8 · 1",
+                       Severity.FUNDAMENTAL, "المساس بنصف الخزينة المملوك للملك", _r010_8,
+                       CrownEffect.ADVISORY),
+    ConstitutionalRule("R-010-9", "A010", "حق الاطلاع والاستفتاء · 9",
+                       Severity.CRITICAL, "منع الملك من اطلاع أو استفتاء", _r010_9,
+                       CrownEffect.ADVISORY),
+    ConstitutionalRule("R-010-10", "A010", "حق الإبطال بلا تبرير · 11 · 2",
+                       Severity.FUNDAMENTAL, "إلزام الملك بتبرير الإبطال أو بموافقة المجلس", _r010_10,
+                       CrownEffect.ADVISORY),
+    ConstitutionalRule("R-011-1", "A011", "حسم التعارض بمرسوم ملكي · 3 · 5",
+                       Severity.FUNDAMENTAL, "تفسير دستوري أو حسم تعارض بلا مرسوم ملكي", _r011_1,
+                       CrownEffect.ADVISORY),
+    ConstitutionalRule("R-011-2", "A011", "تسلسل التفسير الإلزامي · 2 · 2",
+                       Severity.FUNDAMENTAL, "تفسير صلاحية مؤسسية سلطةً تعلو الملك", _r011_2,
                        CrownEffect.ADVISORY),
 )
 

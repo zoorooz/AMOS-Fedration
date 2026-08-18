@@ -33,16 +33,16 @@ class TestVerifyGate:
     def test_coverage_passes_and_lists_every_article(self, capsys):
         assert main(["coverage"]) == 0
         out = capsys.readouterr().out
-        for i in range(1, 10):
+        for i in range(1, 12):
             assert f"A{i:03d}" in out
 
-    def test_seal_writes_all_ten(self, capsys):
-        """عشر مواد بعد إضافة المادة العاشرة بالمرسوم AMD-001."""
+    def test_seal_writes_all_eleven(self, capsys):
+        """إحدى عشرة مادة بعد المادة الحادية عشرة بالمرسوم AMD-003."""
         assert main(["seal"]) == 0
         out = capsys.readouterr().out
-        # عشر مواد + الديباجة = أحد عشر نصًّا مختومًا (التفسير INT-002)
-        assert "خُتمت 10 مادة + الديباجة" in out
-        assert "11 نصًّا دستوريًّا" in out
+        # إحدى عشرة مادة + الديباجة = اثنا عشر نصًّا مختومًا (التفسير INT-002)
+        assert "خُتمت 11 مادة + الديباجة" in out
+        assert "12 نصًّا دستوريًّا" in out
 
 
 class TestEvaluateCommand:

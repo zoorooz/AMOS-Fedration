@@ -32,7 +32,7 @@
     "A005": {
       "file": "core/constitution/articles/005-amendment-process.md",
       "title": "المادة الخامسة — عملية التعديل",
-      "sha256": "253c213f28cee1ac687db3990f19629202928c40fc493449d01132a74a16b422"
+      "sha256": "cd4e42af496cd1c1d7f6581d431eb7eb0064422e1ecdd056b132deeba85e36a9"
     },
     "A006": {
       "file": "core/constitution/articles/006-succession.md",
@@ -57,7 +57,12 @@
     "A010": {
       "file": "core/constitution/articles/010-royal-sovereignty.md",
       "title": "المادة العاشرة — السيادة الملكية",
-      "sha256": "38a5b03623f3d6df853b7f5110b01c4eb0538bd539357157bb1e14322f5fc565"
+      "sha256": "097ee875de375be68363e22aee226eb5d813855b586a8471b64c1e99616eb0fc"
+    },
+    "A011": {
+      "file": "core/constitution/articles/011-interpretation-hierarchy.md",
+      "title": "المادة الحادية عشرة — قاعدة التفسير وآلية حلّ تعارض النصوص",
+      "sha256": "e7d1f630847b2fcb1418ecfb589a727f18f4011f776847ef5deeb49074acfaa0"
     }
   }
 }

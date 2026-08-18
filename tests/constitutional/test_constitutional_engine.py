@@ -61,11 +61,15 @@ def allows(engine: ConstitutionalEngine, req: ActionRequest) -> None:
 # ===========================================================================
 
 class TestArticleLoading:
-    def test_all_ten_articles_load(self):
-        """صارت عشرًا بعد المرسوم AMD-001 الذي أضاف المادة العاشرة (E2)."""
+    def test_all_eleven_articles_load(self):
+        """صارت إحدى عشرة بالمرسوم AMD-003 الذي أضاف المادة الحادية عشرة.
+
+        وكانت عشرًا بالمرسوم AMD-001 (E2). العددُ يُصحَّح هنا لأن سندَه مرسومٌ
+        مؤسِّسٌ لا اختيارُ وكيل، ولأن التوقّعَ القديمَ صار هو المخالفَ للنصّ.
+        """
         arts = load_articles()
-        assert len(arts) == 10
-        assert [a.article_id for a in arts] == [f"A{i:03d}" for i in range(1, 11)]
+        assert len(arts) == 11
+        assert [a.article_id for a in arts] == [f"A{i:03d}" for i in range(1, 12)]
 
     def test_every_article_is_in_force(self):
         assert all(a.in_force for a in load_articles())
@@ -600,9 +604,9 @@ def test_preamble_is_sealed_and_tamper_is_detected():
 
 
 def test_preamble_is_sealed_but_is_not_an_article():
-    """تُختَم ولا تُصير مادة: العدد يبقى عشرًا (INT-002 · ثالثًا)."""
+    """تُختَم ولا تُصير مادة: العدد يبقى إحدى عشرة (INT-002 · ثالثًا)."""
     from core.constitutional_engine.articles import load_articles
 
     arts = load_articles()
-    assert len(arts) == 10
+    assert len(arts) == 11
     assert all(a.article_id != "PRE" for a in arts)

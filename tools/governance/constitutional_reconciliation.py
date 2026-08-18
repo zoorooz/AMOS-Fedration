@@ -74,9 +74,29 @@ RE_ED25519 = re.compile(r"ed25519", re.IGNORECASE)
 # إلى ملفِّ توقيعٍ مُرافق. والتمييزُ لازمٌ: أوّلُ صياغةٍ اكتفت بورودِ لفظِ
 # «Ed25519» فأعلنت المرسومَين سليمَين، والحالُ أنّ اللفظَ ورد في **وصفِ الشرطِ**
 # لا في تنفيذه — فصار الفحصُ يشهد بالتوقيعِ لأنّ النصَّ ذكر أنّه يجب أن يُوقَّع.
-RE_SIGNATURE_MATERIAL = re.compile(
-    r"[0-9a-f]{64,}|[A-Za-z0-9+/]{60,}={0,2}|\.sig\b|signature_file|ملف التوقيع",
-)
+# مادّةُ التوقيع لا تُعرَف بشكلِها وحدَه: بصمةُ SHA-256 ستّونَ حرفًا وأربعةٌ من
+# ست عشريّةٍ أيضًا، فمرسومٌ يوثّق بصماتَ ما قبلَ التعديلِ وما بعدَه كان يمرّ
+# بوصفِه «موقّعًا» وهو غيرُ موقّع. فلا يُعتدُّ بالمادّةِ إلا إذا نُسبت إلى
+# التوقيعِ صراحةً على السطرِ نفسِه، أو كانت مرجعَ ملفِّ توقيعٍ مستقلّ.
+RE_SIGNATURE_LABEL = re.compile(r"توقيع|signature|sig\b|Ed25519", re.IGNORECASE)
+RE_SIGNATURE_BLOB = re.compile(r"[0-9a-fA-F]{64,}|[A-Za-z0-9+/]{60,}={0,2}")
+RE_SIGNATURE_REFERENCE = re.compile(r"\.sig\b|signature_file|ملف التوقيع")
+# نصٌّ يُعلِن صريحًا أنّ توقيعَه لم يُستوفَ — إعلانٌ لا يُعَدُّ توقيعًا أبدًا.
+RE_SIGNATURE_PENDING = re.compile(r"SIGNATURE_REQUIRED|التوقيعُ?\s+الرقميُّ?\s+مُعلَّق")
+
+
+def _has_signature_material(text: str) -> bool:
+    """هل يحمل النصُّ مادّةَ توقيعٍ يُتحقَّق منها — لا مجرّدَ سلسلةٍ طويلة؟
+
+    الشرطُ: مرجعُ ملفِّ توقيعٍ مستقلّ، أو كتلةٌ توقيعيّةٌ **موسومةٌ بالتوقيعِ على
+    سطرِها**. وبصمةُ SHA-256 في جدولِ «ما قبل / ما بعد» ليست توقيعًا.
+    """
+    if RE_SIGNATURE_REFERENCE.search(text):
+        return True
+    for line in text.split("\n"):
+        if RE_SIGNATURE_BLOB.search(line) and RE_SIGNATURE_LABEL.search(line):
+            return True
+    return False
 RE_ISSUE_DATE = re.compile(r"تاريخ الإصدار\D*(\d{4})-(\d{2})-(\d{2})")
 
 # المادة الخامسة · 3: فترةُ مراجعةٍ لا تقلّ عن تسعين يومًا.
@@ -198,7 +218,7 @@ def check_royal_decree_signature(report: Report, root: Path = REPO_ROOT) -> None
         text = path.read_text(encoding="utf-8")
         if not RE_ROYAL_ACT.search(text):
             continue
-        if RE_SIGNATURE_MATERIAL.search(text):
+        if not RE_SIGNATURE_PENDING.search(text) and _has_signature_material(text):
             continue
         mentions = bool(RE_ED25519.search(text))
         report.add(Finding(
@@ -251,8 +271,29 @@ def _issue_date_or_finding(
         return None
 
 
+ROYAL_DECREE_MARKER = re.compile(r"المرسوم\s+الملكي|مرسومٌ\s+ملكي")
+
+
+def _is_royal_decree(text: str) -> bool:
+    """هل هذا النصُّ مرسومٌ ملكيٌّ أم مقترحٌ مؤسّسيّ؟
+
+    الفرقُ ليس شكليًّا: مدّةُ التسعين يومًا شرطُ مسارِ المقترحِ التابع، والمرسومُ
+    الملكيُّ يُعدِّل مباشرةً (المادة الخامسة · 0 · 3). فإن لم يُميَّز النوعان
+    طُبِّق قيدُ المؤسّساتِ على السلطةِ التي أنشأتها.
+    """
+    return bool(ROYAL_DECREE_MARKER.search(text))
+
+
 def check_review_period(report: Report, root: Path = REPO_ROOT) -> None:
-    """المادة الخامسة · 3: فترةُ مراجعةٍ لا تقلّ عن تسعين يومًا قبل التعديل."""
+    """المادة الخامسة · 3: فترةُ مراجعةٍ لا تقلّ عن تسعين يومًا قبل التعديل.
+
+    **مُراجَعٌ بالمرسوم `AMD-003` (RECON-004):** الشرطُ باقٍ بمدّتِه كما هو على
+    **مسارِ المقترحِ التابع** — لم يُلغَ ولم تُخفَّض مدّتُه — ونُصَّ صريحًا أنّه
+    لا يسري على المرسوم الملكيّ. فصار الفحصُ يقيسُ المدّةَ على المقترحاتِ
+    المؤسّسيّة، ويقيسُ على المرسومِ الملكيِّ ما يليقُ به: إعلانَ سندِه الملكيِّ
+    صريحًا. ولو حُذف نصُّ التوصيفِ من المادة الخامسة عاد الفحصُ إلى قياسِ المدّةِ
+    على الجميع كما كان.
+    """
     a005 = ARTICLES_DIR / "005-amendment-process.md"
     base = _issue_date_or_finding(a005, report, root) if a005.is_file() else None
     if base is None:
@@ -265,10 +306,14 @@ def check_review_period(report: Report, root: Path = REPO_ROOT) -> None:
             measured="لا يُقرأ تاريخُ إصدارِ المادة، ففحصُ فترةِ المراجعةِ مُعطَّلٌ لا ناجح",
         ))
         return
+    a005_text = a005.read_text(encoding="utf-8")
+    royal_track_scoped = _conflict_resolved(a005_text)
     for path in _normative_files(AMENDMENTS_DIR):
         issued = _issue_date_or_finding(path, report, root)
         if issued is None:
             continue
+        if royal_track_scoped and _is_royal_decree(path.read_text(encoding="utf-8")):
+            continue  # مرسومٌ ملكيٌّ — المدّةُ شرطُ المقترحِ لا شرطُ المرسوم
         elapsed = (issued - base).days
         if elapsed >= A005_REVIEW_DAYS:
             continue
@@ -281,6 +326,105 @@ def check_review_period(report: Report, root: Path = REPO_ROOT) -> None:
         ))
 
 
+RESOLUTION_MARKERS: tuple[tuple[str, str], ...] = (
+    # (وصفُ الرُّكن، نمطُه) — الحسمُ لا يُستنتج من كلمةٍ واحدةٍ عابرة.
+    ("حصرُ التعديل في الملك", r"اختصاص\S*\s+ملكي\S*\s+حصر"),
+    ("توصيفُ النسبة مسارًا للمقترح", r"مسار\S*\s+المقترح"),
+)
+
+
+def _conflict_resolved(a005_text: str) -> bool:
+    """هل يحمل نصُّ المادة الخامسة نفسُه حسمَ التعارض؟
+
+    لا يكفي أن يُقال في وثيقةٍ خارجيّةٍ إنّ التعارضَ حُلّ — القرارُ المؤسِّس أوجب
+    **إزالتَه من النصِّ الدستوريّ نفسِه**. فالفحصُ يقرأ النصَّ لا الوثيقة، ويطلب
+    رُكنَي الحسمِ معًا: حصرَ التعديلِ في الملك، وتوصيفَ النسبةِ مسارًا للمقترح.
+    فإن غاب أحدُهما فالتعارضُ عائدٌ ويُرفَع من جديد.
+    """
+    return all(re.search(pat, a005_text) for _, pat in RESOLUTION_MARKERS)
+
+
+# صياغاتٌ حرّمها القرارُ المؤسِّس (البند الثاني عشر) والمادة الحادية عشرة · 4.
+# تُقاس على نصٍّ منزوعِ التشكيلِ حتى لا تُفلت بحركةٍ واحدة.
+FORBIDDEN_ROYAL_PHRASES: tuple[tuple[str, str], ...] = (
+    ("F-01", r"الملك\s+لا\s+سلطة\s+له"),
+    ("F-02", r"لا\s+سلطة\s+للملك"),
+    ("F-03", r"الملك\s+لا\s+يملك\s+سلطة"),
+    ("F-04", r"الملك\s+لا\s+يستطيع"),
+    ("F-05", r"المجلس\s+أعلى\s+من\s+الملك"),
+    ("F-06", r"قرار\s+المجلس\s+لا\s+يمكن\s+إبطاله"),
+    ("F-07", r"السيادة\s+لغير\s+الملك"),
+)
+
+EXEMPTION_MARKER = "ROYAL-LANG-EXEMPT"
+
+_DIACRITICS = re.compile(r"[\u064B-\u0652\u0670\u0640]")
+
+
+def _strip_diacritics(text: str) -> str:
+    """التشكيلُ زينةٌ للقارئ ومهربٌ للمخالف — يُنزَع قبل القياس."""
+    return _DIACRITICS.sub("", text)
+
+
+def check_royal_supremacy_language(report: Report, root: Path = REPO_ROOT) -> None:
+    """حارسٌ يمنع عودةَ الصياغاتِ التي حرّمها القرارُ المؤسِّس.
+
+    القاعدةُ الذهبيّة (البند الثاني عشر) تُحرِّم أن يُقال في نصوصِ الدولة ولا
+    وثائقِها ولا اختباراتِها إنّ الملكَ لا سلطةَ له، أو أنّه غيرُ قادرٍ، أو أنّ  # ROYAL-LANG-EXEMPT
+    المجلسَ أعلى منه، أو أنّ قرارَه لا يُبطَل — **إلا باستثناءٍ دستوريٍّ صريح**.
+
+    والاستثناءُ لا يكون سكوتًا ولا استحسانًا: يُعلَن على السطرِ نفسِه بعلامةٍ
+    `ROYAL-LANG-EXEMPT` مع سببِها، فيبقى مقروءًا في المراجعة. وبهذا يُفرَّق بين
+    نصٍّ **يُقرِّر** الصياغةَ المحرَّمة ونصٍّ **يُحرِّمها أو يسجّل تاريخَها**.
+    """
+    for path in _language_subjects(root):
+        try:
+            raw = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            # سكوتٌ هنا يُعطِّل الحارسَ على هذا الملفِّ دون أن يعلم أحد: ملفٌّ
+            # يتعذّر قراءتُه هو ملفٌّ **غيرُ مفحوصٍ** لا ملفٌّ سليم. يُرفَع.
+            report.add(Finding(
+                code="RECON-009",
+                severity=SEVERITY_MECHANICAL,
+                subject=path.relative_to(root).as_posix(),
+                rule="القرار المؤسِّس · البند الثاني عشر — حارسُ الصياغة",
+                measured=f"تعذّرت قراءةُ الملفِّ فلم يُفحَص: {type(exc).__name__}",
+            ))
+            continue
+        for lineno, line in enumerate(raw.split("\n"), start=1):
+            if EXEMPTION_MARKER in line:
+                continue
+            measured = _strip_diacritics(line)
+            for code, pattern in FORBIDDEN_ROYAL_PHRASES:
+                if not re.search(pattern, measured):
+                    continue
+                report.add(Finding(
+                    code="RECON-009",
+                    severity=SEVERITY_MECHANICAL,
+                    subject=f"{path.relative_to(root).as_posix()}:{lineno}",
+                    rule=(
+                        "القرار المؤسِّس · البند الثاني عشر والمادة الحادية عشرة · 4 "
+                        f"— صياغةٌ محرَّمة {code}"
+                    ),
+                    measured=measured.strip()[:160],
+                ))
+
+
+def _language_subjects(root: Path) -> list[Path]:
+    """نصوصُ الدولةِ ووثائقُها واختباراتُها — لا مجلّداتُ الأدواتِ الخارجيّة."""
+    subjects: list[Path] = []
+    for folder in ("core", "docs", "royal", "tools", "tests", "federal"):
+        base = root / folder
+        if not base.is_dir():
+            continue
+        for suffix in ("*.md", "*.py", "*.json"):
+            subjects.extend(
+                p for p in base.rglob(suffix)
+                if p.is_file() and "__pycache__" not in p.parts
+            )
+    return sorted(subjects)
+
+
 def check_procedure_conflict(report: Report) -> None:
     """تعارضٌ نصّيٌّ صريحٌ بين إجراءَي تعديلٍ لا يجتمعان.
 
@@ -291,6 +435,12 @@ def check_procedure_conflict(report: Report) -> None:
     فالنصّان يصفان مسارَين متنافيَين للفعل نفسِه: أحدُهما يُوجب الأغلبيّةَ
     والآخرُ يُبطلها. ولا يُحسَم هذا بقراءةٍ ولا بترجيحٍ من أداة: أيُّهما ناسخٌ
     للآخر قرارٌ سياديّ. ولذلك يُرفَع كما هو ولا يُخترَع له حلّ.
+
+    **حُسِم بالمرسوم `AMD-003`** (2026-08-18): نسبةُ الأغلبيّة آليّةُ قرارٍ داخلَ
+    المجلس لرفعِ مقترحٍ إلى الملك، والتعديلُ اختصاصٌ ملكيٌّ حصرًا. فصار هذا
+    الفحصُ **حارسًا لا مُبلِّغًا**: يسكت وحدَ ما دام نصُّ الحسم قائمًا في المادة
+    الخامسة، ويعود يصرخ إن حُذف النصُّ فعادت الأغلبيّةُ تُقرأ إجازةً للتعديل.
+    وهذا هو التحصينُ المنصوصُ في المادة الحادية عشرة · 3 · 6.
     """
     a005 = ARTICLES_DIR / "005-amendment-process.md"
     a010 = ARTICLES_DIR / "010-royal-sovereignty.md"
@@ -300,7 +450,7 @@ def check_procedure_conflict(report: Report) -> None:
     t10 = a010.read_text(encoding="utf-8")
     majority_required = bool(re.search(r"موافقة\s*\d+\s*%\s*من\s*مجلس", t5))
     majority_void = bool(re.search(r"بأي\s*أغلبية", t10))
-    if majority_required and majority_void:
+    if majority_required and majority_void and not _conflict_resolved(t5):
         report.add(Finding(
             code="RECON-005",
             severity=SEVERITY_HUMAN,
@@ -409,6 +559,7 @@ def reconcile(root: Path = REPO_ROOT) -> Report:
     check_review_period(report, root)
     check_procedure_conflict(report)
     check_engine_reads_decrees(report, root)
+    check_royal_supremacy_language(report, root)
     return report
 
 

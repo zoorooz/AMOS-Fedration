@@ -398,3 +398,75 @@ def test_the_verdict_dictionary_carries_both_kinds_of_notes() -> None:
     assert payload["advisory_violations"][0]["rule_id"] == "R-001-1"
     assert payload["decision_kind"] == "SOVEREIGN_ROYAL"
     assert payload["authority_layer"] == "CROWN"
+
+
+# ── قواعد المرسوم AMD-003 — أثرٌ تشغيليٌّ لا نصٌّ في ملفّ ─────────────────────
+#
+# القاعدةُ 12 من القواعد العليا: وجودُ الملفِّ ليس دليلًا على وجودِ القدرة. فهذه
+# الحزمةُ تُقيس القواعدَ الخمسَ المستحدثةَ من مسارِ التقييمِ نفسِه: كلُّ فعلٍ
+# ممنوعٍ يُرَدُّ بسببٍ مُعلَنٍ يسمّي المادةَ والبند، وكلُّ فعلٍ محايدٍ يمرّ.
+
+
+class Testقواعدُالقرارِالمؤسِّس:
+    """خمسُ قواعدَ: R-010-8 و R-010-9 و R-010-10 و R-011-1 و R-011-2."""
+
+    @pytest.mark.parametrize(
+        ("rule_id", "action", "دلالة"),
+        [
+            ("R-010-8", "reduce_royal_treasury_share", "نصف الخزينة"),
+            ("R-010-8", "deny_royal_treasury_ownership", "نصف الخزينة"),
+            ("R-010-8", "seize_royal_treasury_share", "نصف الخزينة"),
+            ("R-010-9", "refuse_royal_inquiry", "اطّلاعًا أو استفتاءً"),
+            ("R-010-9", "withhold_state_records_from_king", "اطّلاعًا أو استفتاءً"),
+            ("R-010-9", "reject_royal_referendum", "اطّلاعًا أو استفتاءً"),
+            ("R-010-10", "require_royal_justification", "تبريرًا أو موافقةً"),
+            ("R-010-10", "block_royal_nullification", "تبريرًا أو موافقةً"),
+            ("R-011-1", "reinterpret_constitution", "بلا مرسوم"),
+            ("R-011-1", "resolve_constitutional_conflict", "بلا مرسوم"),
+            ("R-011-2", "subordinate_king_to_council", "تسلسل التفسير"),
+            ("R-011-2", "grant_council_supremacy_over_king", "تسلسل التفسير"),
+        ],
+    )
+    def test_الفعلُ_الممنوعُ_يُرَدُّ_بسببٍ_مُعلَن(
+        self, rule_id: str, action: str, دلالة: str
+    ) -> None:
+        قاعدة = next(r for r in RULES if r.rule_id == rule_id)
+        سبب = قاعدة.evaluate(_req(action, actor=Branch.LEGISLATIVE))
+        assert سبب is not None, f"{rule_id} سكتت عن «{action}» — حراسةٌ معلَنةٌ لا واقعة"
+        assert دلالة in سبب, سبب
+
+    @pytest.mark.parametrize("rule_id", ["R-010-8", "R-010-9", "R-010-10",
+                                        "R-011-1", "R-011-2"])
+    def test_الفعلُ_المحايدُ_لا_يُستوقَف(self, rule_id: str) -> None:
+        """قاعدةٌ ترفض كلَّ شيءٍ ليست حراسةً بل تعطيل."""
+        قاعدة = next(r for r in RULES if r.rule_id == rule_id)
+        assert قاعدة.evaluate(_req("orchestrate", actor=Branch.EXECUTIVE)) is None
+
+    @pytest.mark.parametrize(
+        ("rule_id", "action"),
+        [("R-010-8", "reduce_royal_treasury_share"),
+         ("R-011-1", "reinterpret_constitution")],
+    )
+    def test_المرسومُ_الملكيُّ_يمضي_حيثُ_يُرَدُّ_غيرُه(
+        self, rule_id: str, action: str
+    ) -> None:
+        """الملكُ مصدرُ الحقِّ لا محلُّ الحظر: بمرسومِه يمضي الفعلُ نفسُه."""
+        قاعدة = next(r for r in RULES if r.rule_id == rule_id)
+        assert قاعدة.evaluate(_req(action, actor=Branch.LEGISLATIVE)) is not None
+        assert قاعدة.evaluate(
+            _req(action, actor=Branch.ROYAL, royal_decree=_StubDecree(action))
+        ) is None
+
+    def test_منعُ_الاطّلاعِ_لا_يُبرَّرُ_بمرسومٍ_مزعوم(self) -> None:
+        """حقُّ الاطّلاعِ حقُّ الملكِ نفسِه، فلا يُحتَجُّ بمرسومٍ للحجبِ عنه."""
+        قاعدة = next(r for r in RULES if r.rule_id == "R-010-9")
+        assert قاعدة.evaluate(
+            _req("refuse_royal_inquiry", actor=Branch.EXECUTIVE,
+                 royal_decree=_StubDecree("refuse_royal_inquiry"))
+        ) is not None
+
+    def test_المادةُ_الحاديةَ_عشرةَ_محروسةٌ_لا_نصٌّ_معلَّق(self) -> None:
+        """نصٌّ بلا قاعدةٍ تقرؤه = وثيقةٌ لا قدرة (القاعدةُ العليا 14)."""
+        مجموعة = rules_by_article()
+        assert [r.rule_id for r in مجموعة.get("A011", ())] == ["R-011-1", "R-011-2"]
+        assert len(مجموعة["A010"]) >= 10, "بنودُ العاشرةِ المستحدثةُ بلا حراسة"
