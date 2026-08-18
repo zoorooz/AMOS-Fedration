@@ -15,7 +15,9 @@
 الحدود المُعلَنة:
 - يقيسُ **مواضعَ** الكتابةِ في المصدر، لا عددَ الكتاباتِ في التشغيل.
 - «عمليّةٌ عامّةٌ مُغيِّرة» = دالّةٌ عامّةٌ في صنفٍ أو وحدةٍ إنتاجيّةٍ يقعُ في جسمِها
-  `add/add_all/commit/delete/merge` أو SQL خامٌّ تغييريّ.
+  `add/add_all/commit/delete/merge` **على مُستقبِلِ تخزينٍ** (جلسة · اتّصال · مستودع)
+  أو SQL خامٌّ تغييريّ. ونداءُ `set.add` أو `@router.delete` ليس كتابةً في قاعدةٍ،
+  وعدُّه كتابةً تضخيمٌ يُفسِدُ الحكمَ كما يُفسِدُه النقص.
 - المعاوناتُ الخاصّة (`_name`) لا تُعدُّ عمليّاتٍ مستقلّة. وكتابتُها **تُنسَبُ**
   إلى العمليّةِ العامّةِ التي تُناديها في الوحدةِ نفسِها (تتبُّعٌ ساكنٌ للاستدعاء،
   عمقٌ غيرُ محدود، دورانٌ محميّ). وبلا هذا النسبِ يكونُ المقياسُ مضلِّلًا: عمليّةٌ
@@ -44,6 +46,45 @@ SKIP_DIR_NAMES = frozenset({"__pycache__", ".git", "tests", "test", "node_module
 
 #: نداءاتُ جلسةِ SQLAlchemy التي تُنتِجُ أثرًا كتابيًّا.
 WRITE_CALLS = frozenset({"add", "add_all", "commit", "delete", "merge"})
+
+#: أسماءُ المُستقبِلاتِ التي يُعتَدُّ بكتابتِها — قياسٌ v3.
+#:
+#: بلا هذا القيدِ يُحسَبُ `seen.add(...)` و`report.add(...)` و`router.delete(...)`
+#: كتاباتٍ في قاعدةِ البيانات، وهي ليست كذلك. وقد قيسَ أثرُ الخللِ فعلًا: عمليّةٌ
+#: في `state_registry/main.py` كانت تُعَدُّ «متجاوزةً» وسببُها الوحيدُ مُزخرِفُ
+#: مسارٍ اسمُه `@router.delete(...)` — لا كتابةَ فيه أصلًا. والرقمُ المتضخِّمُ
+#: يُفسِدُ الحكمَ كما يُفسِدُه الرقمُ المنقوص.
+WRITE_RECEIVER_TOKENS = frozenset(
+    {
+        "session",
+        "sessions",
+        "conn",
+        "connection",
+        "cursor",
+        "engine",
+        "db",
+        "database",
+        "repo",
+        "repository",
+    }
+)
+
+
+def _is_persistence_receiver(receiver: ast.expr) -> bool:
+    """هل المُستقبِلُ جلسةَ تخزينٍ لا مجموعةً في الذاكرةِ ولا مُزخرِفَ مسار؟
+
+    القياسُ على أسماءِ التعبيرِ لا على أنواعِه: أداةُ جردٍ ساكنةٌ لا مُحلِّلُ أنواع،
+    وهذا حدٌّ مُعلَنٌ لا نقصٌ مسكوتٌ عنه.
+    """
+    tokens: set[str] = set()
+    for node in ast.walk(receiver):
+        if isinstance(node, ast.Name):
+            tokens.add(node.id.lower().lstrip("_"))
+        elif isinstance(node, ast.Attribute):
+            tokens.add(node.attr.lower().lstrip("_"))
+    return any(
+        token in WRITE_RECEIVER_TOKENS or token.endswith("_session") for token in tokens
+    )
 
 #: كلماتُ SQL الخامِّ التغييريّة.
 SQL_WRITE_KEYWORDS = ("INSERT ", "UPDATE ", "DELETE FROM", "CREATE TABLE", "ALTER TABLE")
@@ -100,6 +141,7 @@ class _WriteVisitor(ast.NodeVisitor):
                 isinstance(sub, ast.Call)
                 and isinstance(sub.func, ast.Attribute)
                 and sub.func.attr in WRITE_CALLS
+                and _is_persistence_receiver(sub.func.value)
             ):
                 writes.add(f"{sub.func.attr}()")
             if isinstance(sub, ast.Constant) and isinstance(sub.value, str):

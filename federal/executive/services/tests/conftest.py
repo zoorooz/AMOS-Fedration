@@ -209,6 +209,12 @@ def _cleanup_test_db(workspace: Path) -> None:
 #: سجلُّ الذرّيّة (1H) الخاصُّ بالاختبارات — مُثبَّتٌ صراحةً منذ 2A.
 TEST_IDEMPOTENCY_LEDGER_FILE = "amos_federation_test_idempotency.json"
 
+#: سجلُّ التصاريحِ المُستهلَكة — يُشتَقُّ مسارُه من مجلَّدِ سجلِّ الذرّيّةِ في
+#: `sovereignty_bridge.py`، وكانَ يبقى بعدَ الجلسةِ بلا مسح. فيُقاسُ نداءٌ في
+#: جلسةٍ تاليةٍ على تصريحٍ استُهلِكَ في جلسةٍ ماضيةٍ محيت قاعدتُها — وهذا هو
+#: عينُ ما مُسِحَ سجلُّ الذرّيّةِ من أجلِه، فيُمسحُ معه بالحجّةِ نفسِها.
+TEST_CONSUMED_PERMITS_FILE = "executive_core_consumed_permits.json"
+
 
 def _cleanup_test_ledger(workspace: Path) -> Path:
     """اعزِلْ سجلَّ الذرّيّةِ في ملفٍّ للاختباراتِ وامسَحْه مع قاعدةِ الاختبار.
@@ -221,8 +227,9 @@ def _cleanup_test_ledger(workspace: Path) -> Path:
     وتكرارُ النداءِ نفسِه فيه إعادةٌ لا أثرٌ ثانٍ.
     """
     ledger = workspace / TEST_IDEMPOTENCY_LEDGER_FILE
-    with contextlib.suppress(OSError):
-        ledger.unlink()
+    for path in (ledger, workspace / TEST_CONSUMED_PERMITS_FILE):
+        with contextlib.suppress(OSError):
+            path.unlink()
     return ledger
 
 

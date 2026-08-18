@@ -154,6 +154,19 @@ DEPARTMENT_CREATE_SCOPE = "state_registry.department.create"
 #: (`registry.department.create`)، فلا فعلٌ جديدٌ يُختَرعُ ولا فعلٌ حصريٌّ يُنتحَل.
 ACTION_DEPARTMENT_CREATE = "registry.department.create"
 
+#: نطاقُ مفاتيحِ الذرّيّة (1H) لتقليدِ المسؤول — مستقلٌّ عن نطاقاتِ المؤسسةِ والإدارة.
+OFFICIAL_APPOINT_SCOPE = "state_registry.official.appoint"
+
+#: فعلُ التقليدِ كما تراه البوابة — هو نصُّ التخويلِ المحلّيِّ القائمِ نفسُه
+#: (`registry.official.appoint`)، فلا فعلٌ جديدٌ يُختَرعُ ولا فعلٌ حصريٌّ يُنتحَل.
+ACTION_OFFICIAL_APPOINT = "registry.official.appoint"
+
+#: نطاقُ مفاتيحِ الذرّيّة (1H) لعزلِ المسؤول.
+OFFICIAL_REVOKE_SCOPE = "state_registry.official.revoke"
+
+#: فعلُ العزلِ كما تراه البوابة — نصُّ التخويلِ القائمِ نفسُه.
+ACTION_OFFICIAL_REVOKE = "registry.official.revoke"
+
 
 class StateRegistry:
     """السجل الفدرالي للمؤسسات والإدارات والمسؤولين."""
@@ -218,6 +231,52 @@ class StateRegistry:
                 .filter(DepartmentModel.id == department_id)
                 .first()
             )
+            if row is None:
+                return False
+            session.delete(row)
+            session.commit()
+            return True
+        finally:
+            session.close()
+
+    def _revoke_official_row(
+        self, official_id: str, reason: str, *, is_head: bool
+    ) -> bool:
+        """كتابةُ العزلِ ورجعتُه في دالّةٍ واحدة — لأنَّ العزلَ إسنادُ حالةٍ نهائيّة.
+
+        `is_head=False` يعزل، و`is_head` الأصليُّ مع `reason=None` يُرجِعُ الصفَّ إلى
+        `appointed` كما كان. والصفُّ لا يُحذَفُ في الحالتين: أثرُ التقليدِ الماضي
+        محفوظٌ، وهذا عقدُ R7 قبلَ الهجرةِ ولم يُغيَّر.
+        """
+        session = self._session()
+        try:
+            row = session.query(OfficialModel).filter(OfficialModel.id == official_id).first()
+            if row is None:
+                return False
+            if reason is None:
+                row.status = "appointed"
+                row.revoked_at = None
+                row.revocation_reason = None
+            else:
+                row.status = "revoked"
+                row.revoked_at = _now()
+                row.revocation_reason = reason
+            row.is_head = is_head
+            session.commit()
+            return True
+        finally:
+            session.close()
+
+    def _delete_official_row(self, official_id: str) -> bool:
+        """العكسُ الحقيقيُّ للتقليد (1I) — حذفُ صفِّ المسؤولِ المُقلَّدِ لا ادّعاءُ حذفِه.
+
+        ولا يُستعملُ إلاّ معوّضًا مربوطًا في خطّةِ التعويضِ قبلَ التنفيذ. وليس هذا
+        عزلًا: العزلُ فعلٌ مُعلَنٌ له مسارُه (`revoke_official`) وأثرُه في التدقيق،
+        أمّا هذا فعكسُ أثرٍ لم يتمَّ عقدُه — كأنَّ التقليدَ لم يقعْ أصلًا.
+        """
+        session = self._session()
+        try:
+            row = session.query(OfficialModel).filter(OfficialModel.id == official_id).first()
             if row is None:
                 return False
             session.delete(row)
@@ -894,8 +953,17 @@ class StateRegistry:
         department_code: str | None = None,
         is_head: bool = False,
     ) -> dict[str, Any]:
-        """قلِّد وكيلًا منصبًا — والوكيل يجب أن يكون موجودًا في `agents` فعلًا."""
-        require_domain_permission(context, "registry.official.appoint", PERMISSIONS_OFFICIAL_WRITE)
+        """قلِّد وكيلًا منصبًا — عبرَ حدِّ التنفيذِ السياديّ.
+
+        الفحوصُ القائمةُ لم تُنقَل ولم تُضعَّف، وكلُّها **قبلَ** العبور: التخويلُ
+        المحلّيّ، ووجودُ الوكيلِ في `agents` فعلًا (فالتقليدُ لا يُنشئُ هويّةً)،
+        وحدُّ المستأجرِ (R6.1)، ونشاطُ المؤسسةِ والإدارة، ولزومُ إدارةٍ للرئاسة،
+        ومنعُ رئيسينِ لإدارةٍ واحدة، ومنعُ تقليدٍ مكرَّرٍ في الموضعِ نفسِه.
+
+        والمعرّفُ يُولَّدُ قبلَ العبورِ لا في المُطبِّق: المعوّضُ يجبُ أن يعرفَ ما
+        يعكسُه قبلَ أن يقع.
+        """
+        require_domain_permission(context, ACTION_OFFICIAL_APPOINT, PERMISSIONS_OFFICIAL_WRITE)
         tenant = self._tenant_of(context)
         identity = get_identity(agent_id)
         if identity is None:
@@ -963,44 +1031,109 @@ class StateRegistry:
                     f"الوكيل '{agent_id}' مُقلَّد بالفعل في هذا الموضع ({duplicate.id})"
                 )
 
-            row = OfficialModel(
-                id=f"offl-{uuid.uuid4()}",
-                agent_id=agent_id,
-                institution_id=institution.id,
-                department_id=department_id,
-                title=title,
-                status="appointed",
-                is_head=is_head,
-                appointed_by=context.principal_id,
-                tenant_id=institution.tenant_id,
-            )
-            session.add(row)
-            session.commit()
-            official = self._official_dict(row)
+            institution_id = institution.id
+            institution_tenant = institution.tenant_id
         finally:
             session.close()
 
-        trace = self._record(
-            context,
-            "registry.official.appoint",
-            EVENT_OFFICIAL_APPOINTED,
-            {
-                "official_id": official["id"],
-                "agent_id": official["agent_id"],
-                "institution_id": official["institution_id"],
-                "department_id": official["department_id"],
-                "title": official["title"],
-                "is_head": official["is_head"],
-                "tenant_id": official["tenant_id"],
+        official_id = f"offl-{uuid.uuid4()}"
+        # الهدفُ موضعُ التقليدِ لا الوكيل: السلطةُ على مواضعِ المؤسسةِ لا على الأشخاص،
+        # ولذلك يُبنى الهدفُ من المؤسسةِ (والإدارةِ إن وُجِدت) ثمّ الوكيل.
+        seat = f"institutions/{tenant}/{institution_code}"
+        if department_code:
+            seat = f"{seat}/departments/{department_code}"
+        target = f"{seat}/officials/{agent_id}"
+        effect = declared_effect(
+            "WRITE",
+            target,
+            f"تقليدُ الوكيلِ '{agent_id}' منصبَ '{title}'"
+            + (f" في الإدارةِ '{department_code}'" if department_code else "")
+            + (" رئيسًا لها" if is_head else ""),
+        )
+
+        def _apply(_effect: Any) -> dict[str, Any]:
+            """التطبيقُ الحقيقيّ — الصفُّ ثمّ التدقيقُ ثمّ الحدث، بترتيبِ R7 نفسِه."""
+            write_session = self._session()
+            try:
+                row = OfficialModel(
+                    id=official_id,
+                    agent_id=agent_id,
+                    institution_id=institution_id,
+                    department_id=department_id,
+                    title=title,
+                    status="appointed",
+                    is_head=is_head,
+                    appointed_by=context.principal_id,
+                    tenant_id=institution_tenant,
+                )
+                write_session.add(row)
+                write_session.commit()
+                official = self._official_dict(row)
+            finally:
+                write_session.close()
+
+            trace = self._record(
+                context,
+                ACTION_OFFICIAL_APPOINT,
+                EVENT_OFFICIAL_APPOINTED,
+                {
+                    "official_id": official["id"],
+                    "agent_id": official["agent_id"],
+                    "institution_id": official["institution_id"],
+                    "department_id": official["department_id"],
+                    "title": official["title"],
+                    "is_head": official["is_head"],
+                    "tenant_id": official["tenant_id"],
+                },
+            )
+            return {**official, **trace}
+
+        guarded = self.authorizer.guard_declared(
+            ACTION_OFFICIAL_APPOINT,
+            target,
+            declared_effects=(effect,),
+            applier=_apply,
+            operation_key=operation_key(
+                OFFICIAL_APPOINT_SCOPE,
+                f"{tenant}:{institution_code}:{department_code or '-'}:{agent_id}:{title}",
+            ),
+            compensators=(
+                compensator(
+                    effect.signature,
+                    lambda: self._delete_official_row(official_id),
+                    "حذفُ صفِّ التقليدِ — عكسٌ حقيقيٌّ لا عزلٌ مُقنَّع",
+                ),
+            ),
+            metadata={
+                "tenant_id": tenant,
+                "institution_code": institution_code,
+                "department_code": department_code,
+                "agent_id": agent_id,
+                "is_head": is_head,
             },
         )
-        return {**official, **trace}
+        if guarded.is_replay:
+            return {
+                "agent_id": agent_id,
+                "institution_code": institution_code,
+                "department_code": department_code,
+                "tenant_id": tenant,
+                "official_id": official_id,
+                "replayed": True,
+                "operation_key": guarded.outcome.operation_key,
+            }
+        return {**guarded.value, "replayed": False}
 
     def revoke_official(
         self, *, context: AuthorizationContext, official_id: str, reason: str
     ) -> dict[str, Any]:
-        """اعزل مسؤولًا — الصفّ يبقى بحالة `revoked`، ولا يُحذَف أثره."""
-        require_domain_permission(context, "registry.official.revoke", PERMISSIONS_OFFICIAL_WRITE)
+        """اعزل مسؤولًا — عبرَ حدِّ التنفيذِ السياديّ.
+
+        العزلُ إسنادُ حالةٍ نهائيّةٍ لا تراكمَ فيه، فمفتاحُ الذرّيّةِ على هويّةِ
+        التقليدِ وحدَها. والصفُّ يبقى `revoked` ولا يُحذَف: هذا عقدُ R7 قبلَ الهجرةِ
+        ولم تُغيِّرْه، فأثرُ التقليدِ الماضي لا يُمحى.
+        """
+        require_domain_permission(context, ACTION_OFFICIAL_REVOKE, PERMISSIONS_OFFICIAL_WRITE)
         session = self._session()
         try:
             row = session.query(OfficialModel).filter(OfficialModel.id == official_id).first()
@@ -1009,28 +1142,67 @@ class StateRegistry:
             require_tenant(context, row.tenant_id)
             if row.status == "revoked":
                 raise RegistryError(f"التقليد '{official_id}' معزولٌ بالفعل")
-            row.status = "revoked"
-            row.revoked_at = _now()
-            row.revocation_reason = reason
-            row.is_head = False
-            session.commit()
-            official = self._official_dict(row)
+            tenant_id = row.tenant_id
+            was_head = bool(row.is_head)
         finally:
             session.close()
 
-        trace = self._record(
-            context,
-            "registry.official.revoke",
-            EVENT_OFFICIAL_REVOKED,
-            {
-                "official_id": official["id"],
-                "agent_id": official["agent_id"],
-                "institution_id": official["institution_id"],
-                "reason": reason,
-                "tenant_id": official["tenant_id"],
-            },
+        target = f"officials/{tenant_id}/{official_id}"
+        effect = declared_effect(
+            "WRITE", target, f"عزلُ التقليدِ '{official_id}' — السببُ: {reason}"
         )
-        return {**official, **trace}
+
+        def _apply(_effect: Any) -> dict[str, Any]:
+            """التطبيقُ الحقيقيّ — الحالةُ ثمّ التدقيق، بترتيبِ R7 نفسِه."""
+            self._revoke_official_row(official_id, reason, is_head=False)
+            read_session = self._session()
+            try:
+                row = (
+                    read_session.query(OfficialModel)
+                    .filter(OfficialModel.id == official_id)
+                    .first()
+                )
+                official = self._official_dict(row)
+            finally:
+                read_session.close()
+
+            trace = self._record(
+                context,
+                ACTION_OFFICIAL_REVOKE,
+                EVENT_OFFICIAL_REVOKED,
+                {
+                    "official_id": official["id"],
+                    "agent_id": official["agent_id"],
+                    "institution_id": official["institution_id"],
+                    "reason": reason,
+                    "tenant_id": official["tenant_id"],
+                },
+            )
+            return {**official, **trace}
+
+        guarded = self.authorizer.guard_declared(
+            ACTION_OFFICIAL_REVOKE,
+            target,
+            declared_effects=(effect,),
+            applier=_apply,
+            operation_key=operation_key(OFFICIAL_REVOKE_SCOPE, f"{tenant_id}:{official_id}"),
+            compensators=(
+                compensator(
+                    effect.signature,
+                    lambda: self._revoke_official_row(official_id, None, is_head=was_head),
+                    "إرجاعُ التقليدِ إلى `appointed` برئاستِه الأصليّة",
+                ),
+            ),
+            metadata={"tenant_id": tenant_id, "official_id": official_id, "was_head": was_head},
+        )
+        if guarded.is_replay:
+            return {
+                "id": official_id,
+                "tenant_id": tenant_id,
+                "replayed": True,
+                "operation_key": guarded.outcome.operation_key,
+            }
+        return {**guarded.value, "replayed": False}
 
 
 _registry: StateRegistry | None = None

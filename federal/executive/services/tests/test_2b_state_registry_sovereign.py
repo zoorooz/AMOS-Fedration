@@ -1,6 +1,7 @@
 """الهدف: إثباتُ هجرةِ عائلةِ `state_registry` إلى حدِّ التنفيذِ السياديّ (2B · P1)
 
 النطاق: `StateRegistry.set_institution_status` (P1أ) · `create_department` (P1ب)
+       · `appoint_official` (P1ج) · `revoke_official` (P1د)
        — ويُضافُ إليها ما يُهاجَرُ لاحقًا
 المالك: federal/executive/services
 تاريخ الإنشاء: 2026-08-18
@@ -44,15 +45,21 @@ from amos_federation.services.executive_core.sovereignty_bridge import (
     GuardedResult,
 )
 from amos_federation.services.state_registry import service as registry_module
+from amos_federation.services.executive_core.agent_identity import register_identity
 from amos_federation.services.state_registry.models import (
     DepartmentModel,
     InstitutionModel,
+    OfficialModel,
 )
 from amos_federation.services.state_registry.service import (
     ACTION_DEPARTMENT_CREATE,
+    ACTION_OFFICIAL_APPOINT,
+    ACTION_OFFICIAL_REVOKE,
     ACTION_INSTITUTION_STATUS,
+    DepartmentHeadConflictError,
     DuplicateCodeError,
     InstitutionInactiveError,
+    OfficialNotFoundError,
     InstitutionNotEmptyError,
     RegistryError,
     StateRegistry,
@@ -373,17 +380,31 @@ class TestFailureIsFailClosed:
         )
         assert len(authorizer.results) == 0, "أُرجِعت حصيلةُ نجاحٍ من نداءٍ فاشل."
 
-        # والعمليّةُ لم تُثبَّت ناجحةً: محاولةُ إعادتِها تُغلِقُ صريحًا (1F/1H)
-        # ولا تُنتِجُ أثرًا ثانيًا ولا تُرجِعُ «إعادةً» صامتة.
+        # وإعادةُ العمليّةِ الفاشلةِ: **لا ضمانَ** بإغلاقِها. كُتِبَ هذا الفحصُ أوّلًا
+        # ينتظرُ `IdempotencyError` فمرَّ، ثمّ سقطَ في تشغيلٍ تالٍ بلا تغييرٍ في
+        # الشِّفرة: ما كان يُغلِقُ الإعادةَ هو تصادمُ التصاريحِ في الثانيةِ الواحدة
+        # (Q-11) لا حرسٌ على المفتاح (Q-12). فبقاءُ التوقُّعِ الأوّلِ ادّعاءُ ضمانٍ
+        # لا وجودَ له، وهو أخطرُ من نقصِ الضمانِ نفسِه.
+        #
+        # فالمقيسُ هنا ما هو مضمونٌ فعلًا: أيًّا كانَ فرعُ الإعادة، لا يقعُ أثرٌ
+        # مُغايرٌ — لأنَّ إسنادَ الحالةِ قيمةٌ نهائيّةٌ لا تراكمَ فيها. أمّا العزلُ
+        # التامُّ للإعادةِ فقرارٌ بشريٌّ مُسجَّلٌ (Q-12) لا يُصنَعُ في اختبار.
         monkeypatch.undo()
-        with pytest.raises(IdempotencyError):
-            service.set_institution_status(
+        try:
+            retried = service.set_institution_status(
                 context=_context("king", _KING_PERMISSIONS),
                 code=institution,
                 status="suspended",
                 reason="فشلٌ بعدَ الأثر",
                 change_id="s6",
             )
+        except IdempotencyError:
+            retried = None  # فرعُ الإغلاق — تصادفَ التصريحُ في الثانيةِ نفسِها.
+        assert _status_of(institution) == "suspended", (
+            "أوقعتِ الإعادةُ حالةً مُغايرةً — وهذا انفلاتٌ لا يحتملُه الدَّينُ المُعلَن."
+        )
+        if retried is not None:
+            assert retried.get("status") == "suspended"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1013,3 +1034,564 @@ class TestDepartmentPreMigrationRulesStillHold:
                 name="إدارةٌ بلا مؤسسة",
             )
         assert authorizer.results == [], "عبرت العمليّةُ الحدَّ بمؤسسةٍ لا وجودَ لها."
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# P1ج · `appoint_official` — الدعاوى العشرُ على تقليدِ المنصب
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def _official_rows(agent_id: str) -> list[Any]:
+    """صفوفُ تقليدِ وكيلٍ من **قاعدةِ البيانات** لا من حصيلةِ النداء."""
+    session = get_session_factory()()
+    try:
+        return list(session.query(OfficialModel).filter(OfficialModel.agent_id == agent_id).all())
+    finally:
+        session.close()
+
+
+@pytest.fixture
+def agent_id() -> str:
+    """وكيلٌ موجودٌ فعلًا في `agents` — فالتقليدُ لا يُنشئُ هويّة."""
+    identifier = f"agent-2b-{uuid.uuid4().hex[:8]}"
+    register_identity(identifier, f"وكيل {identifier}", "executor", tenant_id=DEFAULT_TENANT)
+    return identifier
+
+
+class TestAppointmentCrossesTheBoundary:
+    """S-1 · S-2 · S-4 — العبورُ والمراحلُ وهدفٌ هو موضعُ التقليد."""
+
+    def test_appointment_writes_row_and_passes_mandatory_stages(
+        self,
+        registry: tuple[StateRegistry, RecordingAuthorizer],
+        institution: str,
+        agent_id: str,
+    ) -> None:
+        service, authorizer = registry
+        result = service.appoint_official(
+            context=_context("king", _KING_PERMISSIONS),
+            agent_id=agent_id,
+            institution_code=institution,
+            title="وكيلُ الوزارة",
+        )
+        assert result["replayed"] is False
+        rows = _official_rows(agent_id)
+        assert len(rows) == 1 and rows[0].status == "appointed", "لم يقعِ الأثرُ في القاعدة."
+        assert len(authorizer.results) == 1
+        outcome = authorizer.results[0].outcome
+        assert _mandatory_stages() <= set(outcome.stages), (
+            f"مراحلُ الحدِّ لم تمرَّ كلُّها: {_mandatory_stages() - set(outcome.stages)}"
+        )
+        assert outcome.contract.action == ACTION_OFFICIAL_APPOINT
+        assert outcome.permit_id
+
+    def test_target_is_the_seat_and_effect_stays_within_it(
+        self,
+        registry: tuple[StateRegistry, RecordingAuthorizer],
+        institution: str,
+        dept_code: str,
+        agent_id: str,
+    ) -> None:
+        """الهدفُ موضعُ التقليدِ (مؤسسة · إدارة · وكيل) والأثرُ في نطاقِه."""
+        service, authorizer = registry
+        king = _context("king", _KING_PERMISSIONS)
+        service.create_department(
+            context=king, institution_code=institution, code=dept_code, name="إدارةٌ"
+        )
+        authorizer.results.clear()
+        service.appoint_official(
+            context=king,
+            agent_id=agent_id,
+            institution_code=institution,
+            title="رئيسُ الإدارة",
+            department_code=dept_code,
+            is_head=True,
+        )
+        outcome = authorizer.results[0].outcome
+        target = outcome.contract.target
+        assert target == (
+            f"institutions/{DEFAULT_TENANT}/{institution}/departments/{dept_code}"
+            f"/officials/{agent_id}"
+        ), f"هدفٌ غيرُ متوقَّع: {target}"
+        for effect in outcome.contract.declared_effects:
+            assert effect.resource == target or effect.resource.startswith(target + "/")
+
+
+class TestAppointmentUnauthorizedCreatesNothing:
+    """S-3 — المنعُ محلّيًّا وبالبوّابةِ بلا أثرٍ في القاعدة."""
+
+    def test_local_authorization_denial_appoints_nobody(
+        self,
+        registry: tuple[StateRegistry, RecordingAuthorizer],
+        institution: str,
+        agent_id: str,
+    ) -> None:
+        service, authorizer = registry
+        with pytest.raises(Exception):  # noqa: B017,PT011
+            service.appoint_official(
+                context=_context("citizen", _CITIZEN_PERMISSIONS),
+                agent_id=agent_id,
+                institution_code=institution,
+                title="منصبٌ ممنوع",
+            )
+        assert _official_rows(agent_id) == [], "وقعَ تقليدٌ رغمَ المنع."
+        assert authorizer.results == []
+
+    def test_gateway_denial_appoints_nobody(
+        self,
+        registry: tuple[StateRegistry, RecordingAuthorizer],
+        institution: str,
+        agent_id: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from core.sovereignty.gateway import SovereigntyViolation
+
+        service, authorizer = registry
+        denial = _real_denial_verdict()
+        assert denial.decision.name == "DENY"
+
+        def _deny(*_args: Any, **_kwargs: Any) -> None:
+            raise SovereigntyViolation(denial)
+
+        monkeypatch.setattr(authorizer.boundary.gateway, "decide", _deny)
+        with pytest.raises(SovereigntyViolation):
+            service.appoint_official(
+                context=_context("king", _KING_PERMISSIONS),
+                agent_id=agent_id,
+                institution_code=institution,
+                title="منصبٌ مرفوض",
+            )
+        assert _official_rows(agent_id) == [], "وقعَ تقليدٌ رغمَ رفضِ البوّابة."
+
+
+class TestAppointmentCompensationIsReal:
+    """S-5 — المعوّضُ يحذفُ صفَّ التقليدِ فعلًا، وليس عزلًا مُقنَّعًا."""
+
+    def test_compensator_removes_the_appointment(
+        self,
+        registry: tuple[StateRegistry, RecordingAuthorizer],
+        institution: str,
+        agent_id: str,
+    ) -> None:
+        service, authorizer = registry
+        service.appoint_official(
+            context=_context("king", _KING_PERMISSIONS),
+            agent_id=agent_id,
+            institution_code=institution,
+            title="وكيلٌ",
+        )
+        outcome = authorizer.results[0].outcome
+        plan = outcome.compensation_plan
+        assert plan is not None
+        applied = set(outcome.applied_signatures)
+        assert applied and applied <= plan.covered_signatures
+        assert plan.compensator_for(next(iter(applied))).apply() is True
+        assert _official_rows(agent_id) == [], (
+            "المعوّضُ لم يحذفِ الصفَّ — والعكسُ الحقيقيُّ لتقليدٍ لم يتمَّ عقدُه حذفُه."
+        )
+
+
+class TestAppointmentFailureIsFailClosed:
+    """S-6 — الفشلُ لا يُدَّعى نجاحًا."""
+
+    def test_failure_inside_applier_does_not_claim_success(
+        self,
+        registry: tuple[StateRegistry, RecordingAuthorizer],
+        institution: str,
+        agent_id: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        service, authorizer = registry
+
+        def _explode(*_args: Any, **_kwargs: Any) -> None:
+            raise RuntimeError("سقوطُ التدقيقِ بعدَ وقوعِ الأثر")
+
+        monkeypatch.setattr(service, "_record", _explode)
+        with pytest.raises(Exception):  # noqa: B017,PT011
+            service.appoint_official(
+                context=_context("king", _KING_PERMISSIONS),
+                agent_id=agent_id,
+                institution_code=institution,
+                title="منصبٌ ساقط",
+            )
+        assert authorizer.results == []
+
+
+class TestAppointmentReplayProducesNoSecondEffect:
+    """S-7 — لا تقليدَ مزدوجًا: حرسٌ طبيعيٌّ قبلَ الحدِّ ومفتاحٌ داخلَه."""
+
+    def test_duplicate_seat_is_refused_before_the_boundary(
+        self,
+        registry: tuple[StateRegistry, RecordingAuthorizer],
+        institution: str,
+        agent_id: str,
+    ) -> None:
+        service, authorizer = registry
+        king = _context("king", _KING_PERMISSIONS)
+        service.appoint_official(
+            context=king, agent_id=agent_id, institution_code=institution, title="وكيلٌ"
+        )
+        with pytest.raises(DuplicateCodeError):
+            service.appoint_official(
+                context=king, agent_id=agent_id, institution_code=institution, title="وكيلٌ"
+            )
+        assert len(_official_rows(agent_id)) == 1, "أُنشِئَ تقليدٌ ثانٍ في الموضعِ نفسِه."
+        assert len(authorizer.results) == 1
+
+    def test_replay_of_a_proven_key_appoints_nothing(
+        self,
+        registry: tuple[StateRegistry, RecordingAuthorizer],
+        institution: str,
+        agent_id: str,
+    ) -> None:
+        """مفتاحٌ مُثبَّتٌ (1H) لا يُنشئُ صفَّ تقليدٍ ثانيًا بعدَ غيابِ الأوّل."""
+        service, _ = registry
+        king = _context("king", _KING_PERMISSIONS)
+        first = service.appoint_official(
+            context=king, agent_id=agent_id, institution_code=institution, title="وكيلٌ"
+        )
+        assert service._delete_official_row(first["id"]) is True  # noqa: SLF001
+        replayed = service.appoint_official(
+            context=king, agent_id=agent_id, institution_code=institution, title="وكيلٌ"
+        )
+        assert replayed["replayed"] is True, "عُدَّت الإعادةُ تقليدًا جديدًا."
+        assert _official_rows(agent_id) == [], "أُنشِئَ صفٌّ في إعادة."
+
+
+class TestAppointmentNoBypassPathRemains:
+    """S-8 · S-9 — لا مسارَ تقليدٍ عامًّا بجانبِ الحدّ ولا معامَلَ تجاوز."""
+
+    def test_official_rows_are_built_in_one_function_only(self) -> None:
+        import ast
+
+        source = Path(registry_module.__file__).read_text(encoding="utf-8")
+        tree = ast.parse(source)
+
+        def _own_body(node: ast.FunctionDef) -> str:
+            segment = ast.get_source_segment(source, node) or ""
+            for child in ast.walk(node):
+                if child is node or not isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef):
+                    continue
+                segment = segment.replace(ast.get_source_segment(source, child) or "", "")
+            return segment
+
+        builders = [
+            node.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef) and "OfficialModel(" in _own_body(node)
+        ]
+        assert builders == ["_apply"], f"مواضعُ تقليدٍ غيرُ متوقَّعة: {builders}"
+
+    def test_no_forbidden_bypass_parameter_in_the_migrated_operation(self) -> None:
+        import inspect
+
+        from amos_federation.services.executive_core.sovereignty_bridge import (
+            FORBIDDEN_BYPASS_PARAMS,
+        )
+
+        names = set(inspect.signature(StateRegistry.appoint_official).parameters)
+        assert not (names & FORBIDDEN_BYPASS_PARAMS)
+
+
+class TestAppointmentPreMigrationRulesStillHold:
+    """S-10 — ما كان يُمنَعُ قبلَ الهجرةِ ما زالَ يُمنَع."""
+
+    def test_unknown_agent_is_still_refused(
+        self,
+        registry: tuple[StateRegistry, RecordingAuthorizer],
+        institution: str,
+    ) -> None:
+        service, authorizer = registry
+        with pytest.raises(RegistryError):
+            service.appoint_official(
+                context=_context("king", _KING_PERMISSIONS),
+                agent_id="agent-la-wujud",
+                institution_code=institution,
+                title="منصبٌ لوكيلٍ لا وجودَ له",
+            )
+        assert authorizer.results == [], "عبرَ التقليدُ الحدَّ بوكيلٍ لا وجودَ له."
+
+    def test_head_without_department_is_still_refused(
+        self,
+        registry: tuple[StateRegistry, RecordingAuthorizer],
+        institution: str,
+        agent_id: str,
+    ) -> None:
+        service, authorizer = registry
+        with pytest.raises(RegistryError):
+            service.appoint_official(
+                context=_context("king", _KING_PERMISSIONS),
+                agent_id=agent_id,
+                institution_code=institution,
+                title="رئيسٌ بلا إدارة",
+                is_head=True,
+            )
+        assert authorizer.results == []
+        assert _official_rows(agent_id) == []
+
+    def test_second_head_of_one_department_is_still_refused(
+        self,
+        registry: tuple[StateRegistry, RecordingAuthorizer],
+        institution: str,
+        dept_code: str,
+        agent_id: str,
+    ) -> None:
+        service, _ = registry
+        king = _context("king", _KING_PERMISSIONS)
+        service.create_department(
+            context=king, institution_code=institution, code=dept_code, name="إدارةٌ"
+        )
+        service.appoint_official(
+            context=king,
+            agent_id=agent_id,
+            institution_code=institution,
+            title="رئيسٌ أوّل",
+            department_code=dept_code,
+            is_head=True,
+        )
+        other = f"agent-2b-{uuid.uuid4().hex[:8]}"
+        register_identity(other, f"وكيل {other}", "executor", tenant_id=DEFAULT_TENANT)
+        with pytest.raises(DepartmentHeadConflictError):
+            service.appoint_official(
+                context=king,
+                agent_id=other,
+                institution_code=institution,
+                title="رئيسٌ ثانٍ",
+                department_code=dept_code,
+                is_head=True,
+            )
+        assert _official_rows(other) == [], "قُلِّدَ رئيسٌ ثانٍ لإدارةٍ واحدة."
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# P1د · `revoke_official` — العزلُ عبرَ الحدّ
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def _official_row(official_id: str) -> Any:
+    session = get_session_factory()()
+    try:
+        return session.query(OfficialModel).filter(OfficialModel.id == official_id).first()
+    finally:
+        session.close()
+
+
+@pytest.fixture
+def appointed(
+    registry: tuple[StateRegistry, RecordingAuthorizer], institution: str, agent_id: str
+) -> str:
+    """تقليدٌ قائمٌ ليُعزَل — يُنشَأُ ثمّ يُنظَّفُ سجلُّ الحدِّ ليبقى القياسُ على العزلِ وحدَه."""
+    service, authorizer = registry
+    result = service.appoint_official(
+        context=_context("king", _KING_PERMISSIONS),
+        agent_id=agent_id,
+        institution_code=institution,
+        title="وكيلٌ للعزل",
+    )
+    authorizer.results.clear()
+    return result["id"]
+
+
+class TestRevocationCrossesTheBoundary:
+    """S-1 · S-2 · S-4 — العبورُ والمراحلُ والنطاق."""
+
+    def test_revocation_marks_the_row_and_passes_mandatory_stages(
+        self, registry: tuple[StateRegistry, RecordingAuthorizer], appointed: str
+    ) -> None:
+        service, authorizer = registry
+        result = service.revoke_official(
+            context=_context("king", _KING_PERMISSIONS),
+            official_id=appointed,
+            reason="انتهاءُ التكليف",
+        )
+        assert result["replayed"] is False
+        row = _official_row(appointed)
+        assert row is not None, "حُذِفَ الصفُّ — والعزلُ لا يمحو أثرَ التقليدِ الماضي."
+        assert row.status == "revoked" and row.is_head is False
+        assert row.revocation_reason == "انتهاءُ التكليف"
+        outcome = authorizer.results[0].outcome
+        assert _mandatory_stages() <= set(outcome.stages)
+        assert outcome.contract.action == ACTION_OFFICIAL_REVOKE
+        for effect in outcome.contract.declared_effects:
+            target = outcome.contract.target
+            assert effect.resource == target or effect.resource.startswith(target + "/")
+
+
+class TestRevocationUnauthorizedChangesNothing:
+    """S-3 — المنعُ محلّيًّا وبالبوّابةِ يُبقي التقليدَ قائمًا."""
+
+    def test_local_denial_leaves_the_official_appointed(
+        self, registry: tuple[StateRegistry, RecordingAuthorizer], appointed: str
+    ) -> None:
+        service, authorizer = registry
+        with pytest.raises(Exception):  # noqa: B017,PT011
+            service.revoke_official(
+                context=_context("citizen", _CITIZEN_PERMISSIONS),
+                official_id=appointed,
+                reason="عزلٌ ممنوع",
+            )
+        assert _official_row(appointed).status == "appointed"
+        assert authorizer.results == []
+
+    def test_gateway_denial_leaves_the_official_appointed(
+        self,
+        registry: tuple[StateRegistry, RecordingAuthorizer],
+        appointed: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from core.sovereignty.gateway import SovereigntyViolation
+
+        service, authorizer = registry
+        denial = _real_denial_verdict()
+
+        def _deny(*_args: Any, **_kwargs: Any) -> None:
+            raise SovereigntyViolation(denial)
+
+        monkeypatch.setattr(authorizer.boundary.gateway, "decide", _deny)
+        with pytest.raises(SovereigntyViolation):
+            service.revoke_official(
+                context=_context("king", _KING_PERMISSIONS),
+                official_id=appointed,
+                reason="عزلٌ مرفوض",
+            )
+        assert _official_row(appointed).status == "appointed", "وقعَ العزلُ رغمَ الرفض."
+
+
+class TestRevocationCompensationIsReal:
+    """S-5 — المعوّضُ يُرجِعُ الحالةَ والرئاسةَ فعلًا."""
+
+    def test_compensator_restores_appointment_and_headship(
+        self,
+        registry: tuple[StateRegistry, RecordingAuthorizer],
+        institution: str,
+        dept_code: str,
+        agent_id: str,
+    ) -> None:
+        service, authorizer = registry
+        king = _context("king", _KING_PERMISSIONS)
+        service.create_department(
+            context=king, institution_code=institution, code=dept_code, name="إدارةٌ"
+        )
+        head = service.appoint_official(
+            context=king,
+            agent_id=agent_id,
+            institution_code=institution,
+            title="رئيسٌ",
+            department_code=dept_code,
+            is_head=True,
+        )
+        authorizer.results.clear()
+        service.revoke_official(
+            context=king, official_id=head["id"], reason="عزلُ الرئيس"
+        )
+        assert _official_row(head["id"]).is_head is False
+        outcome = authorizer.results[0].outcome
+        plan = outcome.compensation_plan
+        assert plan is not None
+        applied = set(outcome.applied_signatures)
+        assert applied and applied <= plan.covered_signatures
+        assert plan.compensator_for(next(iter(applied))).apply() is True
+        restored = _official_row(head["id"])
+        assert restored.status == "appointed", "المعوّضُ لم يُرجِعِ الحالة."
+        assert restored.is_head is True, "المعوّضُ أرجعَ الحالةَ وأسقطَ الرئاسة."
+        assert restored.revocation_reason is None
+
+
+class TestRevocationFailureIsFailClosed:
+    """S-6 — سقوطُ التدقيقِ لا يُدَّعى نجاحًا."""
+
+    def test_failure_inside_applier_does_not_claim_success(
+        self,
+        registry: tuple[StateRegistry, RecordingAuthorizer],
+        appointed: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        service, authorizer = registry
+
+        def _explode(*_args: Any, **_kwargs: Any) -> None:
+            raise RuntimeError("سقوطُ التدقيقِ بعدَ وقوعِ العزل")
+
+        monkeypatch.setattr(service, "_record", _explode)
+        with pytest.raises(Exception):  # noqa: B017,PT011
+            service.revoke_official(
+                context=_context("king", _KING_PERMISSIONS),
+                official_id=appointed,
+                reason="عزلٌ ساقط",
+            )
+        assert authorizer.results == []
+
+
+class TestRevocationReplayAndPriorRules:
+    """S-7 · S-10 — الإعادةُ والحرسُ القائم."""
+
+    def test_second_revocation_is_refused_before_the_boundary(
+        self, registry: tuple[StateRegistry, RecordingAuthorizer], appointed: str
+    ) -> None:
+        service, authorizer = registry
+        king = _context("king", _KING_PERMISSIONS)
+        service.revoke_official(context=king, official_id=appointed, reason="الأوّل")
+        with pytest.raises(RegistryError):
+            service.revoke_official(context=king, official_id=appointed, reason="الثاني")
+        assert _official_row(appointed).revocation_reason == "الأوّل"
+        assert len(authorizer.results) == 1
+
+    def test_replay_of_a_proven_key_does_not_rewrite_the_row(
+        self, registry: tuple[StateRegistry, RecordingAuthorizer], appointed: str
+    ) -> None:
+        """مفتاحٌ مُثبَّتٌ (1H) لا يُعيدُ العزلَ بعدَ إرجاعِ الصفِّ يدويًّا."""
+        service, _ = registry
+        king = _context("king", _KING_PERMISSIONS)
+        service.revoke_official(context=king, official_id=appointed, reason="الأوّل")
+        assert service._revoke_official_row(appointed, None, is_head=False) is True  # noqa: SLF001
+        replayed = service.revoke_official(
+            context=king, official_id=appointed, reason="إعادة"
+        )
+        assert replayed["replayed"] is True, "عُدَّت الإعادةُ عزلًا جديدًا."
+        assert _official_row(appointed).status == "appointed", "أوقعتِ الإعادةُ أثرًا ثانيًا."
+
+    def test_unknown_official_is_still_refused(
+        self, registry: tuple[StateRegistry, RecordingAuthorizer]
+    ) -> None:
+        service, authorizer = registry
+        with pytest.raises(OfficialNotFoundError):
+            service.revoke_official(
+                context=_context("king", _KING_PERMISSIONS),
+                official_id="offl-la-wujud",
+                reason="عزلُ ما لا وجودَ له",
+            )
+        assert authorizer.results == []
+
+
+class TestRevocationNoBypassPathRemains:
+    """S-8 · S-9 — كتابةُ العزلِ في دالّةٍ واحدةٍ ولا معامَلَ تجاوز."""
+
+    def test_revocation_status_is_written_in_one_helper_only(self) -> None:
+        import ast
+
+        source = Path(registry_module.__file__).read_text(encoding="utf-8")
+        tree = ast.parse(source)
+
+        def _own_body(node: ast.FunctionDef) -> str:
+            segment = ast.get_source_segment(source, node) or ""
+            for child in ast.walk(node):
+                if child is node or not isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef):
+                    continue
+                segment = segment.replace(ast.get_source_segment(source, child) or "", "")
+            return segment
+
+        writers = [
+            node.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef) and 'row.status = "revoked"' in _own_body(node)
+        ]
+        assert writers == ["_revoke_official_row"], f"كُتّابُ العزل: {writers}"
+
+    def test_no_forbidden_bypass_parameter_in_the_migrated_operation(self) -> None:
+        import inspect
+
+        from amos_federation.services.executive_core.sovereignty_bridge import (
+            FORBIDDEN_BYPASS_PARAMS,
+        )
+
+        names = set(inspect.signature(StateRegistry.revoke_official).parameters)
+        assert not (names & FORBIDDEN_BYPASS_PARAMS)
