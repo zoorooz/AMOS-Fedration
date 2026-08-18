@@ -1,0 +1,33 @@
+{
+ "note": "مخزنُ قياسٍ لا مصدرُ حقيقةٍ للقرارات. لا نصَّ قرارٍ فيه ولا حالةً. مصدرُ الحقيقةِ SOVEREIGN_DECISION_REGISTER.md، وإن خالفَه فالسجلُّ الحاكم.",
+ "snapshots": [
+  {
+   "debt": 168,
+   "sovereign": 16,
+   "closed_legacy": 7,
+   "write_sites_total": 203,
+   "git_head": "f8fc0eb",
+   "waves": {
+    "W1": 52,
+    "W2": 34,
+    "W3": 82
+   },
+   "decision": "Q-11",
+   "recorded_at": "2026-08-18T21:33:57+00:00"
+  },
+  {
+   "debt": 168,
+   "sovereign": 16,
+   "closed_legacy": 7,
+   "write_sites_total": 203,
+   "git_head": "f8fc0eb",
+   "waves": {
+    "W1": 52,
+    "W2": 34,
+    "W3": 82
+   },
+   "decision": "Q-12",
+   "recorded_at": "2026-08-18T21:33:59+00:00"
+  }
+ ]
+}

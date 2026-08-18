@@ -17,6 +17,12 @@
   python tools/audit/decision_gate.py --record Q-11      # يُسجِّلُ لقطةً منسوبةً إلى قرارٍ أُغلِق
   python tools/audit/decision_gate.py --gate W1          # يفتحُ موجةً أو يسقطُ مُعلِنًا الناقص
 
+دلالةُ `--gate Wn` (صُحِّحَتْ في P16 بعدَ سقوطٍ مقيس): تفتحُ الموجةَ إذا كانت قراراتُ
+**الموجاتِ السابقةِ** كلُّها مسجَّلةَ اللقطاتِ ولم ينحرفِ الدَّينُ بلا لقطة. أمّا قراراتُ
+الموجةِ نفسِها فتُسجَّلُ عندَ حسمِ كلٍّ منها، وهي شرطُ فتحِ الموجةِ **التالية** لا شرطُ
+فتحِ موجتِها. وكانَ الشرطانِ مدموجينِ خطأً في P15 فكانتْ كلُّ موجةٍ تشترطُ حسمَ نفسِها
+قبلَ أن تُفتَح — وهو ما يستحيلُ منطقًا.
+
 رموزُ الخروج: 0 = مرَّ · 1 = سقطَ (ناقصٌ أو انحرافٌ) · 2 = خطأُ استعمال.
 """
 
@@ -174,15 +180,13 @@ def cmd_gate(wave: str) -> None:
     missing_prior: list[str] = []
     for earlier in order[:order.index(wave)]:
         missing_prior += [q for q in waves[earlier] if q not in recorded]
-    missing_own = [q for q in waves[wave] if q not in recorded]
+    pending_own = [q for q in waves[wave] if q not in recorded]
     now = measure()
 
     print(f"الموجة {wave}: الدَّينُ المقيسُ الآن {now['debt']} · الرأسُ {now['git_head']}")
     if missing_prior:
         _fail("موجةٌ سابقةٌ لم تُغلَقْ — قراراتٌ بلا لقطةٍ: " + " · ".join(missing_prior))
-    if missing_own:
-        _fail(f"قراراتُ {wave} بلا لقطةٍ مسجَّلة: " + " · ".join(missing_own))
-    if not snapshots:
+    if not snapshots and any(waves[w] for w in order[:order.index(wave)]):
         _fail("لا لقطةَ واحدةً في السجلّ — لا تُفتَحُ موجةٌ بلا جردٍ مسجَّل")
     last = snapshots[-1]
     if last["debt"] != now["debt"]:
@@ -190,6 +194,11 @@ def cmd_gate(wave: str) -> None:
               f"والمقيسُ الآنَ {now['debt']} — يُعادُ الجردُ وتُسجَّلُ لقطةٌ قبلَ الفتح")
     print(f"مرَّتِ البوابة: {wave} مفتوحةٌ · آخرُ لقطةٍ {last['decision']} "
           f"عند {last['recorded_at']}")
+    if pending_own:
+        print(f"وقراراتُ {wave} نفسُها ما زالت بلا لقطةٍ (تُسجَّلُ عندَ حسمِ كلٍّ منها): "
+              + " · ".join(pending_own))
+        print("فالموجةُ مفتوحةٌ للحسمِ ولما يُبيحُه المحسومُ منها، "
+              "ولا تُفتَحُ الموجةُ التاليةُ قبلَ تسجيلِ لقطاتِها كلِّها.")
 
 
 def main() -> None:

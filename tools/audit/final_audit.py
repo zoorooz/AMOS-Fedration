@@ -25,7 +25,9 @@ out["total_sites"] = s["write_sites_total"]
 # 2) الأرقامُ المذكورةُ في الوثيقةِ المركزيّة
 prog = (D / "SOVEREIGN_MIGRATION_PROGRAM.md").read_text(encoding="utf-8")
 out["program_mentions_168"] = prog.count("168")
-out["program_placeholders"] = prog.count("يُسجَّلُ عند الدفع")
+# صيغتانِ للعلامةِ المؤقّتةِ: عبارةُ P14 ورمزُ P15/P16 — عُدَّتِ الأولى وحدَها
+# حتى P16 فكانَ العدُّ أعمى عن الثانية، فوُسِّعَ صريحًا لا صامتًا.
+out["program_placeholders"] = prog.count("يُسجَّلُ عند الدفع") + prog.count("PENDING_PUSH")
 out["program_todo_markers"] = len(re.findall(r"TODO|FIXME|XXX|<<<|>>>", prog))
 
 # 3) الأسئلةُ في السجلّ
