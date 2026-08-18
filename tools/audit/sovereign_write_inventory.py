@@ -1,0 +1,249 @@
+#!/usr/bin/env python3
+"""جردُ الكتاباتِ الإنتاجيّةِ وحالتُها من الحدِّ السياديّ — قياسٌ لا تقدير.
+
+الهدف: أداةُ قياسٍ **قابلةٌ للإعادة** يُبنى عليها عددُ دَينِ الهجرةِ في كلِّ مرحلةٍ
+من برنامجِ الهجرةِ السياديّة، فلا يُقال «بقيَ كذا» بلا دليلٍ يُعاد توليدُه.
+النطاق: تحليلٌ ساكنٌ (AST) لملفّاتِ الإنتاجِ وحدَها — لا يشغّلُ شيئًا ولا يكتبُ في
+قاعدةِ بيانات، ولا يُصدِرُ حكمًا دستوريًّا (ذاك عملُ البوّابةِ لا عملُ أداةِ جرد).
+
+الاستعمال:
+    python tools/audit/sovereign_write_inventory.py            # ملخّصٌ نصّيّ
+    python tools/audit/sovereign_write_inventory.py --json OUT # ملخّصٌ + تفصيلٌ JSON
+    python tools/audit/sovereign_write_inventory.py --service \
+        federal/executive/services/src/amos_federation/services/state_registry
+
+الحدود المُعلَنة:
+- يقيسُ **مواضعَ** الكتابةِ في المصدر، لا عددَ الكتاباتِ في التشغيل.
+- «عمليّةٌ عامّةٌ مُغيِّرة» = دالّةٌ عامّةٌ في صنفٍ أو وحدةٍ إنتاجيّةٍ يقعُ في جسمِها
+  `add/add_all/commit/delete/merge` أو SQL خامٌّ تغييريّ.
+- المعاوناتُ الخاصّة (`_name`) تُحصى منفصلةً ولا تُعدُّ عمليّاتٍ مستقلّة.
+- كونُ الدالّةِ «مُغيِّرةً» لا يعني وجوبَ هجرتِها: الوجوبُ حكمٌ دستوريٌّ يُقرَّر في
+  سجلِّ القرارات، وهذه الأداةُ تعدُّ فقط.
+"""
+
+from __future__ import annotations
+
+import argparse
+import ast
+import json
+from dataclasses import asdict, dataclass
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+#: ما يُستثنى من عدِّ الإنتاج — الاختباراتُ ليست إنتاجًا، والذاكرةُ المؤقّتةُ ليست مصدرًا.
+SKIP_DIR_NAMES = frozenset({"__pycache__", ".git", "tests", "test", "node_modules", "backups"})
+
+#: نداءاتُ جلسةِ SQLAlchemy التي تُنتِجُ أثرًا كتابيًّا.
+WRITE_CALLS = frozenset({"add", "add_all", "commit", "delete", "merge"})
+
+#: كلماتُ SQL الخامِّ التغييريّة.
+SQL_WRITE_KEYWORDS = ("INSERT ", "UPDATE ", "DELETE FROM", "CREATE TABLE", "ALTER TABLE")
+
+#: علامةُ عبورِ الحدِّ السياديّ.
+GUARD_MARKER = "guard_declared("
+
+#: علامةُ إغلاقِ مسارٍ قديم (1N/2A): يُرفَعُ ولا يكتب.
+CLOSED_MARKER = "UndeclaredExecutionError"
+
+
+@dataclass(frozen=True)
+class WriteSite:
+    """موضعُ كتابةٍ واحدٌ في المصدر."""
+
+    path: str
+    owner: str
+    function: str
+    line: int
+    public: bool
+    writes: tuple[str, ...]
+    guarded: bool
+    closed_legacy: bool
+
+
+class _WriteVisitor(ast.NodeVisitor):
+    def __init__(self, path: str, source: str) -> None:
+        self._path = path
+        self._source = source
+        self._classes: list[str] = []
+        self.sites: list[WriteSite] = []
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:  # noqa: N802
+        self._classes.append(node.name)
+        self.generic_visit(node)
+        self._classes.pop()
+
+    def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        segment = ast.get_source_segment(self._source, node) or ""
+        writes: set[str] = set()
+        for sub in ast.walk(node):
+            if (
+                isinstance(sub, ast.Call)
+                and isinstance(sub.func, ast.Attribute)
+                and sub.func.attr in WRITE_CALLS
+            ):
+                writes.add(f"{sub.func.attr}()")
+            if isinstance(sub, ast.Constant) and isinstance(sub.value, str):
+                upper = sub.value.upper()
+                if any(keyword in upper for keyword in SQL_WRITE_KEYWORDS):
+                    writes.add("raw-sql-write")
+        closed = CLOSED_MARKER in segment
+        if closed and not writes:
+            # مسارٌ قديمٌ **مُغلَق**: يُرفَعُ ولا يكتب. عدُّه واجبٌ لأنّه دليلُ إغلاقٍ،
+            # وإسقاطُه بحجّةِ «لا كتابةَ فيه» يُخفي أهمَّ ما أُنجِز.
+            self.sites.append(
+                WriteSite(
+                    path=self._path,
+                    owner=self._classes[-1] if self._classes else "-",
+                    function=node.name,
+                    line=node.lineno,
+                    public=not node.name.startswith("_"),
+                    writes=(),
+                    guarded=False,
+                    closed_legacy=True,
+                )
+            )
+        if writes:
+            self.sites.append(
+                WriteSite(
+                    path=self._path,
+                    owner=self._classes[-1] if self._classes else "-",
+                    function=node.name,
+                    line=node.lineno,
+                    public=not node.name.startswith("_"),
+                    writes=tuple(sorted(writes)),
+                    guarded=GUARD_MARKER in segment,
+                    closed_legacy=closed,
+                )
+            )
+        self.generic_visit(node)
+
+    visit_FunctionDef = _visit_function  # type: ignore[assignment]
+    visit_AsyncFunctionDef = _visit_function  # type: ignore[assignment]
+
+
+def is_production_file(relative: Path) -> bool:
+    """هل الملفُّ إنتاجيٌّ؟ الاختباراتُ والذاكرةُ المؤقّتةُ ليست إنتاجًا."""
+    if set(relative.parts) & SKIP_DIR_NAMES:
+        return False
+    name = relative.name
+    return not (name.startswith("test_") or name.endswith("_test.py") or name == "conftest.py")
+
+
+def collect(root: Path, subtree: Path | None = None) -> list[WriteSite]:
+    """اجمعْ مواضعَ الكتابةِ كلَّها تحتَ `root` (أو تحتَ `subtree` منه)."""
+    base = root / subtree if subtree else root
+    sites: list[WriteSite] = []
+    for path in sorted(base.rglob("*.py")):
+        relative = path.relative_to(root)
+        if not is_production_file(relative):
+            continue
+        try:
+            source = path.read_text(encoding="utf-8")
+            tree = ast.parse(source)
+        except (SyntaxError, UnicodeDecodeError):
+            continue
+        visitor = _WriteVisitor(str(relative), source)
+        visitor.visit(tree)
+        sites.extend(visitor.sites)
+    return sites
+
+
+#: مناطقُ القياس — الفصلُ مقصود: «خدماتٌ» ليست كـ«أدوات» ولا كـ«نواة».
+AREAS: tuple[tuple[str, str], ...] = (
+    ("services", "federal/executive/services/src/amos_federation/services/"),
+    ("service_common", "federal/executive/services/src/amos_federation/common/"),
+    ("federal_other", "federal/"),
+    ("core", "core/"),
+    ("tools", "tools/"),
+)
+
+
+def area_of(path: str) -> str:
+    """أيُّ منطقةٍ يقعُ فيها الموضع؟ أوّلُ بادئةٍ مطابقةٍ تحكم."""
+    for name, prefix in AREAS:
+        if path.startswith(prefix):
+            return name
+    return "other"
+
+
+def summarize(sites: list[WriteSite]) -> dict[str, object]:
+    """الملخّصُ العدديُّ — ولا تُخفى فيه التفرقةُ بين العامِّ والخاصّ."""
+    public = [s for s in sites if s.public]
+    by_file: dict[str, int] = {}
+    for site in public:
+        if not site.guarded and not site.closed_legacy:
+            by_file[site.path] = by_file.get(site.path, 0) + 1
+    by_area: dict[str, dict[str, int]] = {}
+    for site in public:
+        bucket = by_area.setdefault(
+            area_of(site.path), {"public": 0, "sovereign": 0, "non_sovereign": 0}
+        )
+        bucket["public"] += 1
+        if site.guarded:
+            bucket["sovereign"] += 1
+        elif not site.closed_legacy:
+            bucket["non_sovereign"] += 1
+    return {
+        "write_sites_total": len(sites),
+        "by_area": by_area,
+        "public_write_operations": len(public),
+        "sovereign_write_operations": sum(1 for s in public if s.guarded),
+        "closed_legacy_paths": sum(1 for s in sites if s.closed_legacy),
+        "non_sovereign_write_operations": sum(
+            1 for s in public if not s.guarded and not s.closed_legacy
+        ),
+        "non_sovereign_by_file": dict(sorted(by_file.items(), key=lambda kv: (-kv[1], kv[0]))),
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="جردُ الكتاباتِ الإنتاجيّةِ وحالتِها السياديّة")
+    parser.add_argument("--root", default=str(REPO_ROOT), help="جذرُ المستودع")
+    parser.add_argument("--service", default=None, help="مسارٌ فرعيٌّ نسبيٌّ لقصرِ الجرد")
+    parser.add_argument("--json", dest="json_out", default=None, help="ملفُّ تفصيلٍ JSON")
+    parser.add_argument("--fail-if-any", action="store_true", help="اخرجْ بخطأٍ إن بقيت كتابةٌ متجاوزة")
+    args = parser.parse_args()
+
+    root = Path(args.root).resolve()
+    subtree = Path(args.service) if args.service else None
+    sites = collect(root, subtree)
+    summary = summarize(sites)
+
+    print("== جردُ الكتاباتِ الإنتاجيّة ==")
+    print(f"  جذرُ القياس            : {subtree or '.'}")
+    print(f"  مواضعُ كتابةٍ (كلُّها)   : {summary['write_sites_total']}")
+    print(f"  عمليّاتٌ عامّةٌ مُغيِّرة   : {summary['public_write_operations']}")
+    print(f"  منها تعبرُ الحدَّ        : {summary['sovereign_write_operations']}")
+    print(f"  مساراتٌ قديمةٌ مُغلَقة    : {summary['closed_legacy_paths']}")
+    print(f"  **لا تعبرُ الحدَّ**       : {summary['non_sovereign_write_operations']}")
+    by_area = summary["by_area"]
+    assert isinstance(by_area, dict)
+    if by_area:
+        print("  التوزيعُ على المناطق (عامّة / سياديّة / متجاوزة):")
+        for area, counts in sorted(by_area.items()):
+            print(
+                f"    {area:16s} {counts['public']:4d} / {counts['sovereign']:3d} /"
+                f" {counts['non_sovereign']:4d}"
+            )
+    non_sovereign_by_file = summary["non_sovereign_by_file"]
+    assert isinstance(non_sovereign_by_file, dict)
+    if non_sovereign_by_file:
+        print("  التوزيعُ على الملفّات:")
+        for path, count in non_sovereign_by_file.items():
+            print(f"    {count:4d}  {path}")
+
+    if args.json_out:
+        payload = {"summary": summary, "sites": [asdict(s) for s in sites]}
+        Path(args.json_out).write_text(
+            json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8"
+        )
+        print(f"  التفصيلُ محفوظٌ في: {args.json_out}")
+
+    if args.fail_if_any and summary["non_sovereign_write_operations"]:
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
