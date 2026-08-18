@@ -32,7 +32,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from typing import Any, TypeVar
@@ -55,6 +55,13 @@ from core.sovereignty.contract import (
     bind_contract,
 )
 from core.sovereignty.crown import crown_is_provisioned
+from core.sovereignty.fail_closed import (
+    ExecutionAttempt,
+    ExecutionCompletion,
+    IncompleteSovereignTransaction,
+    attempt_execution,
+    require_audit_anchor,
+)
 from core.sovereignty.enforcement import (
     DEFAULT_PERMIT_TTL_SECONDS,
     EnforcementPermit,
@@ -124,7 +131,6 @@ class ExecutionRecord:
     action: str
     actor: str
     decision: str
-    executed: bool
     ledger_entry_hash: str | None
     decree_id: str | None = None
     decision_kind: str = ""
@@ -134,6 +140,42 @@ class ExecutionRecord:
     #: `PERMIT_ISSUED` بلا مسٍّ للحالة. دونَ هذا الحقل كان السجلُ يقول
     #: «نُفِّذ» عن إصدارِ رخصة — وذلك وصفٌ غيرُ صادقٍ لما جرى.
     enforcement: str = "DIRECT"
+    #: حالةُ اكتمالِ المعاملةِ السيادية (1J). الافتراضُ **مُغلَقٌ**: أثرٌ لم
+    #: يُصرَّح باكتمالِه لا يُقرأ نجاحًا.
+    completion: ExecutionCompletion = ExecutionCompletion.NOT_EXECUTED
+    #: سببُ الفشلِ أو تعذُّرِ التصديقِ إن وُجِد — يُقرأ ولا يُخمَّن.
+    failure_reason: str = ""
+
+    def __post_init__(self) -> None:
+        """حالةُ اكتمالٍ مجهولةُ النوعِ تُرفَض — ولا تُؤوَّل تأويلًا متسامحًا.
+
+        فلو قُبِل نصٌّ حرٌّ مكانَ التعداد لعادت الحالةُ الغامضةُ من البابِ
+        الخلفيّ. والرفضُ هنا هو الإغلاقُ عند الفشلِ في مستوى العقد نفسِه.
+        """
+        if not isinstance(self.completion, ExecutionCompletion):
+            raise TypeError(
+                "completion يجب أن تكون ExecutionCompletion — وصلت "
+                f"{type(self.completion).__name__!r}. لا حالةَ اكتمالٍ حرّةَ الصياغة."
+            )
+
+    @property
+    def executed(self) -> bool:
+        """هل اكتمل تنفيذٌ صحيحٌ فعليٌّ؟ مشتقٌّ من `completion` ولا يُضبَط يدويًّا.
+
+        **تغييرُ دلالةٍ مقصودٌ في 1J (Fail-Closed):** لم يبقَ `executed` حقلًا
+        يُكتَب عند البناء، فما دام النجاحُ حقلًا بوليًّا حرًّا يبقى ممكنًا أن
+        يُكتَب `executed=True` قبل استدعاءِ المُنفِّذِ — وهو ما كان يجري فعلًا.
+        وباشتقاقِه صار النجاحُ الكاذبُ ممتنعًا بنيويًّا: لا سبيلَ إلى
+        `executed == True` إلّا بحالةِ `COMPLETED`، ولا تُنتَج تلك الحالةُ إلّا
+        بعد عودةِ المُنفِّذِ سالمًا ومعه مرتكزٌ تدقيقيٌّ مُثبَّت.
+
+        فهي تعني اليومَ: تنفيذٌ صحيحٌ اكتمل. ولا تعني — ولم يبقَ لها سبيلٌ أن
+        تعني — أن التنفيذَ جُرِّب، أو أن مُنفِّذًا استُدعي، أو أن أثرًا جزئيًّا
+        وقع، أو أن حدثًا صدر، أو أن إذنًا وُجِد، أو أن التعويضَ متاح، أو أن
+        مرحلةً وسيطةً بُلِغت، أو أن استثناءً ابتُلِع، أو أن راجعةً في الذاكرة
+        ضُبِطت.
+        """
+        return self.completion.certifies_execution
 
     @property
     def sovereign(self) -> bool:
@@ -146,6 +188,8 @@ class ExecutionRecord:
             "actor": self.actor,
             "decision": self.decision,
             "executed": self.executed,
+            "completion": self.completion.value,
+            "failure_reason": self.failure_reason,
             "ledger_entry_hash": self.ledger_entry_hash,
             "decree_id": self.decree_id,
             "decision_kind": self.decision_kind,
@@ -370,7 +414,7 @@ class SovereignGateway:
                     action=request.action,
                     actor=request.actor.value,
                     decision="CONTRACT_BREACH",
-                    executed=False,
+                    completion=ExecutionCompletion.NOT_EXECUTED,
                     ledger_entry_hash=None,
                 )
             )
@@ -444,6 +488,42 @@ class SovereignGateway:
         self._permits.append(permit.permit_id)
         return permit
 
+    # ── قاعدةُ 1J: الختمُ بعد التنفيذِ لا قبلَه ─────────────────────────────
+    def _run_and_seal(
+        self,
+        authorized: ExecutionRecord,
+        executor: Callable[[], T],
+    ) -> T:
+        """نفِّذْ ثمّ اختِمْ أثرًا ثانيًا بحقيقةِ ما جرى — لا ادِّعاءَ سابقًا للفعل.
+
+        هذا هو **موضعُ إنفاذِ** Fail-Closed لا أداةٌ اختياريةٌ بجانبِه: كِلا
+        مساري التنفيذِ (السياديُّ والتابع) يمرّان من هنا، فلا نسخةَ ثانيةً
+        للقاعدةِ تتباعد عن الأولى.
+
+        والترتيبُ مقصودٌ حرفيًّا:
+
+        1. الأثرُ الأوّلُ (`AUTHORIZED`) مُثبَّتٌ سلفًا: يقول «صدر الإذنُ» ولا
+           يقول «نُفِّذ». فلو انقطعت العمليةُ في منتصفِ المُنفِّذِ فأقصى ما في
+           السجلِّ إذنٌ صدر — ولا ادِّعاءَ نجاحٍ أبدًا. هذا هو الإغلاقُ
+           عند الفشلِ **بالبناء** لا بالحراسة.
+        2. تُلتقَط نتيجةُ المُنفِّذِ كما هي (`attempt_execution`).
+        3. يُلحَق أثرٌ ثانٍ مختومٌ — ولا يُعدَّل الأوّلُ ولا يُحذَف (القاعدة 22).
+        4. إن كان فشلًا أُعيد رفعُ الاستثناءِ نفسِه: لا ابتلاعَ، ولا تحويلَ
+           للنجاح، ولا تراجُعَ صامتًا إلى قيمةٍ افتراضية.
+        """
+        attempt: ExecutionAttempt[T] = attempt_execution(
+            executor, audit_anchor=authorized.ledger_entry_hash or ""
+        )
+        self._records.append(
+            replace(
+                authorized,
+                completion=attempt.completion,
+                failure_reason=attempt.failure_reason,
+            )
+        )
+        attempt.raise_if_failed()
+        return attempt.value
+
     # ── أ — المسار السيادي ────────────────────────────────────────────────
     def _execute_sovereign(
         self,
@@ -503,22 +583,21 @@ class SovereignGateway:
             decree_id=decree_id,
         )
 
-        self._records.append(
-            ExecutionRecord(
-                fingerprint=verdict.request_fingerprint,
-                action=request.action,
-                actor=request.actor.value,
-                decision=verdict.decision.value,
-                executed=True,
-                enforcement=self._enforcement_mode,
-                ledger_entry_hash=verdict.ledger_entry_hash,
-                decree_id=decree_id,
-                decision_kind=classification.kind.value,
-                authority_layer=classification.layer.name,
-                advisory_articles=verdict.advisory_articles,
-            )
+        authorized = ExecutionRecord(
+            fingerprint=verdict.request_fingerprint,
+            action=request.action,
+            actor=request.actor.value,
+            decision=verdict.decision.value,
+            completion=ExecutionCompletion.AUTHORIZED,
+            enforcement=self._enforcement_mode,
+            ledger_entry_hash=verdict.ledger_entry_hash,
+            decree_id=decree_id,
+            decision_kind=classification.kind.value,
+            authority_layer=classification.layer.name,
+            advisory_articles=verdict.advisory_articles,
         )
-        return executor()
+        self._records.append(authorized)
+        return self._run_and_seal(authorized, executor)
 
     # ── ب — المسار التابع ─────────────────────────────────────────────────
     def _execute_subordinate(
@@ -555,7 +634,7 @@ class SovereignGateway:
                     action=request.action,
                     actor=request.actor.value,
                     decision="AUTHORITY_WITHDRAWN",
-                    executed=False,
+                    completion=ExecutionCompletion.NOT_EXECUTED,
                     ledger_entry_hash=None,
                     decree_id=withdrawn.decree_id,
                     decision_kind=classification.kind.value,
@@ -578,7 +657,7 @@ class SovereignGateway:
                     action=request.action,
                     actor=request.actor.value,
                     decision=verdict.decision.value,
-                    executed=False,
+                    completion=ExecutionCompletion.NOT_EXECUTED,
                     ledger_entry_hash=verdict.ledger_entry_hash,
                     decree_id=decree_id,
                     decision_kind=classification.kind.value,
@@ -587,24 +666,44 @@ class SovereignGateway:
             )
             raise SovereigntyViolation(verdict)
 
+        # مرتكزُ الأثرِ التدقيقيِّ إلزاميٌّ في المسارِ التابع: الأثرُ الإلزاميُّ
+        # الفاشلُ يُغلِق البوابةَ قبل استدعاءِ المُنفِّذ، ولا يُنفَّذ ما لا يُدقَّق.
+        try:
+            require_audit_anchor(verdict)
+        except IncompleteSovereignTransaction as فشل:
+            self._records.append(
+                ExecutionRecord(
+                    fingerprint=verdict.request_fingerprint,
+                    action=request.action,
+                    actor=request.actor.value,
+                    decision=verdict.decision.value,
+                    completion=ExecutionCompletion.NOT_EXECUTED,
+                    ledger_entry_hash=verdict.ledger_entry_hash,
+                    decree_id=decree_id,
+                    decision_kind=classification.kind.value,
+                    authority_layer=classification.layer.name,
+                    failure_reason=فشل.reason,
+                )
+            )
+            raise
+
         if isinstance(decree, RoyalDecree) and is_royal_exclusive(request.action):
             self._decrees.consume(decree)
 
-        self._records.append(
-            ExecutionRecord(
-                fingerprint=verdict.request_fingerprint,
-                action=request.action,
-                actor=request.actor.value,
-                decision=verdict.decision.value,
-                executed=True,
-                enforcement=self._enforcement_mode,
-                ledger_entry_hash=verdict.ledger_entry_hash,
-                decree_id=decree_id,
-                decision_kind=classification.kind.value,
-                authority_layer=classification.layer.name,
-            )
+        authorized = ExecutionRecord(
+            fingerprint=verdict.request_fingerprint,
+            action=request.action,
+            actor=request.actor.value,
+            decision=verdict.decision.value,
+            completion=ExecutionCompletion.AUTHORIZED,
+            enforcement=self._enforcement_mode,
+            ledger_entry_hash=verdict.ledger_entry_hash,
+            decree_id=decree_id,
+            decision_kind=classification.kind.value,
+            authority_layer=classification.layer.name,
         )
-        return executor()
+        self._records.append(authorized)
+        return self._run_and_seal(authorized, executor)
 
 
     # ── حراسة ذاتية ───────────────────────────────────────────────────────
@@ -621,7 +720,20 @@ class SovereignGateway:
             "bypass_parameters": [],
             "supreme_authority": self.supreme_authority.name,
             "security_events": len(self._security.events),
-            "sovereign_executions": sum(1 for r in self._records if r.sovereign),
+            "sovereign_executions": sum(
+                1 for r in self._records if r.sovereign and r.executed
+            ),
+            # 1J: ما لم يكتمل يُعلَن ولا يُخفى داخل عدّادِ النجاح.
+            "failed_executions": sum(
+                1
+                for r in self._records
+                if r.completion is ExecutionCompletion.EXECUTION_FAILED
+            ),
+            "recovery_required": sum(
+                1
+                for r in self._records
+                if r.completion is ExecutionCompletion.RECOVERY_REQUIRED
+            ),
             "active_withdrawals": len(self._grants.active_withdrawals()),
             # الدولةُ اليومَ فيها مسارٌ بعقدٍ ومسارٌ بلا عقد، والثاني يُعلَن ولا يُخفى.
             "contracted_executions": len(self._contracts),
@@ -636,6 +748,9 @@ class SovereignGateway:
 
 __all__ = [
     "AuthorityWithdrawn",
+    "ExecutionAttempt",
+    "ExecutionCompletion",
+    "IncompleteSovereignTransaction",
     "ContractBreach",
     "ExecutionContract",
     "ExecutionOutcome",

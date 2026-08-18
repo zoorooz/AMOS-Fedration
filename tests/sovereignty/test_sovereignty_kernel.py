@@ -565,14 +565,26 @@ class TestSovereignGateway:
             gateway.execute(
                 ActionRequest(actor=Branch.AGENT, action="amend_constitution"), lambda: 1
             )
-        assert len(gateway.records) == 2
-        assert [r.executed for r in gateway.records] == [True, False]
+        # 1J: التنفيذُ الواحدُ يترك أثرين لا أثرًا — إذنٌ يُثبَّت ثمّ ختمٌ
+        # بحقيقةِ ما جرى. وقبل 1J كان الأثرُ واحدًا يقول `executed=True`
+        # **قبل** استدعاءِ المُنفِّذ، فيزعم السجلُّ النجاحَ ولو رفع المُنفِّذُ
+        # استثناءً. الأثرُ الأوّلُ اليومَ لا يزعم شيئًا سوى صدورِ الإذن.
+        assert len(gateway.records) == 3
+        assert [r.completion.value for r in gateway.records] == [
+            "AUTHORIZED",
+            "COMPLETED",
+            "NOT_EXECUTED",
+        ]
+        assert [r.executed for r in gateway.records] == [False, True, False]
         assert all(r.ledger_entry_hash for r in gateway.records)
 
     def test_record_serializes(self, gateway: SovereignGateway) -> None:
         gateway.execute(ActionRequest(actor=Branch.EXECUTIVE, action="execute_task"), lambda: 1)
-        payload = gateway.records[0].as_dict()
+        # الأثرُ المختومُ هو آخرُ الأثرين (1J) — والأوّلُ إذنٌ لا تنفيذ.
+        payload = gateway.records[-1].as_dict()
         assert payload["executed"] is True
+        assert payload["completion"] == "COMPLETED"
+        assert gateway.records[0].as_dict()["executed"] is False
         assert payload["action"] == "execute_task"
 
     def test_review_does_not_execute(self, gateway: SovereignGateway) -> None:
