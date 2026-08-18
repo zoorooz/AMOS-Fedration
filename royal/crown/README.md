@@ -14,23 +14,63 @@
 2026-08-16
 
 ## تاريخ آخر تعديل
-2026-08-16
+2026-08-18
 
 ## المحتويات
 | الملف | الدور |
 |---|---|
-| `CROWN_KEYS.json` | سجل مفاتيح التاج — المفتاح العام والحالة والمفتاح النشط |
+| `CROWN_KEYS.json` | سجل مفاتيح التاج — المفتاح العام والحالة والمفتاح النشط وأصل الجذر |
+| `ENROLLMENT_CHALLENGE.json` | تحدّي التنسيب القائم — نصٌّ عامٌّ لمرّة واحدة، يُوسَم مُستهلَكًا بعد استعماله |
 
 ## الحالة الراهنة
 `unprovisioned` — التاج غير مُنصَّب. كل فعل ذي اختصاص ملكي حصري مرفوض، والاختصاص
 **مُجمَّد لا منقول**: لا مجلس ولا أغلبية ولا حالة ضرورة تحلّ محلّ الملك.
 
-## مراسم التنصيب
+## مراسم التنصيب السيادية — الجذر البشري الخارجي
+
+**القاعدة:** الدولة **لا تولّد** مفتاح الملك ولا تراه ولا تنقله. الملك يولّده على
+جهازه هو خارج الدولة، والدولة تنسّب **المفتاح العام وحده** بعد أن تتحقّق تعميًّا
+أن مُقدِّمه يملك خاصّه. وبهذا يصير الوعد ضمانًا بنيويًّا: ما لم تره الدولة قطُّ لا
+يمكن أن تُسرِّبه.
+
+**الخطوة 1 — الدولة تُصدر تحدّيًا:**
 ```bash
-python -m core.sovereignty.cli provision-crown --out ~/amos-crown-key.pem
+python -m core.sovereignty.cli crown-challenge --ttl 3600
 ```
-ثم انقل المفتاح الخاص إلى حرز الملك واحذفه من الجهاز. المفتاح هو السلطة: من يملكه
-يملك الاختصاص الملكي كله.
+يطبع الأمر بايتات التحدّي (hex). التحدّي لمرّة واحدة، بأجلٍ منتهٍ، وبفصل مجالٍ
+صريح — فتوقيعٌ صُنع لغرض آخر لا يصلح تنسيبًا ولو كان بمفتاح الملك.
+
+**الخطوة 2 — الملك يوقّع على جهازه، خارج الدولة:**
+```bash
+# على جهاز الملك وحده. هذا الجهاز ليس نظامًا تشغيليًّا للدولة.
+python - <<'EOF'
+from cryptography.hazmat.primitives.asymmetric import ed25519
+from cryptography.hazmat.primitives import serialization
+k = ed25519.Ed25519PrivateKey.generate()          # أو حمّل مفتاحك القائم
+open("crown.pem","wb").write(k.private_bytes(
+    serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+    serialization.NoEncryption()))
+print("public :", k.public_key().public_bytes(
+    serialization.Encoding.Raw, serialization.PublicFormat.Raw).hex())
+print("signature:", k.sign(bytes.fromhex("<بايتات التحدّي من الخطوة 1>")).hex())
+EOF
+```
+
+**الخطوة 3 — الدولة تنسّب المفتاح العام:**
+```bash
+python -m core.sovereignty.cli crown-enroll \
+  --public-key <hex> --signature <hex> \
+  --keystore-kind offline_air_gapped --witness "اسم الشاهد"
+```
+يُرفَض التنسيب إن أخفق إثبات الحيازة، أو انتهى التحدّي، أو كان مُستهلَكًا، أو كان
+التاج مُنصَّبًا. ويُوسَم السجل `root_origin: EXTERNAL_HUMAN_ROOT`.
+
+## المسار غير السيادي — `provision-crown`
+
+`provision_crown` باقٍ للاختبار والإثبات الصناعي **لا لتنصيب دولة حقيقية**، وحدُّه
+مُعلَن: المفتاح الخاص يُولَّد داخل عملية من عمليات الدولة، فالدولة **رأته**، ونقلُه
+بعد ذلك إجراء بشري لا ضمان تقني. ولذلك يُوسَم `root_origin: STATE_GENERATED`،
+و`sovereignty-check` تسقط إن كان جذر الدولة الحقيقي بهذا الأصل.
 
 ## استبدال المفتاح
 ممنوع بالكود. `replace_crown_key` من أفعال تآكل السلطة الملكية المرفوضة من كل طرف

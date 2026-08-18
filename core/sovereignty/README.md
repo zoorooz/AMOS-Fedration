@@ -20,7 +20,7 @@
 2026-08-16
 
 ## تاريخ آخر تعديل
-2026-08-16
+2026-08-18
 
 ## المحتويات
 | الملف | الدور |
@@ -32,7 +32,7 @@
 | `security_events.py` | سجل الأحداث الأمنية — انتحال · تدخل سيادي · مسّ السيادة |
 | `gateway.py` | البوابة السيادية — المسار الوحيد للتنفيذ (مساران: سيادي · تابع) |
 | `gateways.py` | بوابات تابعة صريحة: فدرالية · ولاية · مؤسسة · وكيل — لا ترقّي |
-| `cli.py` | `provision-crown` · `crown-status` · `sovereignty-check` · `gate` · `prerogatives` |
+| `cli.py` | `crown-challenge` · `crown-enroll` · `provision-crown` · `crown-status` · `sovereignty-check` · `gate` · `prerogatives` |
 
 ---
 
@@ -127,7 +127,7 @@ SovereignGateway().execute(
 
 ## تنصيب التاج
 ```bash
-python -m core.sovereignty.cli provision-crown --out ~/amos-crown-key.pem
+python -m core.sovereignty.cli crown-challenge   # ثمّ crown-enroll بالمفتاح العام
 python -m core.sovereignty.cli crown-status
 ```
 

@@ -23,7 +23,15 @@ from core.sovereignty.authority import (
     assert_no_layer_above_crown,
     supreme_layer,
 )
-from core.sovereignty.crown import CrownError, crown_is_provisioned, load_crown, provision_crown
+from core.sovereignty.crown import (
+    ROOT_EXTERNAL_HUMAN,
+    CrownError,
+    crown_is_provisioned,
+    enroll_crown,
+    issue_enrollment_challenge,
+    load_crown,
+    provision_crown,
+)
 from core.sovereignty.gateways import SUBORDINATE_GATEWAYS
 from core.sovereignty.gateway import (
     FORBIDDEN_BYPASS_PARAMS,
@@ -61,6 +69,40 @@ def _cmd_provision_crown(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_crown_challenge(args: argparse.Namespace) -> int:
+    """أصدِر تحدّيًا يوقّعه الملكُ على جهازِه هو، خارجَ الدولة."""
+    try:
+        challenge = issue_enrollment_challenge(ttl_seconds=args.ttl)
+    except CrownError as exc:
+        print(f"[CHALLENGE] ✗ {exc}", file=sys.stderr)
+        return 1
+    print(f"[CHALLENGE] ✓ التحدّي «{challenge.challenge_id}» صالحٌ حتى {challenge.expires_at}")
+    print(f"[CHALLENGE]   البايتات الموقَّعة (hex): {challenge.message.hex()}")
+    print("[CHALLENGE]   وقّعها بمفتاحك خارج هذه الدولة، ثمّ نسِّب مفتاحك العام:")
+    print("[CHALLENGE]   python -m core.sovereignty.cli crown-enroll "
+          "--public-key <hex> --signature <hex>")
+    return 0
+
+
+def _cmd_crown_enroll(args: argparse.Namespace) -> int:
+    """نسِّب المفتاحَ العامَّ وحدَه بعد إثباتِ الحيازة."""
+    try:
+        crown = enroll_crown(
+            args.public_key,
+            args.signature,
+            holder=args.holder,
+            keystore_kind=args.keystore_kind,
+            witnesses=tuple(args.witness or ()),
+        )
+    except CrownError as exc:
+        print(f"[ENROLL] ✗ {exc}", file=sys.stderr)
+        return 1
+    print(f"[ENROLL] ✓ نُسِّب جذرٌ بشريٌّ خارجيّ — المفتاح «{crown.key_id}» "
+          f"لحامله «{crown.holder}».")
+    print("[ENROLL]   المفتاح الخاص لم يدخل هذه الدولةَ قطُّ ولم تره.")
+    return 0
+
+
 def _cmd_crown_status(_args: argparse.Namespace) -> int:
     if not crown_is_provisioned():
         print("[CROWN] التاج غير مُنصَّب — الاختصاص الملكي الحصري مُجمَّد لا منقول.")
@@ -69,6 +111,10 @@ def _cmd_crown_status(_args: argparse.Namespace) -> int:
     crown = load_crown()
     print(f"[CROWN] ✓ مُنصَّب — المفتاح «{crown.key_id}» · الحامل «{crown.holder}»")
     print(f"[CROWN]   الخوارزمية Ed25519 · التنصيب {crown.provisioned_at}")
+    print(f"[CROWN]   أصل الجذر: {crown.root_origin}")
+    if not crown.is_external_human_root:
+        print("[CROWN] ⚠ الجذرُ ولّدتْه الدولةُ نفسُها — ليس جذرًا بشريًّا. "
+              "الدولةُ رأت المفتاحَ الخاصَّ لحظةَ توليدِه.")
     return 0
 
 
@@ -82,6 +128,15 @@ def _cmd_sovereignty_check(_args: argparse.Namespace) -> int:
 
     if not _ARTICLE_010.exists():
         failures.append("المادة العاشرة مفقودة من الدستور.")
+
+    if crown_is_provisioned():
+        crown = load_crown()
+        if crown.root_origin != ROOT_EXTERNAL_HUMAN:
+            failures.append(
+                f"جذرُ الدولةِ مُنصَّبٌ بأصلٍ «{crown.root_origin}» لا "
+                f"«{ROOT_EXTERNAL_HUMAN}»: الدولةُ ولّدت مفتاحَ الملك فرأتْه. "
+                "المسارُ السياديُّ هو crown-enroll."
+            )
 
     gateway = SovereignGateway()
     if gateway.engine.unguarded_articles():
@@ -241,6 +296,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", required=True, help="مسار المفتاح الخاص — خارج المستودع إلزامًا")
     p.add_argument("--holder", default="الملك", help="حامل التاج")
     p.set_defaults(func=_cmd_provision_crown)
+
+    p = sub.add_parser("crown-challenge",
+                       help="أصدِر تحدّي تنسيب يوقّعه الملك خارج الدولة")
+    p.add_argument("--ttl", type=int, default=3600, help="مدّة الصلاحية بالثواني")
+    p.set_defaults(func=_cmd_crown_challenge)
+
+    p = sub.add_parser("crown-enroll",
+                       help="نسِّب المفتاح العام للملك بعد إثبات الحيازة")
+    p.add_argument("--public-key", required=True, help="المفتاح العام Ed25519 (hex)")
+    p.add_argument("--signature", required=True, help="توقيع التحدّي (hex)")
+    p.add_argument("--holder", default="الملك", help="حامل التاج")
+    p.add_argument("--keystore-kind", default="offline_human_device",
+                   help="بيئة التوقيع كما يُقرّها الملك")
+    p.add_argument("--witness", action="append", help="شاهد على المراسم (يتكرّر)")
+    p.set_defaults(func=_cmd_crown_enroll)
 
     p = sub.add_parser("crown-status", help="حالة التاج")
     p.set_defaults(func=_cmd_crown_status)
