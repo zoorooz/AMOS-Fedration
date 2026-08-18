@@ -50,6 +50,7 @@ class SecurityEventKind(str, Enum):
     SOVEREIGNTY_ALTERING_DECREE = "SOVEREIGNTY_ALTERING_DECREE"
     SUBORDINATE_VETO_ATTEMPT = "SUBORDINATE_VETO_ATTEMPT"
     WITHDRAWN_AUTHORITY_USE = "WITHDRAWN_AUTHORITY_USE"
+    EXECUTION_CONTRACT_BREACH = "EXECUTION_CONTRACT_BREACH"
 
     @property
     def severity(self) -> SecurityEventSeverity:
@@ -75,6 +76,10 @@ _SEVERITY: dict[SecurityEventKind, SecurityEventSeverity] = {
     SecurityEventKind.SOVEREIGNTY_ALTERING_DECREE: SecurityEventSeverity.CRITICAL,
     SecurityEventKind.SUBORDINATE_VETO_ATTEMPT: SecurityEventSeverity.HIGH,
     SecurityEventKind.WITHDRAWN_AUTHORITY_USE: SecurityEventSeverity.HIGH,
+    # مُنفِّذٌ حاول أثرًا لم يأذن به العقدُ الذي نُفِّذ تحته — أي أنّ الإذنَ
+    # صدر لفعلٍ وأُريدَ به غيرُه. خطرٌ بقدرِ انتحالِ الصفة: في الأوّلِ مُدّعٍ
+    # لا يملك الإذن، وفي هذا مأذونٌ تجاوز حدَّ إذنِه — والثاني أخفى أثرًا.
+    SecurityEventKind.EXECUTION_CONTRACT_BREACH: SecurityEventSeverity.CRITICAL,
 }
 
 

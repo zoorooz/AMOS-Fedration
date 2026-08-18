@@ -28,6 +28,17 @@ _EXPORTS: dict[str, str] = {
     "immune_clauses_touched": "prerogatives",
     "is_royal_exclusive": "prerogatives",
     "touches_royal_authority": "prerogatives",
+    # contract — عقدُ التنفيذِ السياديّ (1E)
+    "ContractBreach": "contract",
+    "ContractError": "contract",
+    "EffectKind": "contract",
+    "EffectOutOfScopeError": "contract",
+    "ExecutionContract": "contract",
+    "ExecutionOutcome": "contract",
+    "SovereignEffect": "contract",
+    "bind_contract": "contract",
+    "digest_of_payload": "contract",
+    "in_scope": "contract",
     # crown
     "Crown": "crown",
     "CrownError": "crown",

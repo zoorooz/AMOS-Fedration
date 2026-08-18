@@ -45,6 +45,13 @@ from core.sovereignty.authority import (
     classify,
 )
 from core.sovereignty.authority_grants import AuthorityGrantRegistry
+from core.sovereignty.contract import (
+    ContractBreach,
+    ExecutionContract,
+    ExecutionOutcome,
+    SovereignEffect,
+    bind_contract,
+)
 from core.sovereignty.crown import crown_is_provisioned
 from core.sovereignty.decree import DecreeRegistry, RoyalDecree
 from core.sovereignty.prerogatives import is_royal_exclusive
@@ -156,6 +163,10 @@ class SovereignGateway:
         self._records: list[ExecutionRecord] = []
         self._security = security_log or SecurityEventLog(self._engine.ledger)
         self._grants = grant_registry or AuthorityGrantRegistry()
+        self._contracts: list[ExecutionContract] = []
+        # مواضعُ الأثرِ في `_records` التي جرت تحتَ عقد. الموضعُ لا البصمة: طلبان
+        # متطابقان لهما بصمةٌ واحدة، فالعدُّ بالبصمة يُنقِص عددَ ما بلا عقد.
+        self._contracted_positions: set[int] = set()
 
     # ── الاستعلام ─────────────────────────────────────────────────────────
     @property
@@ -174,6 +185,11 @@ class SovereignGateway:
     def grants(self) -> AuthorityGrantRegistry:
         """سجلُّ منحِ الصلاحياتِ وسحبِها — أثرُ المادة العاشرة · 10 التشغيليّ."""
         return self._grants
+
+    @property
+    def contracts(self) -> tuple[ExecutionContract, ...]:
+        """عقودُ التنفيذِ المربوطةُ في هذه الجلسة — للتدقيقِ لا للتعديل."""
+        return tuple(self._contracts)
 
     @property
     def supreme_authority(self) -> AuthorityLayer:
@@ -261,6 +277,90 @@ class SovereignGateway:
         if classification.is_sovereign:
             return self._execute_sovereign(request, executor, classification)
         return self._execute_subordinate(request, executor, classification)
+
+    # ── عقدُ التنفيذِ السياديّ (1E) ──────────────────────────────
+    def execute_under_contract(
+        self,
+        request: ActionRequest,
+        *,
+        declared_effects: tuple[SovereignEffect, ...],
+        planner: Callable[[ExecutionContract], tuple[SovereignEffect, ...]],
+        applier: Callable[[SovereignEffect], None],
+        value_of: Callable[[tuple[SovereignEffect, ...]], Any] | None = None,
+    ) -> ExecutionOutcome[Any]:
+        """نفِّذ بعقدٍ: الأثرُ يُعلَن ثمّ يُحقَّق ثمّ يُطبَّق — بهذا الترتيب.
+
+        الفرقُ عن `execute` ليس زيادةَ تدقيقٍ: `execute` تأذن لـ`executor` حرٍّ
+        لا حدَّ له ولا وصفَ، وهذه تحصر المُنفِّذَ في آثارٍ أُعلِنَت قبلَ صدورِ
+        الإذن وداخلَ هدفِه:
+
+        1. **حدُّ النطاق:** يُربَط العقدُ قبل أيّ شيء، وأثرٌ على موردٍ خارجَ
+           هدفِ الطلب يُرفَع `EffectOutOfScopeError` **ولا يُقيَّم الطلبُ أصلًا**.
+        2. **الحكمُ الدستوريّ:** يمرّ من `execute` نفسِها — فلا مُنفِّذٌ موازٍ
+           ولا تقييمٌ مكرّرٌ ولا مسارٌ ثانٍ للسيادة (القاعدتان 5 و 6).
+        3. **حدُّ العقد:** `planner` يُرجِع الآثارَ ولا يُطبّقُها. وما لم يُعلَن
+           يُرفَض `ContractBreach` **قبل استدعاءِ `applier` على أيّ أثر**.
+        4. **التطبيق:** `applier` لا يُستدعى إلّا على أثرٍ مشمولٍ بالعقد.
+
+        فالمنعُ **سابقٌ** لا لاحق: المُنفِّذُ لا يملك مسارًا إلى حالةِ الدولةِ
+        إلّا عبر `applier` الذي تحرسُه البوابة. وهذا فرقُ «كشفِ التجاوز» عن
+        «استحالتِه».
+
+        وعند المخالفة **لا يُعدَّل أثرٌ مُثبَّتٌ ولا يُحذَف** (القاعدة 22): يُكتب
+        أثرٌ ثانٍ بقرار `CONTRACT_BREACH` وحدثٌ أمنيٌّ حرجٌ، فيرى المُدقّقُ
+        الأمرين معًا: إذنًا صدر، ومحاولةً لتجاوزِه تلته.
+
+        **ما لا تزعمُه هذه الدالة:** لا ذرّيّةَ ولا تراجُع. إن خالف `planner`
+        بعد أن طُبّقَ أثرٌ مشروعٌ سابقٌ، فالمشروعُ باقٍ ويظهر في
+        `ExecutionOutcome.applied_effects` لا يُخفى. التعويضُ عملُ 1H و 1I.
+        """
+        contract = bind_contract(
+            actor=request.actor.value,
+            action=request.action,
+            target=request.target,
+            declared_effects=declared_effects,
+        )
+        self._contracts.append(contract)
+        applied: list[SovereignEffect] = []
+
+        def _guarded() -> tuple[SovereignEffect, ...]:
+            produced = tuple(planner(contract))
+            uncovered = contract.uncovered(produced)
+            if uncovered:
+                raise ContractBreach(contract, uncovered)
+            for effect in produced:
+                applier(effect)
+                applied.append(effect)
+            return produced
+
+        try:
+            produced = self.execute(request, _guarded)
+            self._contracted_positions.add(len(self._records) - 1)
+        except ContractBreach as breach:
+            self._security.record(
+                SecurityEventKind.EXECUTION_CONTRACT_BREACH,
+                actor=request.actor.value,
+                action=request.action,
+                target=request.target or "",
+                reason=str(breach),
+            )
+            self._records.append(
+                ExecutionRecord(
+                    fingerprint=contract.contract_id,
+                    action=request.action,
+                    actor=request.actor.value,
+                    decision="CONTRACT_BREACH",
+                    executed=False,
+                    ledger_entry_hash=None,
+                )
+            )
+            raise
+
+        return ExecutionOutcome(
+            contract=contract,
+            value=value_of(produced) if value_of is not None else produced,
+            applied_effects=tuple(applied),
+        )
 
     # ── أ — المسار السيادي ────────────────────────────────────────────────
     def _execute_sovereign(
@@ -439,11 +539,22 @@ class SovereignGateway:
             "security_events": len(self._security.events),
             "sovereign_executions": sum(1 for r in self._records if r.sovereign),
             "active_withdrawals": len(self._grants.active_withdrawals()),
+            # الدولةُ اليومَ فيها مسارٌ بعقدٍ ومسارٌ بلا عقد، والثاني يُعلَن ولا يُخفى.
+            "contracted_executions": len(self._contracts),
+            "uncontracted_executions": sum(
+                1
+                for i, r in enumerate(self._records)
+                if r.executed and i not in self._contracted_positions
+            ),
         }
 
 
 __all__ = [
     "AuthorityWithdrawn",
+    "ContractBreach",
+    "ExecutionContract",
+    "ExecutionOutcome",
+    "SovereignEffect",
     "ExecutionRecord",
     "GatewayError",
     "RoyalImpersonation",
