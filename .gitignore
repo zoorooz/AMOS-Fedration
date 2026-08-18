@@ -23,3 +23,7 @@ htmlcov/
 core/constitution/ledger/*.jsonl
 royal/crown/*.pem
 royal/crown/*.key
+
+# أقفال السجل الدستوري — أدواتُ تزامنٍ محليّةٌ لا أصلٌ هندسي
+core/constitution/ledger/*.lock
+*.jsonl.lock

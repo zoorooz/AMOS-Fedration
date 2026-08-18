@@ -40,18 +40,18 @@
 
 | الإقليم | موثّق | منفّذ | مصدر حقيقي | زائف/مخبأ | مدمج | مختبَر | مؤمَّن | مُراقَب | منشور | **مُثبَت** | الحالة |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| `core/` | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ | **❌** | `DEPLOYED` |
-| `royal/` | ✅ | ✅ | ✅ | — | ❌ | ✅ | ✅ | ❌ | ✅ | **❌** | `DEPLOYED` |
-| `federal/` | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ | **❌** | `DEPLOYED` |
-| `states/` | ✅ | ❌ | ❌ | — | ❌ | ✅ | ✅ | ❌ | ✅ | **❌** | `DEPLOYED` |
-| `institutions/` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ✅ | ✅ | ❌ | ❌ | **❌** | `UNIT_TESTED` |
-| `agents/` | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ❌ | ✅ | **❌** | `DEPLOYED` |
-| `tools/` | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ | **❌** | `DEPLOYED` |
-| `interfaces/` | ✅ | ❌ | ❌ | — | ❌ | ✅ | ✅ | ❌ | ❌ | **❌** | `SPECIFIED` |
-| `runtime/` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ✅ | ✅ | ❌ | ✅ | **❌** | `DEPLOYED` |
-| `docs/` | ✅ | ❌ | ❌ | — | ❌ | ✅ | ✅ | ❌ | ✅ | **❌** | `DEPLOYED` |
-| `ops/` | ✅ | ✅ | ✅ | — | ❌ | ✅ | ✅ | ❌ | ❌ | **❌** | `INTEGRATED` |
-| `tests/` | ✅ | ✅ | ❌ | — | ❌ | ✅ | ✅ | ❌ | ✅ | **❌** | `DEPLOYED` |
+| `core/` | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ❌ | **❌** | `UNIT_TESTED` |
+| `royal/` | ✅ | ✅ | ✅ | — | ❌ | ❌ | ✅ | ❌ | ❌ | **❌** | `IMPLEMENTED` |
+| `federal/` | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ❌ | **❌** | `UNIT_TESTED` |
+| `states/` | ✅ | ❌ | ❌ | — | ❌ | ❌ | ✅ | ❌ | ❌ | **❌** | `SPECIFIED` |
+| `institutions/` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | ✅ | ❌ | ❌ | **❌** | `IMPLEMENTED` |
+| `agents/` | ✅ | ✅ | ✅ | ⚠️ | ✅ | ❌ | ✅ | ❌ | ❌ | **❌** | `IMPLEMENTED` |
+| `tools/` | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ❌ | **❌** | `UNIT_TESTED` |
+| `interfaces/` | ✅ | ❌ | ❌ | — | ❌ | ❌ | ✅ | ❌ | ❌ | **❌** | `SPECIFIED` |
+| `runtime/` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | ✅ | ❌ | ❌ | **❌** | `IMPLEMENTED` |
+| `docs/` | ✅ | ❌ | ❌ | — | ❌ | ❌ | ✅ | ❌ | ❌ | **❌** | `SPECIFIED` |
+| `ops/` | ✅ | ✅ | ✅ | — | ❌ | ❌ | ✅ | ❌ | ❌ | **❌** | `IMPLEMENTED` |
+| `tests/` | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ❌ | ❌ | **❌** | `INTEGRATED` |
 
 > `⚠️` في عمود «زائف/مخبأ» يعني وجود قيم ثابتة أو مخازن ذاكرة تُستخدم بديلًا عن مصدر الحقيقة. أي إقليم يحمل `⚠️` **لا يمكن** أن يصل PROVEN.
 
@@ -61,18 +61,18 @@
 
 | الإقليم | md | py | yaml | أسطر كود | نوى | بلا ترويسة هوية | حالات النوى |
 |---|---:|---:|---:|---:|---:|---:|---|
-| `core/` | 65 | 32 | 0 | 9186 | 14 | 2 | unspecified=14 |
+| `core/` | 65 | 32 | 0 | 9241 | 14 | 2 | unspecified=14 |
 | `royal/` | 51 | 2 | 1 | 92 | 14 | 3 | unspecified=14 |
 | `federal/` | 60 | 208 | 3 | 56376 | 7 | 2 | unspecified=7 |
 | `states/` | 47 | 2 | 0 | 32 | 7 | 2 | unspecified=7 |
 | `institutions/` | 19 | 2 | 0 | 89 | 6 | 2 | unspecified=6 |
 | `agents/` | 601 | 4 | 283 | 549 | 11 | 3 | unspecified=11 |
-| `tools/` | 39 | 15 | 2 | 3903 | 12 | 3 | unspecified=12 |
+| `tools/` | 39 | 16 | 2 | 4590 | 12 | 3 | unspecified=12 |
 | `interfaces/` | 14 | 2 | 0 | 30 | 4 | 2 | unspecified=4 |
 | `runtime/` | 20 | 2 | 0 | 71 | 7 | 2 | unspecified=7 |
-| `docs/` | 62 | 2 | 0 | 47 | 7 | 2 | unspecified=7 |
+| `docs/` | 63 | 2 | 0 | 47 | 7 | 2 | unspecified=7 |
 | `ops/` | 38 | 2 | 0 | 93 | 12 | 1 | unspecified=12 |
-| `tests/` | 14 | 24 | 0 | 6796 | 5 | 1 | unspecified=5 |
+| `tests/` | 14 | 27 | 0 | 7338 | 5 | 1 | unspecified=5 |
 
 ---
 
@@ -186,9 +186,9 @@
 | `federal/executive/services/src/amos_federation/services/governance/policy_engine.py:56` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
 | `federal/executive/services/src/amos_federation/services/governance/policy_engine.py:61` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
 | `federal/executive/services/src/amos_federation/services/tool_registry/store.py:58` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
-| `tools/governance/truth_audit.py:251` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
-| `tools/governance/truth_audit.py:279` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
-| `tools/governance/truth_audit.py:356` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
+| `tools/governance/truth_audit.py:329` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
+| `tools/governance/truth_audit.py:357` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
+| `tools/governance/truth_audit.py:531` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
 
 ### إعلاناتُ «ليست سرًّا» الصريحة (6)
 

@@ -1,27 +1,29 @@
 {
   "schema_version": 1,
-  "repo": "AMOS-Fedration",
+  "repo": "amos",
   "domains": {
     "core": {
       "domain": "core",
       "md_files": 65,
       "py_files": 32,
       "yaml_files": 0,
-      "code_lines": 9186,
+      "code_lines": 9241,
       "nucleus_count": 14,
       "nucleus_status": {
         "unspecified": 14
       },
       "has_readme": true,
-      "real_source_hits": 5,
+      "real_source_hits": 7,
       "fake_hits": 2,
       "in_memory_hits": 0,
       "secret_hits": 0,
       "observed_hits": 3,
       "api_routes": 0,
-      "test_refs": 194,
+      "test_refs": 232,
       "identity_violations": 2,
-      "deployed": true,
+      "test_evidence": "PASS",
+      "coverage_evidence": "PASS",
+      "deployment_evidence": "ABSENT",
       "columns": {
         "DOCUMENTED": true,
         "IMPLEMENTED": true,
@@ -31,10 +33,16 @@
         "TESTED": true,
         "SECURED": true,
         "OBSERVED": true,
-        "DEPLOYED": true,
-        "PROVEN": false
+        "DEPLOYED": false,
+        "PROVEN": false,
+        "EVIDENCE": {
+          "TEST_RUN": "PASS",
+          "COVERAGE": "PASS",
+          "DEPLOYMENT": "ABSENT"
+        },
+        "TEST_NAME_MENTIONS": 232
       },
-      "maturity": "DEPLOYED",
+      "maturity": "UNIT_TESTED",
       "findings_count": 2
     },
     "royal": {
@@ -54,22 +62,30 @@
       "secret_hits": 0,
       "observed_hits": 0,
       "api_routes": 0,
-      "test_refs": 40,
+      "test_refs": 47,
       "identity_violations": 3,
-      "deployed": true,
+      "test_evidence": "ABSENT",
+      "coverage_evidence": "ABSENT",
+      "deployment_evidence": "ABSENT",
       "columns": {
         "DOCUMENTED": true,
         "IMPLEMENTED": true,
         "REAL_SOURCE": true,
         "FAKE_OR_CACHED": false,
         "INTEGRATED": false,
-        "TESTED": true,
+        "TESTED": false,
         "SECURED": true,
         "OBSERVED": false,
-        "DEPLOYED": true,
-        "PROVEN": false
+        "DEPLOYED": false,
+        "PROVEN": false,
+        "EVIDENCE": {
+          "TEST_RUN": "ABSENT",
+          "COVERAGE": "ABSENT",
+          "DEPLOYMENT": "ABSENT"
+        },
+        "TEST_NAME_MENTIONS": 47
       },
-      "maturity": "DEPLOYED",
+      "maturity": "IMPLEMENTED",
       "findings_count": 0
     },
     "federal": {
@@ -89,9 +105,11 @@
       "secret_hits": 0,
       "observed_hits": 124,
       "api_routes": 178,
-      "test_refs": 140,
+      "test_refs": 142,
       "identity_violations": 2,
-      "deployed": true,
+      "test_evidence": "PASS",
+      "coverage_evidence": "PASS",
+      "deployment_evidence": "ABSENT",
       "columns": {
         "DOCUMENTED": true,
         "IMPLEMENTED": true,
@@ -101,10 +119,16 @@
         "TESTED": true,
         "SECURED": true,
         "OBSERVED": true,
-        "DEPLOYED": true,
-        "PROVEN": false
+        "DEPLOYED": false,
+        "PROVEN": false,
+        "EVIDENCE": {
+          "TEST_RUN": "PASS",
+          "COVERAGE": "PASS",
+          "DEPLOYMENT": "ABSENT"
+        },
+        "TEST_NAME_MENTIONS": 142
       },
-      "maturity": "DEPLOYED",
+      "maturity": "UNIT_TESTED",
       "findings_count": 84
     },
     "states": {
@@ -126,20 +150,28 @@
       "api_routes": 0,
       "test_refs": 23,
       "identity_violations": 2,
-      "deployed": true,
+      "test_evidence": "ABSENT",
+      "coverage_evidence": "ABSENT",
+      "deployment_evidence": "ABSENT",
       "columns": {
         "DOCUMENTED": true,
         "IMPLEMENTED": false,
         "REAL_SOURCE": false,
         "FAKE_OR_CACHED": false,
         "INTEGRATED": false,
-        "TESTED": true,
+        "TESTED": false,
         "SECURED": true,
         "OBSERVED": false,
-        "DEPLOYED": true,
-        "PROVEN": false
+        "DEPLOYED": false,
+        "PROVEN": false,
+        "EVIDENCE": {
+          "TEST_RUN": "ABSENT",
+          "COVERAGE": "ABSENT",
+          "DEPLOYMENT": "ABSENT"
+        },
+        "TEST_NAME_MENTIONS": 23
       },
-      "maturity": "DEPLOYED",
+      "maturity": "SPECIFIED",
       "findings_count": 0
     },
     "institutions": {
@@ -161,20 +193,28 @@
       "api_routes": 0,
       "test_refs": 5,
       "identity_violations": 2,
-      "deployed": false,
+      "test_evidence": "ABSENT",
+      "coverage_evidence": "ABSENT",
+      "deployment_evidence": "ABSENT",
       "columns": {
         "DOCUMENTED": true,
         "IMPLEMENTED": true,
         "REAL_SOURCE": true,
         "FAKE_OR_CACHED": true,
         "INTEGRATED": false,
-        "TESTED": true,
+        "TESTED": false,
         "SECURED": true,
         "OBSERVED": false,
         "DEPLOYED": false,
-        "PROVEN": false
+        "PROVEN": false,
+        "EVIDENCE": {
+          "TEST_RUN": "ABSENT",
+          "COVERAGE": "ABSENT",
+          "DEPLOYMENT": "ABSENT"
+        },
+        "TEST_NAME_MENTIONS": 5
       },
-      "maturity": "UNIT_TESTED",
+      "maturity": "IMPLEMENTED",
       "findings_count": 1
     },
     "agents": {
@@ -196,42 +236,52 @@
       "api_routes": 0,
       "test_refs": 142,
       "identity_violations": 3,
-      "deployed": true,
+      "test_evidence": "ABSENT",
+      "coverage_evidence": "ABSENT",
+      "deployment_evidence": "ABSENT",
       "columns": {
         "DOCUMENTED": true,
         "IMPLEMENTED": true,
         "REAL_SOURCE": true,
         "FAKE_OR_CACHED": true,
         "INTEGRATED": true,
-        "TESTED": true,
+        "TESTED": false,
         "SECURED": true,
         "OBSERVED": false,
-        "DEPLOYED": true,
-        "PROVEN": false
+        "DEPLOYED": false,
+        "PROVEN": false,
+        "EVIDENCE": {
+          "TEST_RUN": "ABSENT",
+          "COVERAGE": "ABSENT",
+          "DEPLOYMENT": "ABSENT"
+        },
+        "TEST_NAME_MENTIONS": 142
       },
-      "maturity": "DEPLOYED",
+      "maturity": "IMPLEMENTED",
       "findings_count": 3
     },
     "tools": {
       "domain": "tools",
       "md_files": 39,
-      "py_files": 15,
+      "py_files": 16,
       "yaml_files": 2,
-      "code_lines": 3903,
+      "code_lines": 4590,
       "nucleus_count": 12,
       "nucleus_status": {
         "unspecified": 12
       },
       "has_readme": true,
-      "real_source_hits": 14,
+      "real_source_hits": 18,
       "fake_hits": 1,
       "in_memory_hits": 0,
       "secret_hits": 0,
       "observed_hits": 7,
       "api_routes": 0,
-      "test_refs": 50,
+      "test_refs": 57,
       "identity_violations": 3,
-      "deployed": true,
+      "test_evidence": "PASS",
+      "coverage_evidence": "ABSENT",
+      "deployment_evidence": "ABSENT",
       "columns": {
         "DOCUMENTED": true,
         "IMPLEMENTED": true,
@@ -241,10 +291,16 @@
         "TESTED": true,
         "SECURED": true,
         "OBSERVED": true,
-        "DEPLOYED": true,
-        "PROVEN": false
+        "DEPLOYED": false,
+        "PROVEN": false,
+        "EVIDENCE": {
+          "TEST_RUN": "PASS",
+          "COVERAGE": "ABSENT",
+          "DEPLOYMENT": "ABSENT"
+        },
+        "TEST_NAME_MENTIONS": 57
       },
-      "maturity": "DEPLOYED",
+      "maturity": "UNIT_TESTED",
       "findings_count": 5
     },
     "interfaces": {
@@ -266,18 +322,26 @@
       "api_routes": 0,
       "test_refs": 2,
       "identity_violations": 2,
-      "deployed": false,
+      "test_evidence": "ABSENT",
+      "coverage_evidence": "ABSENT",
+      "deployment_evidence": "ABSENT",
       "columns": {
         "DOCUMENTED": true,
         "IMPLEMENTED": false,
         "REAL_SOURCE": false,
         "FAKE_OR_CACHED": false,
         "INTEGRATED": false,
-        "TESTED": true,
+        "TESTED": false,
         "SECURED": true,
         "OBSERVED": false,
         "DEPLOYED": false,
-        "PROVEN": false
+        "PROVEN": false,
+        "EVIDENCE": {
+          "TEST_RUN": "ABSENT",
+          "COVERAGE": "ABSENT",
+          "DEPLOYMENT": "ABSENT"
+        },
+        "TEST_NAME_MENTIONS": 2
       },
       "maturity": "SPECIFIED",
       "findings_count": 0
@@ -301,25 +365,33 @@
       "api_routes": 0,
       "test_refs": 51,
       "identity_violations": 2,
-      "deployed": true,
+      "test_evidence": "ABSENT",
+      "coverage_evidence": "ABSENT",
+      "deployment_evidence": "ABSENT",
       "columns": {
         "DOCUMENTED": true,
         "IMPLEMENTED": true,
         "REAL_SOURCE": true,
         "FAKE_OR_CACHED": true,
         "INTEGRATED": false,
-        "TESTED": true,
+        "TESTED": false,
         "SECURED": true,
         "OBSERVED": false,
-        "DEPLOYED": true,
-        "PROVEN": false
+        "DEPLOYED": false,
+        "PROVEN": false,
+        "EVIDENCE": {
+          "TEST_RUN": "ABSENT",
+          "COVERAGE": "ABSENT",
+          "DEPLOYMENT": "ABSENT"
+        },
+        "TEST_NAME_MENTIONS": 51
       },
-      "maturity": "DEPLOYED",
+      "maturity": "IMPLEMENTED",
       "findings_count": 2
     },
     "docs": {
       "domain": "docs",
-      "md_files": 62,
+      "md_files": 63,
       "py_files": 2,
       "yaml_files": 0,
       "code_lines": 47,
@@ -334,22 +406,30 @@
       "secret_hits": 0,
       "observed_hits": 0,
       "api_routes": 0,
-      "test_refs": 8,
+      "test_refs": 9,
       "identity_violations": 2,
-      "deployed": true,
+      "test_evidence": "ABSENT",
+      "coverage_evidence": "ABSENT",
+      "deployment_evidence": "ABSENT",
       "columns": {
         "DOCUMENTED": true,
         "IMPLEMENTED": false,
         "REAL_SOURCE": false,
         "FAKE_OR_CACHED": false,
         "INTEGRATED": false,
-        "TESTED": true,
+        "TESTED": false,
         "SECURED": true,
         "OBSERVED": false,
-        "DEPLOYED": true,
-        "PROVEN": false
+        "DEPLOYED": false,
+        "PROVEN": false,
+        "EVIDENCE": {
+          "TEST_RUN": "ABSENT",
+          "COVERAGE": "ABSENT",
+          "DEPLOYMENT": "ABSENT"
+        },
+        "TEST_NAME_MENTIONS": 9
       },
-      "maturity": "DEPLOYED",
+      "maturity": "SPECIFIED",
       "findings_count": 0
     },
     "ops": {
@@ -369,57 +449,73 @@
       "secret_hits": 0,
       "observed_hits": 0,
       "api_routes": 0,
-      "test_refs": 2,
+      "test_refs": 3,
       "identity_violations": 1,
-      "deployed": false,
+      "test_evidence": "ABSENT",
+      "coverage_evidence": "ABSENT",
+      "deployment_evidence": "ABSENT",
       "columns": {
         "DOCUMENTED": true,
         "IMPLEMENTED": true,
         "REAL_SOURCE": true,
         "FAKE_OR_CACHED": false,
         "INTEGRATED": false,
-        "TESTED": true,
+        "TESTED": false,
         "SECURED": true,
         "OBSERVED": false,
         "DEPLOYED": false,
-        "PROVEN": false
+        "PROVEN": false,
+        "EVIDENCE": {
+          "TEST_RUN": "ABSENT",
+          "COVERAGE": "ABSENT",
+          "DEPLOYMENT": "ABSENT"
+        },
+        "TEST_NAME_MENTIONS": 3
       },
-      "maturity": "INTEGRATED",
+      "maturity": "IMPLEMENTED",
       "findings_count": 0
     },
     "tests": {
       "domain": "tests",
       "md_files": 14,
-      "py_files": 24,
+      "py_files": 27,
       "yaml_files": 0,
-      "code_lines": 6796,
+      "code_lines": 7338,
       "nucleus_count": 5,
       "nucleus_status": {
         "unspecified": 5
       },
       "has_readme": true,
-      "real_source_hits": 0,
+      "real_source_hits": 5,
       "fake_hits": 0,
       "in_memory_hits": 0,
       "secret_hits": 0,
       "observed_hits": 0,
       "api_routes": 0,
-      "test_refs": 99,
+      "test_refs": 115,
       "identity_violations": 1,
-      "deployed": true,
+      "test_evidence": "PASS",
+      "coverage_evidence": "ABSENT",
+      "deployment_evidence": "ABSENT",
       "columns": {
         "DOCUMENTED": true,
         "IMPLEMENTED": true,
-        "REAL_SOURCE": false,
+        "REAL_SOURCE": true,
         "FAKE_OR_CACHED": false,
-        "INTEGRATED": false,
+        "INTEGRATED": true,
         "TESTED": true,
         "SECURED": true,
         "OBSERVED": false,
-        "DEPLOYED": true,
-        "PROVEN": false
+        "DEPLOYED": false,
+        "PROVEN": false,
+        "EVIDENCE": {
+          "TEST_RUN": "PASS",
+          "COVERAGE": "ABSENT",
+          "DEPLOYMENT": "ABSENT"
+        },
+        "TEST_NAME_MENTIONS": 115
       },
-      "maturity": "DEPLOYED",
+      "maturity": "INTEGRATED",
       "findings_count": 0
     }
   },
@@ -1071,21 +1167,21 @@
     {
       "kind": "SILENT_FALLBACK",
       "path": "tools/governance/truth_audit.py",
-      "line": 251,
+      "line": 329,
       "detail": "استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة",
       "severity": "MEDIUM"
     },
     {
       "kind": "SILENT_FALLBACK",
       "path": "tools/governance/truth_audit.py",
-      "line": 279,
+      "line": 357,
       "detail": "استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة",
       "severity": "MEDIUM"
     },
     {
       "kind": "SILENT_FALLBACK",
       "path": "tools/governance/truth_audit.py",
-      "line": 356,
+      "line": 531,
       "detail": "استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة",
       "severity": "MEDIUM"
     },
@@ -1151,6 +1247,7 @@
       "SILENT_FALLBACK": 26,
       "IN_MEMORY_STORE": 60,
       "SANDBOX_DISABLED": 1
-    }
+    },
+    "evidence_state": "READ"
   }
 }

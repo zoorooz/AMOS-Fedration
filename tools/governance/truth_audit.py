@@ -41,6 +41,7 @@ from __future__ import annotations
 import ast
 import json
 import re
+import subprocess
 import sys
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
@@ -108,6 +109,44 @@ RE_API = re.compile(r"@(app|router)\.(get|post|put|patch|delete)\(")
 RE_SANDBOX_FALSE = re.compile(r"sandbox(?:_required|_enabled)?\s*:\s*(false|no|off)\b",
                               re.IGNORECASE)
 
+# ---------------------------------------------------------------------------
+# ملفّات البيئة — بقعةٌ عمياء أُغلقت (2026-08-18)
+# ---------------------------------------------------------------------------
+# قياسٌ فعليٌّ للعمى: كان `.env.example` في جذر المستودع يحمل كلمةَ
+# مرورِ PostgreSQL نافذةً نصًّا لمشروع Supabase قائم، ومع ذلك كان هذا
+# المدقّق يطبع `HARDCODED_SECRET: 0` ويرفع عمودَ «مؤمّن» لكلّ الأقاليم.
+# والسببان: (١) المسحُ محصورٌ في اللواحق {md, py, yaml, yml, rego, sql}
+# ولاحقةُ `.env.example` هي `.example` فلا تدخل المسحَ أصلًا؛ (٢) وشرطُ
+# الاستثناء يستبعد صراحةً كلّ اسمٍ يحتوي `.example`.
+# فكان المدقّقُ يُصدِر شهادةَ أمنٍ لا يملك دليلَها — وهو بعينِه ما يمنعه
+# مبدأُ «لا قدرةَ PROVEN بلا دليل». والملفُ القالبُ ليس عذرًا: قالبٌ
+# مدفوعٌ إلى تاريخٍ عامٍ يحمل اعتمادًا نافذًا هو تسريبٌ مكتمل.
+#
+# ملاحظةُ نطاق: هذا المدقّق يكشف ولا يُصلح. تدويرُ الاعتماد المكشوف
+# قرارُ مالكٍ مُسجّلٌ في ACTIVE_EXECUTION_STATE.md، والحذفُ لا يمحوه من تاريخ git.
+RE_ENV_ASSIGN = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$")
+
+# أنماطُ اعتمادٍ نافذٍ لا تُخطئها العين: كلمةُ مرورٍ داخل رابطِ اتّصال،
+# ومفاتيحُ منصّاتٍ ذاتُ بادئاتٍ معروفة.
+RE_URL_PASSWORD = re.compile(r"://[^:/\s@]+:([^@/\s]{6,})@")
+
+# قيمةٌ تُعلِن عن نفسها أنّها نائبٌ لا اعتمادٌ نافذ.
+# لزومُ هذا قياسٌ لا توقّع: أوّلُ تشغيلٍ للكاشف رفع ٧ مخالفات،
+# خمسٌ منها إيجابيّاتٌ كاذبةٌ على قيمٍ مثل `dev_password_change_me`
+# و`your_api_key_here`. والسبب أنّ `SECRET_SAFE_VALUE` يرسي `change_me`
+# بــ`^`، فلا يمسك النائبَ إن تقدّمه بادئة. وتضخيمُ المخالفات كذبٌ
+# كإخفائها: مدقّقٌ يصرخ على قيمٍ نائبةٍ يُدرّب قارئَه على تجاهله.
+RE_ENV_PLACEHOLDER = re.compile(
+    r"(change[_-]?me|change[_-]?this|your[_-].*here|your[_-]?(api[_-]?)?key|"
+    r"replace[_-]?me|to[_-]?be[_-]?set|\bdummy\b|\bfake\b|\bsample\b|"
+    r"\bplaceholder\b|\bexample\b|\bredacted\b|\bTODO\b|^dev_|^test_|^local_)",
+    re.IGNORECASE,
+)
+RE_KNOWN_KEY_PREFIX = re.compile(
+    r"(sb_publishable_|sb_secret_|ghp_|github_pat_|gho_|xox[abprs]-|"
+    r"AKIA[0-9A-Z]{12,}|eyJ[A-Za-z0-9_-]{10,}\.)",
+)
+
 RE_NUCLEUS_STATUS = re.compile(
     r"(?:الحالة|status)\s*[:：]\s*\**\s*(stub|prototype|active|planned)",
     re.IGNORECASE,
@@ -157,8 +196,15 @@ class DomainReport:
     api_routes: int = 0
     test_refs: int = 0
     identity_violations: int = 0
-    deployed: bool = False
     findings: list = field(default_factory=list)
+
+    # -- أحكامُ سجلِّ الأدلّة (المرحلة 1L) ---------------------------------
+    # هذه ليست تقديراتٍ لفظيّةً بل أحكامٌ نُقلت كما هي من مخرَجاتِ آلاتٍ شُغِّلت.
+    # القيمةُ الابتدائيّة `"ABSENT"` إغلاقٌ عند الفشل: غيابُ سجلِّ الأدلّة يعني
+    # غيابَ الدليل، وغيابُ الدليل ليس نجاحًا.
+    test_evidence: str = "ABSENT"
+    coverage_evidence: str = "ABSENT"
+    deployment_evidence: str = "ABSENT"
 
     # -- تقييم الأعمدة ------------------------------------------------------
     @property
@@ -183,7 +229,36 @@ class DomainReport:
 
     @property
     def tested(self) -> bool:
-        return self.test_refs > 0
+        """مُختبَرٌ = يوجد دليلُ تشغيلِ اختباراتٍ ناجحٌ لهذا الإقليم.
+
+        وكان هذا الحكمُ قبل 2026-08-18 يُحسَب هكذا حرفيًّا:
+
+            rep.test_refs = len(re.findall(rf"\\b{dom}\\b", self.test_corpus))
+            return self.test_refs > 0
+
+        أي أنّ الإقليمَ يُعَدُّ مُختبَرًا لأنّ **اسمَه ظهر ككلمةٍ** في نصِّ ملفّات
+        الاختبار. وكلمةُ `core` ترد آلافَ المرّات بحكم كونها اسمَ حزمةٍ في كلّ
+        سطرِ استيراد، فلم يكن في وسع إقليمٍ أن يخسر هذا العمودَ أبدًا: كان
+        العمودُ يقيس شعبيّةَ كلمةٍ لا تغطيةَ اختبار، وكان تعليقٌ واحدٌ يكفي
+        لإصدار شهادةٍ لإقليمٍ كامل.
+
+        وهذا ليس قياسًا ضعيفًا بل **تصنيعُ حقيقة**: المدقّقُ يُنتِج الدليلَ الذي
+        يحكم به فيصير الحكمُ دورًا مغلقًا لا يمسّ الواقع. والحكمُ الآن منقولٌ من
+        `docs/audit/evidence/evidence_registry.jsonl` — وهو مخرَجُ آلةٍ شُغِّلت،
+        مبصومٌ ومتسلسلُ التجزئة. و`test_refs` بقي محفوظًا **للعلم لا للحكم**.
+        """
+        return self.test_evidence == "PASS"
+
+    @property
+    def deployed(self) -> bool:
+        """منشورٌ = يوجد بيانُ نشرٍ يشهد أنّ هذا الإقليم شُغِّل في بيئةٍ ما.
+
+        وكان يُحسَب: `bool(re.search(rf"\\b{dom}\\b", self.deploy_corpus))` — أي
+        أنّ ورودَ اسمِ الإقليم في نصِّ Dockerfile أو CI أو Makefile كان يكفي
+        لإعلانه منشورًا. وورودُ الاسمِ في مسارِ ملفٍّ داخل CI أمرٌ لا يمكن
+        تجنّبه، فكان العمودُ يُمنَح لا يُكتَسب.
+        """
+        return self.deployment_evidence == "PASS"
 
     @property
     def secured(self) -> bool:
@@ -232,6 +307,9 @@ class TruthAudit:
         self._declared_exemptions: list[tuple[str, int, str]] = []
         self.test_corpus = ""
         self.deploy_corpus = ""
+        # حالةُ قراءةِ سجلِّ الأدلّة — تُنشَر في المخرَج كي لا يُقرأ `ABSENT`
+        # على أنّه فشلٌ في القدرة بدل أن يكون غيابًا في الدليل.
+        self.evidence_state = "NOT_LOADED"
 
     # -- أدوات مساعدة -------------------------------------------------------
     def _iter_files(self):
@@ -282,6 +360,7 @@ class TruthAudit:
     # -- المرحلة 2: مسح الملفات --------------------------------------------
     def scan(self):
         self.build_corpora()
+        self.scan_env_files_repo_wide()
         for p in self._iter_files():
             dom = self._domain_of(p)
             if dom is None:
@@ -294,7 +373,6 @@ class TruthAudit:
                     and not any(x in p.name for x in (".example", "truth_matrix", "truth_baseline")):
                 if not self._has_identity_header(p, self._read(p)):
                     rep.identity_violations += 1
-
             if suffix == ".md":
                 rep.md_files += 1
                 if p.name == "README.md" and p.parent == self.root / dom:
@@ -312,6 +390,103 @@ class TruthAudit:
                 self._scan_python(p, rel, rep)
 
         self._score_tests_and_deploy()
+
+    # -- فحص ملفّات البيئة (البقعة العمياء المُغلقة) -------------------------
+    def scan_env_files_repo_wide(self):
+        """يمسح ملفّاتِ البيئة في المستودع كلّه، لا في الأقاليم وحدها.
+
+        عمىً أعمقُ من مسألةِ اللواحق وُجد في `scan()`: فهي تقول
+        `if dom is None: continue`، فكلُّ ملفٍ خارجَ الأقاليم الاثني عشر
+        لا يُمسَح للأسرار أبدًا: جذرُ المستودع، و`tools/`، و`docs/`،
+        و`runtime/`، و`interfaces/`، و`ops/`، و`tests/`، و`.github/`.
+        والتسريبُ الوحيدُ القائم يسكن جذرَ المستودع — أي في أوسع
+        منطقةٍ عمياء. والسرُّ لا يتبع إقليمًا: تسريبٌ خارجَ الأقاليم
+        تسريبٌ كامل، فيُقيّد في `global_findings` ويرفع عدّادَ الإقليم
+        إن وقع داخله، ويُقيّد عامًّا فحسب إن وقع خارجها.
+        """
+        tracked = self._tracked_files()
+        for p in self._iter_files():
+            if not self._is_env_file(p):
+                continue
+            rel = self._rel(p)
+            # المدارُ محصورٌ في الملفّات التي يتعقّبها git — وهو شرطُ
+            # صحّةٍ لا تخفيفٌ: ملفُ `.env` المحلّيُّ المُستثنى في `.gitignore`
+            # هو **الموضعُ الصحيح** للاعتماد، ورفعُ مخالفةٍ عليه يعني بوّابةً
+            # تسقط عند كلّ مطوّرٍ أدّى الواجب، فتُدرّبهم على تجاهلها.
+            # التسريبُ هو ما دُفِع إلى التاريخ، لا ما بقي على قرصٍ محلّي.
+            #
+            # وإن تعذّر سؤالُ git (لا مستودعَ، أو لا أداةَ) فالمدارُ يعود
+            # إلى كلّ ملفّات البيئة — إغلاقٌ عند الفشل لا تسامحٌ معه.
+            if tracked is not None and rel not in tracked:
+                continue
+            dom = self._domain_of(p)
+            rep = self.reports[dom] if dom else None
+            self._scan_env_file(p, rel, rep)
+
+    def _tracked_files(self) -> set[str] | None:
+        """مجموعةُ ملفّاتِ git المتعقّبة، أو `None` إن تعذّر سؤالُ git.
+
+        `None` تُقرأ «لا أعلم ما المتعقّب» فيُمسَح الجميع، ولا تُقرأ
+        «لا شيءَ متعقّب» فيُترك المسحُ كلُّه — والفرقُ بينهما بوّابةٌ تعمل
+        وبوّابةٌ تمرّ صامتةً على كلّ شيء.
+        """
+        proc = subprocess.run(  # noqa: S603 - أمرٌ ثابتٌ بلا مدخل خارجي
+            ["git", "-C", str(self.root), "ls-files", "-z"],
+            capture_output=True, check=False,
+        )
+        if proc.returncode != 0:
+            return None
+        return {n for n in proc.stdout.decode("utf-8", "replace").split("\0") if n}
+
+    @staticmethod
+    def _is_env_file(p: Path) -> bool:
+        """`.env` و`.env.example` و`.env.production` … كلُّها تُمسَح للأسرار.
+
+        القالبُ لا يُعفى: `.env.example` المدفوعُ كان يحمل اعتمادًا نافذًا
+        والمدقّقُ لا يراه، فكانت شهادةُ الأمن بلا دليل.
+        """
+        return p.name.startswith(".env")
+
+    def _scan_env_file(self, p: Path, rel: str, rep: DomainReport | None):
+        """يكشف الاعتمادَ النافذَ داخل ملفِّ بيئة، قالبًا كان أو حقيقيًّا."""
+        for i, raw in enumerate(self._read(p).splitlines(), 1):
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            m = RE_ENV_ASSIGN.match(line)
+            if not m:
+                continue
+            key, value = m.group(1), m.group(2).strip().strip("'\"")
+            if not value or SECRET_SAFE_VALUE.match(value) \
+                    or RE_ENV_PLACEHOLDER.search(value):
+                continue
+
+            # (١) كلمةُ مرورٍ مضمّنةٌ في رابطِ اتّصال — تسريبٌ مهما كان اسمُ المفتاح
+            pw = RE_URL_PASSWORD.search(value)
+            if pw and not SECRET_SAFE_VALUE.match(pw.group(1)):
+                self._secret_hit(
+                    rel, i,
+                    f"`{key}` رابطُ اتّصالٍ يحمل كلمةَ مرورٍ نصًّا في ملفِّ بيئةٍ مدفوع",
+                    rep,
+                )
+                continue
+
+            # (٢) بادئةُ مفتاحٍ معروفةٌ لمنصّةٍ — اعتمادٌ نافذٌ لا نائب
+            if RE_KNOWN_KEY_PREFIX.search(value):
+                self._secret_hit(
+                    rel, i,
+                    f"`{key}` مفتاحُ منصّةٍ ببادئةٍ معروفةٍ مكتوبٌ نصًّا في ملفِّ بيئةٍ مدفوع",
+                    rep,
+                )
+                continue
+
+            # (٣) اسمٌ سرّيٌّ بقيمةٍ نصّيّةٍ ليست نائبًا
+            if self._is_secret_name(key) and len(value) >= 6:
+                self._secret_hit(
+                    rel, i,
+                    f"`{key}` قيمةٌ سرّيّةٌ مكتوبةٌ نصًّا في ملفِّ بيئةٍ مدفوع",
+                    rep,
+                )
 
     # -- فحص YAML ----------------------------------------------------------
     def _scan_yaml(self, p: Path, rel: str, rep: DomainReport):
@@ -415,10 +590,16 @@ class TruthAudit:
         return any(m in head for m in ("الهدف", "التعريف", "المالك", "النطاق"))
 
     # -- كشف الأسرار عبر الشجرة النحوية ------------------------------------
-    def _secret_hit(self, rel: str, line: int, detail: str, rep: DomainReport):
+    def _secret_hit(self, rel: str, line: int, detail: str, rep: DomainReport | None):
+        """يُقيّد تسريبًا. `rep=None` تعني تسريبًا خارجَ الأقاليم الاثني عشر.
+
+        ولا يُسقط لأنّه بلا إقليم: التسريبُ في جذر المستودع أخطرُ منه
+        داخل إقليم، لا أخفّ. يُقيّد عامًّا فيُحسَب في بوّابةِ CI والميزان.
+        """
         f = Finding("HARDCODED_SECRET", rel, line, detail, "CRITICAL")
-        rep.findings.append(f)
-        rep.secret_hits += 1
+        if rep is not None:
+            rep.findings.append(f)
+            rep.secret_hits += 1
         self.global_findings.append(f)
 
     @staticmethod
@@ -492,9 +673,40 @@ class TruthAudit:
 
     # -- ربط الاختبارات والنشر ---------------------------------------------
     def _score_tests_and_deploy(self):
+        """يحفظ عددَ ورودِ اسمِ الإقليم في نصِّ الاختبارات — **للعلم لا للحكم**.
+
+        بقي العدُّ منشورًا في المصفوفة كي يُرى الفرقُ بينه وبين الدليل: إقليمٌ
+        يرد اسمُه آلافَ المرّات ولا يملك دليلَ تشغيلٍ واحدًا هو بعينه ما كان
+        العمودُ القديم يسمّيه «مُختبَرًا».
+        """
         for dom, rep in self.reports.items():
             rep.test_refs = len(re.findall(rf"\b{dom}\b", self.test_corpus))
-            rep.deployed = bool(re.search(rf"\b{dom}\b", self.deploy_corpus))
+
+    def load_evidence(self, registry_path: Path | None = None):
+        """يقرأ أحكامَ سجلِّ الأدلّة. غيابُ السجلِّ يُبقي الأحكامَ `ABSENT`.
+
+        السجلُّ يُقرأ ولا يُكتَب هنا: المدقّقُ يحكم ولا يُنتِج دليلًا لنفسه —
+        وإلّا عاد الدورُ المغلقُ الذي أُنشئ هذا الفصلُ لإبطاله. وإن كانت سلسلةُ
+        الأدلّة مكسورةً فلا تُقرأ منها أحكامٌ ألبتّة: دليلٌ عُدِّل بعد تثبيته
+        ليس دليلًا، والإغلاقُ عند الفشل يُبقي الجميعَ `ABSENT`.
+        """
+        sys.path.insert(0, str(self.root))
+        from tools.governance.evidence_registry import EvidenceRegistry
+
+        reg = EvidenceRegistry(registry_path) if registry_path else EvidenceRegistry()
+        if not reg.path.exists():
+            self.evidence_state = "ABSENT_REGISTRY"
+            return
+        if reg.verify_chain():
+            self.evidence_state = "BROKEN_CHAIN"
+            print("[TRUTH AUDIT] سلسلةُ الأدلّة مكسورة — لا يُقرأ منها حكمٌ.",
+                  file=sys.stderr)
+            return
+        self.evidence_state = "READ"
+        for dom, rep in self.reports.items():
+            rep.test_evidence = reg.verdict_of("TEST_RUN", dom)
+            rep.coverage_evidence = reg.verdict_of("COVERAGE", dom)
+            rep.deployment_evidence = reg.verdict_of("DEPLOYMENT", dom)
 
     # -- المخرجات -----------------------------------------------------------
     def to_json(self) -> dict:
@@ -517,6 +729,14 @@ class TruthAudit:
                         "OBSERVED": r.observed,
                         "DEPLOYED": r.deployed,
                         "PROVEN": r.proven,
+                        # الأحكامُ الخامُ كما وردت من سجلِّ الأدلّة، منشورةً
+                        # بجانب الأعمدة كي يُرى مصدرُ الحكم لا نتيجتُه وحدها.
+                        "EVIDENCE": {
+                            "TEST_RUN": r.test_evidence,
+                            "COVERAGE": r.coverage_evidence,
+                            "DEPLOYMENT": r.deployment_evidence,
+                        },
+                        "TEST_NAME_MENTIONS": r.test_refs,
                     },
                     "maturity": r.maturity(),
                     "findings_count": len(r.findings),
@@ -544,6 +764,11 @@ class TruthAudit:
             "identity_violations": sum(r.identity_violations for r in self.reports.values()),
             "by_severity": by_sev,
             "by_kind": by_kind,
+            # حالةُ سجلِّ الأدلّة تُنشَر مع الخلاصة: قارئٌ يرى `TESTED: false`
+            # في كلّ الأقاليم يلزمه أن يعرف هل السببُ سقوطُ اختباراتٍ أم
+            # غيابُ سجلِّ أدلّةٍ أصلًا — والخلطُ بينهما يصنع ذعرًا أو طمأنينةً
+            # كاذبَين.
+            "evidence_state": self.evidence_state,
         }
 
     def _load_round_classifications(self) -> list[dict]:
@@ -762,6 +987,7 @@ def main(argv: list[str]) -> int:
 
     audit = TruthAudit(root)
     audit.scan()
+    audit.load_evidence()
 
     out_dir = root / "docs" / "audit"
     out_dir.mkdir(parents=True, exist_ok=True)
