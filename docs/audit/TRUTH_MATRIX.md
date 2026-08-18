@@ -61,7 +61,7 @@
 
 | الإقليم | md | py | yaml | أسطر كود | نوى | بلا ترويسة هوية | حالات النوى |
 |---|---:|---:|---:|---:|---:|---:|---|
-| `core/` | 67 | 39 | 0 | 12635 | 14 | 2 | unspecified=14 |
+| `core/` | 67 | 40 | 0 | 13815 | 14 | 2 | unspecified=14 |
 | `royal/` | 51 | 2 | 1 | 92 | 14 | 3 | unspecified=14 |
 | `federal/` | 60 | 208 | 3 | 56408 | 7 | 2 | unspecified=7 |
 | `states/` | 47 | 2 | 0 | 32 | 7 | 2 | unspecified=7 |
@@ -70,9 +70,9 @@
 | `tools/` | 39 | 17 | 2 | 5092 | 12 | 3 | unspecified=12 |
 | `interfaces/` | 14 | 2 | 0 | 30 | 4 | 2 | unspecified=4 |
 | `runtime/` | 20 | 2 | 0 | 71 | 7 | 2 | unspecified=7 |
-| `docs/` | 67 | 2 | 0 | 47 | 7 | 2 | unspecified=7 |
+| `docs/` | 68 | 2 | 0 | 47 | 7 | 2 | unspecified=7 |
 | `ops/` | 38 | 2 | 0 | 93 | 12 | 1 | unspecified=12 |
-| `tests/` | 14 | 36 | 0 | 12066 | 5 | 1 | unspecified=5 |
+| `tests/` | 14 | 37 | 0 | 13335 | 5 | 1 | unspecified=5 |
 
 ---
 
@@ -190,7 +190,7 @@
 | `tools/governance/truth_audit.py:357` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
 | `tools/governance/truth_audit.py:531` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
 
-### إعلاناتُ «ليست سرًّا» الصريحة (6)
+### إعلاناتُ «ليست سرًّا» الصريحة (7)
 
 > قيمٌ اختباريةٌ مُختَرَعةٌ أُعلن في المصدر صراحةً أنها ليست أسرارًا بالعلامة `truth-audit: not-a-secret`. تُنشَر هنا ولا تُخفى.
 
@@ -202,6 +202,7 @@
 | `federal/executive/services/tests/test_r5_multi_provider_sandbox.py:560` | `JWT_SECRET` |
 | `federal/executive/services/tests/test_r5_multi_provider_sandbox.py:560` | `KING_LOGIN_SECRET` |
 | `federal/executive/services/tests/test_r5_multi_provider_sandbox.py:560` | `MODAL_TOKEN_SECRET` |
+| `tests/sovereignty/test_outbox.py:1083` | `api_key` |
 
 ---
 
