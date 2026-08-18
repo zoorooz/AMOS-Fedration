@@ -1,4 +1,4 @@
-"""P6-A — قياسُ أحكامِ البوابةِ على أفعالِ المالِ المرشَّحة. قياسٌ لا تقدير."""
+"""P7 — قياسُ أحكامِ البوابةِ على الأفعالِ القضائيّةِ والتشريعيّة. قياسٌ لا تقدير."""
 
 import json
 import sys
@@ -11,40 +11,50 @@ sys.path.insert(0, str(ROOT / "federal/executive/services/src"))
 from core.constitutional_engine.engine import ConstitutionalEngine  # noqa: E402
 from core.constitutional_engine.model import ActionRequest, Branch  # noqa: E402
 
-ACTORS = ["EXECUTIVE", "TREASURY", "ROYAL"]
+ACTORS = ["EXECUTIVE", "JUDICIAL", "LEGISLATIVE", "ROYAL"]
 
 # كلُّ عمليّةٍ عامّةٍ مُغيِّرةٍ في خزانةِ الدولةِ، ومرشَّحُ فعلِها الدستوريّ،
 # مع الأفعالِ المعجميّةِ المعروفةِ في `TREASURY_ACTIONS` وقائمةِ منعِ القضاء.
 CANDIDATES = [
-    "allocate_budget",
-    "issue_tokens",
-    "allocate_resources",
-    "book_expense",
-    "disburse_funds",
-    "transfer_treasury",
-    "treasury.establish",
-    "treasury.account.open",
-    "treasury.budget.create",
-    "treasury.allocate",
-    "treasury.funding.post",
-    "treasury.disburse",
-    "treasury.decision.disburse",
-    "treasury.transaction.reverse",
-    # الاقتصادُ المركَّبُ يمسُّ الميزانيّاتَ نفسَها
-    "economy.expenditure.authorize",
-    "economy.transfer.execute",
-    "economy.procurement.award",
-    # اقتصادُ الوكلاءِ (amos-credit) في governance/treasury
-    "reward_task_completion",
-    "charge_model_invoke",
-    "run_economic_cycle",
+    "adjudicate",
+    "issue_ruling",
+    "vacate_ruling",
+    "admit_evidence",
+    "register_judgment",
+    "refer_case",
+    "admit_case",
+    "recuse_judge",
+    "create_court",
+    "appoint_judge",
+    "register_court",
+    "set_court_status",
+    "set_judge_status",
+    "file_case",
+    "assign_case",
+    "open_hearing",
+    "close_case",
+    "add_party",
+    "add_claim",
+    "submit_evidence",
+    "set_evidence_status",
+    "record_proceeding",
+    "record_enforcement",
+    "enforce_ruling",
+    "pardon",
+    "overturn_judicial_ruling",
+    "legislate",
+    "enact_policy",
+    "amend_policy",
+    "repeal_policy",
+    "suspend_policy",
+    "vote",
 ]
 
 engine = ConstitutionalEngine()
 rows = []
 for action in CANDIDATES:
     for actor in ACTORS:
-        req = ActionRequest(actor=Branch[actor], action=action, target="probe/treasury")
+        req = ActionRequest(actor=Branch[actor], action=action, target="probe/judiciary")
         try:
             verdict = engine.evaluate(req)
             decision = getattr(verdict, "decision", verdict)
@@ -79,7 +89,7 @@ for action in CANDIDATES:
                 }
             )
 
-OUT = ROOT / "docs/audit/measurements/treasury_gate_matrix.json"
+OUT = ROOT / "docs/audit/measurements/judicial_gate_matrix.json"
 with open(OUT, "w", encoding="utf-8") as fh:
     json.dump(rows, fh, ensure_ascii=False, indent=1)
 

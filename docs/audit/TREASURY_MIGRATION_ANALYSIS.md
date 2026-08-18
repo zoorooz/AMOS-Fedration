@@ -66,7 +66,7 @@
 الدستورُ يعرفُ أربعةَ أفعالٍ ماليّةٍ في معجمِه
 (`core/constitutional_engine/rules.py::TREASURY_ACTIONS`) ويُسنِدُها إلى فرعِ الخزانة.
 وقِيسَ حكمُ البوابةِ على عشرينَ فعلًا مرشَّحًا لكلِّ فاعلٍ من ثلاثة (المُخرَجُ الخامُّ
-محفوظٌ في `docs/audit/evidence/treasury_gate_matrix.json`، ويُعادُ توليدُه بـ `python tools/audit/treasury_gate_probe.py`):
+محفوظٌ في `docs/audit/measurements/treasury_gate_matrix.json`، ويُعادُ توليدُه بـ `python tools/audit/treasury_gate_probe.py`):
 
 | الفعلُ المرشَّح | فاعلٌ تنفيذيّ | خزانة | ملكيّ |
 |---|---|---|---|
