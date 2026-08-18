@@ -89,6 +89,13 @@ if TYPE_CHECKING:
 
 EVENT_SERVICE_PUBLISHED = "amos_federation.gov.service_published"
 EVENT_SERVICE_STATUS_CHANGED = "amos_federation.gov.service_status_changed"
+
+#: نطاقُ مفاتيحِ الذرّيّة (1H) لتغييرِ حالةِ خدمةٍ حكوميّة.
+SERVICE_STATUS_SCOPE = "government_services.service.status"
+
+#: فعلُ تغييرِ الحالةِ كما تراه البوابة — نصُّ الصلاحيّةِ المحلّيِّ القائمِ نفسُه
+#: (`gov.service.status`)، فلا فعلٌ جديدٌ يُخترَعُ ولا فعلٌ حصريٌّ يُنتحَل.
+ACTION_SERVICE_STATUS = "gov.service.status"
 EVENT_CASE_OPENED = "amos_federation.gov.case_opened"
 EVENT_CASE_ASSIGNED = "amos_federation.gov.case_assigned"
 EVENT_CASE_REVIEWED = "amos_federation.gov.case_reviewed"
@@ -168,10 +175,54 @@ def _iso(value: datetime | None) -> str | None:
 class GovernmentServices:
     """الخدمات الحكومية: إعلان الخدمة، فتح القضية، معالجتها، والقرار فيها."""
 
-    def __init__(self, executive_core: Any | None = None) -> None:
+    def __init__(
+        self,
+        executive_core: Any | None = None,
+        authorizer: Any | None = None,
+    ) -> None:
         init_db()
         #: يُمرَّر في الاختبارات، وإلّا فالنواة المشتركة القائمة — لا نواة ثانية.
         self._core = executive_core if executive_core is not None else get_executive_core()
+        # المُصرِّحُ يُمرَّرُ للاختبارِ بسجلِّ ذرّيّةٍ معزول، والافتراضُ مُصرِّحُ النواةِ
+        # التنفيذيّةِ نفسُه — لا مُصرِّحٌ ثانٍ ولا بوابةٌ ثانية. والمُعامِلُ اختياريٌّ
+        # في آخرِ الترتيبِ فلا ينكسرُ نداءٌ قائم.
+        self._authorizer = authorizer
+
+    @property
+    def authorizer(self) -> Any:
+        """المُصرِّحُ السياديُّ — يُبنى عندَ أوّلِ حاجةٍ أو يسقطُ صريحًا.
+
+        والاستيرادُ **مؤجَّلٌ داخلَ الدالّة** لا في رأسِ الوحدة، وهذا ليس ذوقًا:
+        استيرادُ الجسرِ في الرأسِ يجرُّ نماذجَ `national_registry` إلى بيانِ الجداولِ
+        قبلَ نماذجِ `state_treasury`، فيسقطُ `create_all` عندَ مفتاحٍ أجنبيٍّ في
+        `state_authority_grants.budget_id` يشيرُ إلى `state_budgets` غيرِ المُسجَّلِ
+        بعد. وهو اقترانٌ **قائمٌ قبلَ هذه المرحلةِ** كشفَه هذا الاستيراد، ولا يُصلَحُ
+        هنا بترتيبِ نماذجَ من تلقاءِ النفس: يُقيَّدُ في الجردِ ويُؤجَّلُ إلى P12.
+        """
+        if self._authorizer is None:
+            from amos_federation.services.executive_core.sovereignty_bridge import get_authorizer
+
+            self._authorizer = get_authorizer()
+        return self._authorizer
+
+    def _set_service_status_row(self, service_id: str, status: str) -> bool:
+        """إسنادُ حالةِ خدمةٍ — تُستعملُ للأثرِ وللعكسِ معًا.
+
+        وذلك لأنَّ إسنادَ الحالةِ قيمةٌ نهائيّةٌ لا تراكمَ فيها: فالعكسُ إسنادُ الحالةِ
+        السابقةِ لا «تراجعٌ» عن شيء. وترجعُ `False` إن غابَ الصفُّ فلا يُزعَمُ عكسٌ لما
+        لا وجودَ له.
+        """
+        session = self._session()
+        try:
+            row = session.query(ServiceModel).filter(ServiceModel.id == service_id).first()
+            if row is None:
+                return False
+            row.status = status
+            row.updated_at = _now()
+            session.commit()
+            return True
+        finally:
+            session.close()
 
     # ── أدوات داخلية ─────────────────────────────────────────────────────
 
@@ -372,14 +423,21 @@ class GovernmentServices:
         status: str,
         reason: str,
     ) -> dict[str, Any]:
-        """غيِّر حالة خدمة — الحالة من المفردة المُقيَّدة، والسبب مُلزَم."""
-        require_domain_permission(context, "gov.service.status", PERMISSIONS_SERVICE_WRITE)
+        """غيِّر حالة خدمة — عبرَ حدِّ التنفيذِ السياديّ.
+
+        الفحوصُ القائمةُ كلُّها **قبلَ** العبور ولم تُضعَّفْ: الصلاحيّةُ المحلّيّة،
+        ومفردةُ الحالاتِ المُقيَّدة، ولزومُ سببٍ مكتوب، ووجودُ الخدمةِ في مستأجرِها،
+        ومنعُ إحياءِ خدمةٍ مسحوبةٍ بتغييرِ حالة.
+        """
+        require_domain_permission(context, ACTION_SERVICE_STATUS, PERMISSIONS_SERVICE_WRITE)
         if status not in SERVICE_STATUSES:
             raise GovernmentServiceError(
                 f"حالة خدمة غير معروفة: '{status}' — المسموح {list(SERVICE_STATUSES)}"
             )
         if not reason.strip():
             raise GovernmentServiceError("تغيير حالة خدمة يلزمه سبب مكتوب")
+
+        tenant = self._tenant_of(context)
         session = self._session()
         try:
             row = self._service_row(session, context, institution_code, code)
@@ -388,26 +446,81 @@ class GovernmentServices:
                 raise GovernmentServiceError(
                     f"الخدمة '{code}' مسحوبة — لا تُعاد بتغيير حالة، تُعلَن خدمة جديدة"
                 )
-            row.status = status
-            row.updated_at = _now()
-            session.commit()
-            entity = self._service_dict(row)
+            service_id = row.id
         finally:
             session.close()
 
-        trace = record_domain_trace(
-            context,
-            "gov.service.status",
-            EVENT_SERVICE_STATUS_CHANGED,
-            {
-                "service_id": entity["id"],
+        from amos_federation.services.executive_core.sovereignty_bridge import (
+            compensator,
+            declared_effect,
+            operation_key,
+        )
+
+        target = f"services/{tenant}/{institution_code}/{code}"
+        effect = declared_effect(
+            "WRITE", target, f"حالةُ الخدمةِ من '{previous}' إلى '{status}' — السببُ: {reason}"
+        )
+
+        def _apply(_effect: Any) -> dict[str, Any]:
+            """التطبيقُ الحقيقيّ — الحالةُ ثمّ التدقيقُ، بترتيبِ R7d نفسِه."""
+            self._set_service_status_row(service_id, status)
+            read_session = self._session()
+            try:
+                row = (
+                    read_session.query(ServiceModel).filter(ServiceModel.id == service_id).first()
+                )
+                entity = self._service_dict(row)
+            finally:
+                read_session.close()
+
+            trace = record_domain_trace(
+                context,
+                ACTION_SERVICE_STATUS,
+                EVENT_SERVICE_STATUS_CHANGED,
+                {
+                    "service_id": entity["id"],
+                    "from_status": previous,
+                    "to_status": status,
+                    "reason": reason,
+                    "tenant_id": entity["tenant_id"],
+                },
+            )
+            return {**entity, "from_status": previous, **trace}
+
+        guarded = self.authorizer.guard_declared(
+            ACTION_SERVICE_STATUS,
+            target,
+            declared_effects=(effect,),
+            applier=_apply,
+            operation_key=operation_key(
+                SERVICE_STATUS_SCOPE, f"{tenant}:{institution_code}:{code}:{status}"
+            ),
+            compensators=(
+                compensator(
+                    effect.signature,
+                    lambda: self._set_service_status_row(service_id, previous),
+                    f"إرجاعُ حالةِ الخدمةِ إلى '{previous}'",
+                ),
+            ),
+            metadata={
+                "tenant_id": tenant,
+                "institution_code": institution_code,
+                "service_code": code,
                 "from_status": previous,
                 "to_status": status,
-                "reason": reason,
-                "tenant_id": entity["tenant_id"],
             },
         )
-        return {**entity, "from_status": previous, **trace}
+        if guarded.is_replay:
+            return {
+                "code": code,
+                "institution_code": institution_code,
+                "tenant_id": tenant,
+                "status": status,
+                "from_status": previous,
+                "replayed": True,
+                "operation_key": guarded.outcome.operation_key,
+            }
+        return {**guarded.value, "replayed": False}
 
     # ── القضايا ──────────────────────────────────────────────────────────
 

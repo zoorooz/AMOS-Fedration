@@ -227,7 +227,8 @@ python tools/audit/sovereign_write_inventory.py
 | P1د | `revoke_official` | MIGRATED | 10 | — | **177** (مع P1ج) | `a00f12e` — مدفوعٌ |
 | P2 | إعادةُ الجردِ وخِتامُ 2B | ANALYZED | — | 177 | 177 | `bcdeccc` — مدفوعٌ |
 | P3 | State Runtime | **BLOCKED** (Q-13 · Q-14) | — | 177 | 177 | `8e93684` — مدفوعٌ |
-| P4 | هويّةُ الوكيلِ والسكّان | **BLOCKED** (Q-15) | — | 177 | 177 | يُسجَّلُ عند الدفع |
+| P4 | هويّةُ الوكيلِ والسكّان | **BLOCKED** (Q-15) | — | 177 | 177 | `d0ce623` — مدفوعٌ |
+| P5أ | `set_service_status` (خدماتٌ حكوميّة) | **MIGRATED** | 13 | 177 | **176** | يُسجَّلُ عند الدفع |
 
 ---
 
