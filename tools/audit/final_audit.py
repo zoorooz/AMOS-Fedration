@@ -27,7 +27,10 @@ prog = (D / "SOVEREIGN_MIGRATION_PROGRAM.md").read_text(encoding="utf-8")
 out["program_mentions_168"] = prog.count("168")
 # صيغتانِ للعلامةِ المؤقّتةِ: عبارةُ P14 ورمزُ P15/P16 — عُدَّتِ الأولى وحدَها
 # حتى P16 فكانَ العدُّ أعمى عن الثانية، فوُسِّعَ صريحًا لا صامتًا.
-out["program_placeholders"] = prog.count("يُسجَّلُ عند الدفع") + prog.count("PENDING_PUSH")
+# تُعَدُّ العلامةُ في **خليّةِ جدولٍ** لا في شرحٍ نصّيٍّ يذكرُ الرمزَ: وسَّعْنا العدَّ
+# في P16 فعَدَّ ذكرَ الرمزِ في § 8.5 علامةً باقيةً (3 لا 2)، فضُيِّقَ صريحًا.
+out["program_placeholders"] = (prog.count("يُسجَّلُ عند الدفع")
+                               + len(re.findall(r"\|\s*`PENDING_PUSH`\s*\|", prog)))
 out["program_todo_markers"] = len(re.findall(r"TODO|FIXME|XXX|<<<|>>>", prog))
 
 # 3) الأسئلةُ في السجلّ
