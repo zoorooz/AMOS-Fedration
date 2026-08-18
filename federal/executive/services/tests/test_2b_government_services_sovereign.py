@@ -36,12 +36,17 @@ from amos_federation.services.governance.security import DEFAULT_ROLES
 from amos_federation.services.government_services.authorization import RegistryAuthorizationError
 from amos_federation.services.government_services.models import CaseModel, DecisionModel, ServiceModel
 from amos_federation.services.government_services.service import (
+    ACTION_CASE_ASSIGN,
+    ACTION_CASE_CLOSE,
+    ACTION_CASE_DECIDE,
     ACTION_CASE_OPEN,
     ACTION_SERVICE_PUBLISH,
     ACTION_SERVICE_STATUS,
     SERVICE_PUBLISH_SCOPE,
     SERVICE_STATUS_SCOPE,
     CASE_TASK_TYPE,
+    CaseStateError,
+    DecisionExistsError,
     DuplicateServiceCodeError,
     GovernmentServiceError,
     GovernmentServices,
@@ -746,3 +751,317 @@ def test_27_the_applier_writes_one_effect_per_call(
         assert session.query(TaskModel).filter(TaskModel.id == case["task_id"]).count() == 1
     finally:
         session.close()
+
+
+# ── 9. إسنادُ القضيّة (P5د) ────────────────────────────────────────────────
+
+
+@pytest.fixture
+def assignable(gov: GovernmentServices, crown: AuthorizationContext, published: dict, applicant: str) -> dict:
+    """قضيّةٌ مفتوحةٌ ومنصبٌ قائمٌ في مؤسستِها — الشرطانِ اللذانِ يفرضُهما النطاق."""
+    registry = StateRegistry()
+    official = registry.appoint_official(
+        context=crown,
+        agent_id=applicant,
+        institution_code=published["institution_code"],
+        title="مدير الخدمة",
+    )
+    case = _open(
+        gov, crown, published["institution_code"], published["service"]["code"], applicant
+    )
+    return {"case": case, "official_id": official["id"]}
+
+
+def test_28_assignment_passes_the_gateway_with_its_own_effect(
+    gov: GovernmentServices,
+    crown: AuthorizationContext,
+    assignable: dict,
+    authorizer: RecordingAuthorizer,
+) -> None:
+    """الإسنادُ فعلٌ مُعلَنٌ على هدفِ القضيّةِ — لا كتابةٌ في هامشِ فتحِها."""
+    reference = assignable["case"]["reference"]
+    result = gov.assign_case(
+        context=crown, reference=reference, official_id=assignable["official_id"]
+    )
+    target = f"cases/{DEFAULT_TENANT}/{reference}"
+    assert (ACTION_CASE_ASSIGN, target) in authorizer.decisions
+    outcome = authorizer.results[-1].outcome  # type: ignore[union-attr]
+    assert _mandatory_stages() <= set(outcome.stages)
+    assert [effect.signature for effect in outcome.applied_effects] == [
+        f"WRITE:{target}/assignment"
+    ]
+    assert result["status"] == "assigned"
+    assert result["assigned_official_id"] == assignable["official_id"]
+
+
+def test_29_the_assignment_compensator_restores_the_previous_state(
+    gov: GovernmentServices,
+    crown: AuthorizationContext,
+    assignable: dict,
+    authorizer: RecordingAuthorizer,
+) -> None:
+    """المُعوِّضُ يُعيدُ المنصبَ السابقَ والحالةَ السابقةَ معًا — لا الحالةَ وحدَها.
+
+    ولو أُعيدتِ الحالةُ إلى `submitted` وبقيَ المنصبُ مُسنَدًا لكانَ ذلك «تعويضًا»
+    يتركُ أثرًا نصفَ قائمٍ ويُبلِّغُ نجاحًا — وهو ما تمنعُه هذه الدعوى.
+    """
+    reference = assignable["case"]["reference"]
+    gov.assign_case(
+        context=crown, reference=reference, official_id=assignable["official_id"]
+    )
+    outcome = authorizer.results[-1].outcome  # type: ignore[union-attr]
+    signature = outcome.applied_effects[0].signature
+    outcome.compensation_plan.compensator_for(signature).apply()
+    session = get_session_factory()()
+    try:
+        row = session.query(CaseModel).filter(CaseModel.reference == reference).first()
+        assert row.assigned_official_id is None
+        assert row.status == "submitted"
+    finally:
+        session.close()
+
+
+def test_30_assignment_invariants_are_refused_before_the_gateway(
+    gov: GovernmentServices,
+    crown: AuthorizationContext,
+    assignable: dict,
+    authorizer: RecordingAuthorizer,
+) -> None:
+    """منصبٌ لا وجودَ له، ومواطنٌ بلا صلاحيّة — كلاهما يُرَدُّ قبلَ أيِّ عبور."""
+    reference = assignable["case"]["reference"]
+    before = len(authorizer.decisions)
+    with pytest.raises(GovernmentServiceError):
+        gov.assign_case(context=crown, reference=reference, official_id="official-la-wujud")
+    with pytest.raises(RegistryAuthorizationError):
+        gov.assign_case(
+            context=_context("citizen"),
+            reference=reference,
+            official_id=assignable["official_id"],
+        )
+    assert len(authorizer.decisions) == before
+
+
+def test_31_assignment_writes_no_row_outside_the_boundary(gov: GovernmentServices) -> None:
+    """الحرسُ الساكن: جسدُ الإسنادِ لا يُسنِدُ منصبًا ولا يُثبِّتُ جلسة."""
+    body = _own_body(GovernmentServices.assign_case)
+    assert "case.assigned_official_id =" not in body
+    assert "session.commit()" not in body
+    assert "guard_declared" in body
+    for parameter in FORBIDDEN_BYPASS_PARAMS:
+        assert parameter not in body
+
+
+# ── 10. إغلاقُ القضيّة (P5هـ) ──────────────────────────────────────────────
+
+
+@pytest.fixture
+def decided(gov: GovernmentServices, crown: AuthorizationContext, assignable: dict) -> dict:
+    """قضيّةٌ صدرَ فيها قرارٌ فعلًا — بمسارٍ كاملٍ لا بصفوفٍ مزروعةٍ يدويًّا.
+
+    والعاملُ المؤهَّلُ شرطُ نجاحِ المعالجة: بلا وكيلٍ يقبلُ المهمّةَ تفشلُ فعلًا، وذلك
+    سلوكٌ صادقٌ لا يُحتالُ عليه هنا.
+    """
+    worker_id = f"worker-2b-{uuid.uuid4().hex[:8]}"
+    register_identity(worker_id, f"عامل {worker_id}", "worker", allowed_tools=["*"])
+    reference = assignable["case"]["reference"]
+    gov.assign_case(context=crown, reference=reference, official_id=assignable["official_id"])
+    gov.process_case(context=crown, reference=reference)
+    gov.decide_case(
+        context=crown,
+        reference=reference,
+        outcome="approved",
+        rationale="استُوفيت الشروط",
+        official_id=assignable["official_id"],
+    )
+    return {"reference": reference, "official_id": assignable["official_id"]}
+
+
+def test_32_closing_a_case_passes_the_gateway(
+    gov: GovernmentServices,
+    crown: AuthorizationContext,
+    decided: dict,
+    authorizer: RecordingAuthorizer,
+) -> None:
+    """الإغلاقُ فعلٌ مُعلَنٌ بأثرِ إغلاقٍ واحدٍ لا كتابةٌ صامتة."""
+    reference = decided["reference"]
+    result = gov.close_case(context=crown, reference=reference)
+    target = f"cases/{DEFAULT_TENANT}/{reference}"
+    assert (ACTION_CASE_CLOSE, target) in authorizer.decisions
+    outcome = authorizer.results[-1].outcome  # type: ignore[union-attr]
+    assert _mandatory_stages() <= set(outcome.stages)
+    assert [effect.signature for effect in outcome.applied_effects] == [
+        f"WRITE:{target}/closure"
+    ]
+    assert result["status"] == "closed"
+
+
+def test_33_the_closure_compensator_reopens_to_the_previous_status(
+    gov: GovernmentServices,
+    crown: AuthorizationContext,
+    decided: dict,
+    authorizer: RecordingAuthorizer,
+) -> None:
+    """المعكوسُ يُعيدُ الحالةَ السابقةَ (`decided`) لا حالةً مُختارةً بذوقِ الكاتب."""
+    reference = decided["reference"]
+    gov.close_case(context=crown, reference=reference)
+    outcome = authorizer.results[-1].outcome  # type: ignore[union-attr]
+    signature = outcome.applied_effects[0].signature
+    outcome.compensation_plan.compensator_for(signature).apply()
+    session = get_session_factory()()
+    try:
+        row = session.query(CaseModel).filter(CaseModel.reference == reference).first()
+        assert row.status == "decided"
+    finally:
+        session.close()
+
+
+def test_34_a_case_without_a_decision_is_refused_before_the_gateway(
+    gov: GovernmentServices,
+    crown: AuthorizationContext,
+    assignable: dict,
+    authorizer: RecordingAuthorizer,
+) -> None:
+    """«لا إغلاقَ بلا قرار» منعٌ نطاقيٌّ سابقٌ للعبور — لا خطأٌ ذرّيٌّ مُغلَّف.
+
+    ولو نُقِلَ الشرطُ إلى داخلِ المُطبِّقِ لصارَ `CaseStateError` مُلتفًّا في
+    `IdempotencyError`، فيرى المُنادي فشلًا تقنيًّا حيثُ الحقيقةُ حكمٌ نطاقيّ.
+    """
+    before = len(authorizer.decisions)
+    with pytest.raises(CaseStateError):
+        gov.close_case(context=crown, reference=assignable["case"]["reference"])
+    assert len(authorizer.decisions) == before
+
+
+def test_35_closure_writes_no_row_outside_the_boundary(gov: GovernmentServices) -> None:
+    """الحرسُ الساكن: جسدُ الإغلاقِ لا يُغيِّرُ حالةً ولا يُثبِّتُ جلسة."""
+    body = _own_body(GovernmentServices.close_case)
+    assert 'case.status = "closed"' not in body
+    assert "session.commit()" not in body
+    assert "guard_declared" in body
+    for parameter in FORBIDDEN_BYPASS_PARAMS:
+        assert parameter not in body
+
+
+# ── 11. القرارُ النهائيّ (P5و) ─────────────────────────────────────────────
+
+
+@pytest.fixture
+def reviewed(gov: GovernmentServices, crown: AuthorizationContext, assignable: dict) -> dict:
+    """قضيّةٌ بلغتْ مراجعتُها حالةً نهائيّةً — شرطُ القرارِ الذي لم يُضعَّفْ."""
+    worker_id = f"worker-2b-{uuid.uuid4().hex[:8]}"
+    register_identity(worker_id, f"عامل {worker_id}", "worker", allowed_tools=["*"])
+    reference = assignable["case"]["reference"]
+    gov.assign_case(context=crown, reference=reference, official_id=assignable["official_id"])
+    gov.process_case(context=crown, reference=reference)
+    return {"reference": reference, "official_id": assignable["official_id"]}
+
+
+def _decide(gov: GovernmentServices, crown: AuthorizationContext, reviewed: dict) -> dict:
+    return gov.decide_case(
+        context=crown,
+        reference=reviewed["reference"],
+        outcome="approved",
+        rationale="استُوفيت الشروط",
+        official_id=reviewed["official_id"],
+    )
+
+
+def test_36_the_decision_declares_two_effects_and_keeps_its_provenance(
+    gov: GovernmentServices,
+    crown: AuthorizationContext,
+    reviewed: dict,
+    authorizer: RecordingAuthorizer,
+) -> None:
+    """صفُّ القرارِ أثرٌ وحالةُ القضيّةِ أثرٌ آخر — وإسنادُ القرارِ يُكتَبُ مع قرارِه."""
+    result = _decide(gov, crown, reviewed)
+    target = f"cases/{DEFAULT_TENANT}/{reviewed['reference']}"
+    assert (ACTION_CASE_DECIDE, target) in authorizer.decisions
+    outcome = authorizer.results[-1].outcome  # type: ignore[union-attr]
+    assert _mandatory_stages() <= set(outcome.stages)
+    assert [effect.signature for effect in outcome.applied_effects] == [
+        f"CREATE:{target}/decision",
+        f"WRITE:{target}/status",
+    ]
+    assert result["case"]["status"] == "decided"
+    assert result["provenance"]["decision_id"] == result["id"]
+
+
+def test_37_both_decision_compensators_really_reverse(
+    gov: GovernmentServices,
+    crown: AuthorizationContext,
+    reviewed: dict,
+    authorizer: RecordingAuthorizer,
+) -> None:
+    """حذفُ القرارِ يحذفُ إسنادَه، والحالةُ تعودُ إلى ما كانت — لا نصفَ تراجع."""
+    result = _decide(gov, crown, reviewed)
+    outcome = authorizer.results[-1].outcome  # type: ignore[union-attr]
+    plan = outcome.compensation_plan
+    decision_signature, status_signature = (
+        effect.signature for effect in outcome.applied_effects
+    )
+    plan.compensator_for(status_signature).apply()
+    plan.compensator_for(decision_signature).apply()
+
+    session = get_session_factory()()
+    try:
+        assert (
+            session.query(DecisionModel).filter(DecisionModel.id == result["id"]).first() is None
+        )
+        assert (
+            session.query(DecisionProvenanceModel)
+            .filter(DecisionProvenanceModel.decision_id == result["id"])
+            .first()
+            is None
+        )
+        row = session.query(CaseModel).filter(CaseModel.reference == reviewed["reference"]).first()
+        assert row.status == "reviewed"
+    finally:
+        session.close()
+
+
+def test_38_decision_authority_checks_still_precede_the_gateway(
+    gov: GovernmentServices,
+    crown: AuthorizationContext,
+    reviewed: dict,
+    authorizer: RecordingAuthorizer,
+) -> None:
+    """نتيجةٌ مجهولةٌ وسببٌ فارغٌ وقرارٌ ثانٍ — كلُّها تُرَدُّ قبلَ أيِّ عبورٍ للحدّ."""
+    before = len(authorizer.decisions)
+    with pytest.raises(GovernmentServiceError):
+        gov.decide_case(
+            context=crown,
+            reference=reviewed["reference"],
+            outcome="مقبولٌ جزئيًّا",
+            rationale="سبب",
+            official_id=reviewed["official_id"],
+        )
+    with pytest.raises(GovernmentServiceError):
+        gov.decide_case(
+            context=crown,
+            reference=reviewed["reference"],
+            outcome="approved",
+            rationale="   ",
+            official_id=reviewed["official_id"],
+        )
+    assert len(authorizer.decisions) == before
+
+    _decide(gov, crown, reviewed)
+    after_first = len(authorizer.decisions)
+    with pytest.raises(DecisionExistsError):
+        _decide(gov, crown, reviewed)
+    # القرارُ الثاني يُرَدُّ بحكمِ النطاقِ لا بمفتاحِ الذرّيّة: القرارُ الواحدُ نهائيٌّ
+    # لأنَّ القانونَ يقولُه، لا لأنَّ المفتاحَ تكرَّر.
+    assert len(authorizer.decisions) == after_first
+
+
+def test_39_the_decision_writes_no_row_outside_the_boundary(
+    gov: GovernmentServices,
+) -> None:
+    """الحرسُ الساكن: جسدُ القرارِ لا يُنشئُ صفًّا ولا يُثبِّتُ جلسةً بنفسِه."""
+    body = _own_body(GovernmentServices.decide_case)
+    assert "session.add(" not in body
+    assert "session.commit()" not in body
+    assert 'case.status = "decided"' not in body
+    assert "guard_declared" in body
+    for parameter in FORBIDDEN_BYPASS_PARAMS:
+        assert parameter not in body

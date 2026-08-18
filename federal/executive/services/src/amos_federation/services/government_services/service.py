@@ -96,6 +96,24 @@ SERVICE_PUBLISH_SCOPE = "government_services.service.publish"
 #: نطاقُ مفاتيحِ الذرّيّة (1H) لفتحِ قضيّة.
 CASE_OPEN_SCOPE = "government_services.case.open"
 
+#: نطاقُ مفاتيحِ الذرّيّة (1H) لإسنادِ قضيّةٍ إلى منصب.
+CASE_ASSIGN_SCOPE = "government_services.case.assign"
+
+#: فعلُ الإسنادِ كما تراه البوابة — نصُّ الصلاحيّةِ المحلّيِّ القائمُ نفسُه.
+ACTION_CASE_ASSIGN = "gov.case.assign"
+
+#: نطاقُ مفاتيحِ الذرّيّة (1H) لإغلاقِ قضيّة.
+CASE_CLOSE_SCOPE = "government_services.case.close"
+
+#: فعلُ الإغلاقِ كما تراه البوابة.
+ACTION_CASE_CLOSE = "gov.case.close"
+
+#: نطاقُ مفاتيحِ الذرّيّة (1H) لإصدارِ القرارِ النهائيّ.
+CASE_DECIDE_SCOPE = "government_services.case.decide"
+
+#: فعلُ القرارِ كما تراه البوابة.
+ACTION_CASE_DECIDE = "gov.case.decide"
+
 #: فعلُ فتحِ القضيّةِ كما تراه البوابة — نصُّ الصلاحيّةِ المحلّيِّ القائمُ نفسُه.
 ACTION_CASE_OPEN = "gov.case.open"
 
@@ -216,6 +234,61 @@ class GovernmentServices:
 
             self._authorizer = get_authorizer()
         return self._authorizer
+
+    def _delete_decision_row(self, decision_id: str) -> bool:
+        """احذفْ قرارًا وإسنادَه — معكوسُ الإنشاءِ حذفٌ لا «إبطالٌ» يُبقي الصفَّ.
+
+        وإسنادُ القرار (`DecisionProvenanceModel`) تابعٌ للقرارِ لا كيانٌ مستقل: يُحذَفُ
+        معه صريحًا لا اعتمادًا على تعاقبٍ في قاعدةِ البيانات، فبقاءُ إسنادٍ لقرارٍ
+        محذوفٍ سجلُّ تدقيقٍ يشيرُ إلى لا شيء.
+        """
+        session = self._session()
+        try:
+            row = session.query(DecisionModel).filter(DecisionModel.id == decision_id).first()
+            if row is None:
+                return False
+            session.query(DecisionProvenanceModel).filter(
+                DecisionProvenanceModel.decision_id == decision_id
+            ).delete(synchronize_session=False)
+            session.delete(row)
+            session.commit()
+            return True
+        finally:
+            session.close()
+
+    def _set_case_status_row(self, case_id: str, status: str) -> bool:
+        """اضبطْ حالةَ القضيّةِ — إسنادُ قيمةٍ يخدمُ الأثرَ وعكسَه، ولا يُزعَمُ عكسٌ لصفٍّ غائب."""
+        session = self._session()
+        try:
+            row = session.query(CaseModel).filter(CaseModel.id == case_id).first()
+            if row is None:
+                return False
+            row.status = status
+            row.updated_at = _now()
+            session.commit()
+            return True
+        finally:
+            session.close()
+
+    def _assign_case_row(self, case_id: str, official_id: str | None, status: str) -> bool:
+        """أسنِدْ قضيّةً إلى منصبٍ (أو أعِدْها إلى ما كانتْ) — إسنادُ قيمةٍ لا تراكم.
+
+        الدالّةُ نفسُها تخدمُ الأثرَ وعكسَه: العكسُ إعادةُ المنصبِ السابقِ والحالةِ
+        السابقةِ، لا «تراجعٌ» عن شيء. وترجعُ `False` إن غابَ الصفُّ فلا يُزعَمُ عكسٌ
+        لما لا وجودَ له.
+        """
+        session = self._session()
+        try:
+            row = session.query(CaseModel).filter(CaseModel.id == case_id).first()
+            if row is None:
+                return False
+            row.assigned_official_id = official_id
+            row.status = status
+            row.updated_at = _now()
+            session.commit()
+            return True
+        finally:
+            session.close()
 
     def _delete_case_row(self, case_id: str) -> bool:
         """احذفْ صفَّ قضيّةٍ أُنشِئَ في هذه العمليّة — عكسُ الإنشاءِ حذفُه.
@@ -868,8 +941,15 @@ class GovernmentServices:
     def assign_case(
         self, *, context: AuthorizationContext, reference: str, official_id: str
     ) -> dict[str, Any]:
-        """أسنِد القضية إلى منصب قائم في مؤسستها."""
-        require_domain_permission(context, "gov.case.assign", PERMISSIONS_CASE_ASSIGN)
+        """أسنِد القضية إلى منصب قائم في مؤسستها — عبرَ حدِّ التنفيذِ السياديّ.
+
+        الفحوصُ القائمةُ كلُّها **قبلَ** العبورِ ولم تُضعَّفْ: الصلاحيّةُ المحلّيّة،
+        وحالةُ القضيّةِ التي تسمحُ بالإسناد، وقيامُ المنصبِ فعلًا، وكونُه في مؤسسةِ
+        القضيّةِ نفسِها (`require_office`) — فالمنصبُ سلطةٌ على قضايا مؤسستِه لا على
+        كلِّ قضيّة.
+        """
+        require_domain_permission(context, ACTION_CASE_ASSIGN, PERMISSIONS_CASE_ASSIGN)
+        tenant = self._tenant_of(context)
         session = self._session()
         try:
             case = self._case_row(session, context, reference)
@@ -879,28 +959,90 @@ class GovernmentServices:
                 )
             official = self._official_row(session, context, official_id)
             require_office(context, official, institution_id=case.institution_id)
-            case.assigned_official_id = official.id
-            case.status = "assigned"
-            case.updated_at = _now()
-            session.commit()
-            entity = self._case_dict(case)
+            # المنصبُ السابقُ والحالةُ السابقةُ يُقتنَصانِ **قبلَ** العبور: المُعوِّضُ
+            # لا يعرفُ ما يعكسُه إن قُرِئا بعدَ التغيير.
+            case_id = case.id
+            previous_official_id = case.assigned_official_id
+            previous_status = case.status
         finally:
             session.close()
 
-        trace = record_domain_trace(
-            context,
-            "gov.case.assign",
-            EVENT_CASE_ASSIGNED,
-            {
-                "case_id": entity["id"],
-                "reference": entity["reference"],
+        from amos_federation.services.executive_core.sovereignty_bridge import (
+            compensator,
+            declared_effect,
+            operation_key,
+        )
+
+        target = f"cases/{tenant}/{reference}"
+        effect = declared_effect(
+            "WRITE",
+            f"{target}/assignment",
+            f"إسنادُ القضيّةِ '{reference}' إلى المنصبِ '{official_id}'",
+        )
+
+        def _apply(_effect: Any) -> dict[str, Any]:
+            """التطبيقُ الحقيقيّ — الإسنادُ ثمّ التدقيقُ، بترتيبِ R7-A نفسِه."""
+            if not self._assign_case_row(case_id, official_id, "assigned"):
+                raise CaseNotFoundError(
+                    f"القضية '{reference}' غابت بين الفحص والتطبيق — لا أثر يُزعَم"
+                )
+            read_session = self._session()
+            try:
+                entity = self._case_dict(self._case_row(read_session, context, reference))
+            finally:
+                read_session.close()
+
+            trace = record_domain_trace(
+                context,
+                ACTION_CASE_ASSIGN,
+                EVENT_CASE_ASSIGNED,
+                {
+                    "case_id": entity["id"],
+                    "reference": entity["reference"],
+                    "official_id": official_id,
+                    "institution_id": entity["institution_id"],
+                    "task_id": entity["task_id"],
+                    "tenant_id": entity["tenant_id"],
+                },
+            )
+            return {**entity, **trace}
+
+        guarded = self.authorizer.guard_declared(
+            ACTION_CASE_ASSIGN,
+            target,
+            declared_effects=(effect,),
+            applier=_apply,
+            operation_key=operation_key(
+                CASE_ASSIGN_SCOPE, f"{tenant}:{reference}:{official_id}"
+            ),
+            compensators=(
+                compensator(
+                    effect.signature,
+                    lambda: self._assign_case_row(
+                        case_id, previous_official_id, previous_status
+                    ),
+                    f"إعادةُ إسنادِ القضيّةِ إلى '{previous_official_id}' وحالتِها "
+                    f"'{previous_status}'",
+                ),
+            ),
+            metadata={
+                "tenant_id": tenant,
+                "reference": reference,
                 "official_id": official_id,
-                "institution_id": entity["institution_id"],
-                "task_id": entity["task_id"],
-                "tenant_id": entity["tenant_id"],
+                "previous_official_id": previous_official_id,
+                "previous_status": previous_status,
             },
         )
-        return {**entity, **trace}
+        if guarded.is_replay:
+            return {
+                "reference": reference,
+                "tenant_id": tenant,
+                "assigned_official_id": official_id,
+                "status": "assigned",
+                "replayed": True,
+                "operation_key": guarded.outcome.operation_key,
+            }
+        return {**guarded.value, "replayed": False}
 
     def process_case(
         self, *, context: AuthorizationContext, reference: str, max_steps: int = 8
@@ -969,7 +1111,8 @@ class GovernmentServices:
         لا قرار قبل أن تبلغ مهمّة القضية حالةً نهائية: القرار يذكر تلك الحالة
         (`task_final_state`)، فلا يُنسَب قرارٌ إلى مراجعةٍ لم تُنجَز.
         """
-        require_domain_permission(context, "gov.case.decide", PERMISSIONS_CASE_DECIDE)
+        require_domain_permission(context, ACTION_CASE_DECIDE, PERMISSIONS_CASE_DECIDE)
+        tenant = self._tenant_of(context)
         if outcome not in DECISION_OUTCOMES:
             raise GovernmentServiceError(
                 f"نتيجة قرار غير معروفة: '{outcome}' — المسموح {list(DECISION_OUTCOMES)}"
@@ -1038,47 +1181,151 @@ class GovernmentServices:
                     "لمنصب قائم في مؤسسة القضية."
                 )
 
-            decision = DecisionModel(
-                id=f"dec-{uuid.uuid4()}",
-                case_id=case.id,
-                decided_by_official_id=official.id,
-                decided_by_principal=context.principal_id,
-                outcome=outcome,
-                rationale=rationale,
-                task_final_state=case.review_state,
-                tenant_id=case.tenant_id,
-            )
-            session.add(decision)
-            case.status = "decided"
-            case.updated_at = _now()
-            session.flush()
-            provenance = self._record_decision_provenance(
-                session, context, decision=decision, case=case, official=official
-            )
-            session.commit()
-            entity = self._decision_dict(decision)
-            case_entity = self._case_dict(case)
+            official_id_resolved = official.id
+            official_department_id = official.department_id
+            case_id = case.id
+            case_institution_id = case.institution_id
+            case_tenant_id = case.tenant_id
+            case_review_state = case.review_state
+            previous_status = case.status
         finally:
             session.close()
 
-        trace = record_domain_trace(
-            context,
-            "gov.case.decide",
-            EVENT_CASE_DECIDED,
-            {
-                "case_id": case_entity["id"],
-                "reference": case_entity["reference"],
-                "decision_id": entity["id"],
+        from amos_federation.services.executive_core.sovereignty_bridge import (
+            compensator,
+            declared_effect,
+            operation_key,
+        )
+
+        decision_id = f"dec-{uuid.uuid4()}"
+        target = f"cases/{tenant}/{reference}"
+        decision_effect = declared_effect(
+            "CREATE",
+            f"{target}/decision",
+            f"قرارٌ نهائيٌّ '{outcome}' في القضيّةِ '{reference}' وإسنادُه",
+        )
+        status_effect = declared_effect(
+            "WRITE", f"{target}/status", f"حالةُ القضيّةِ '{reference}' تصيرُ 'decided'"
+        )
+        produced: dict[str, Any] = {}
+
+        def _apply(effect: Any) -> dict[str, Any] | None:
+            """أثرٌ واحدٌ في كلِّ نداء — الحدُّ يُنادي المُطبِّقَ مرّةً لكلِّ أثرٍ مُعلَن."""
+            if effect.signature == decision_effect.signature:
+                return _write_decision()
+            if effect.signature == status_effect.signature:
+                return _write_status()
+            raise GovernmentServiceError(
+                f"أثرٌ غيرُ مُعلَنٍ وصلَ إلى مُطبِّقِ القرار: '{effect.signature}'"
+            )
+
+        def _write_decision() -> None:
+            """صفُّ القرارِ وإسنادُه في معاملةٍ واحدة — لا قرارَ بلا إسنادٍ مقروء."""
+            write_session = self._session()
+            try:
+                case_row = self._case_row(write_session, context, reference)
+                official_row = self._official_row(
+                    write_session, context, official_id_resolved
+                )
+                decision = DecisionModel(
+                    id=decision_id,
+                    case_id=case_id,
+                    decided_by_official_id=official_id_resolved,
+                    decided_by_principal=context.principal_id,
+                    outcome=outcome,
+                    rationale=rationale,
+                    task_final_state=case_review_state,
+                    tenant_id=case_tenant_id,
+                )
+                write_session.add(decision)
+                write_session.flush()
+                produced["provenance"] = self._record_decision_provenance(
+                    write_session,
+                    context,
+                    decision=decision,
+                    case=case_row,
+                    official=official_row,
+                )
+                write_session.commit()
+                produced["decision"] = self._decision_dict(decision)
+            finally:
+                write_session.close()
+
+        def _write_status() -> dict[str, Any]:
+            """حالةُ القضيّةِ ثمّ التدقيقُ — بترتيبِ R7-C نفسِه ولم يُقلَب."""
+            if not self._set_case_status_row(case_id, "decided"):
+                raise CaseNotFoundError(
+                    f"القضية '{reference}' غابت بين الفحص والتطبيق — لا أثر يُزعَم"
+                )
+            read_session = self._session()
+            try:
+                case_entity = self._case_dict(
+                    self._case_row(read_session, context, reference)
+                )
+            finally:
+                read_session.close()
+
+            entity = produced["decision"]
+            provenance = produced["provenance"]
+            trace = record_domain_trace(
+                context,
+                ACTION_CASE_DECIDE,
+                EVENT_CASE_DECIDED,
+                {
+                    "case_id": case_entity["id"],
+                    "reference": case_entity["reference"],
+                    "decision_id": entity["id"],
+                    "outcome": outcome,
+                    "official_id": entity["decided_by_official_id"],
+                    "task_id": case_entity["task_id"],
+                    "task_final_state": entity["task_final_state"],
+                    "provenance": provenance["provenance_class"],
+                    "identity_id": provenance["identity_id"],
+                    "tenant_id": entity["tenant_id"],
+                },
+            )
+            return {**entity, "case": case_entity, "provenance": provenance, **trace}
+
+        guarded = self.authorizer.guard_declared(
+            ACTION_CASE_DECIDE,
+            target,
+            declared_effects=(decision_effect, status_effect),
+            applier=_apply,
+            operation_key=operation_key(
+                CASE_DECIDE_SCOPE, f"{tenant}:{reference}:{outcome}"
+            ),
+            compensators=(
+                compensator(
+                    decision_effect.signature,
+                    lambda: self._delete_decision_row(decision_id),
+                    f"حذفُ القرارِ '{decision_id}' وإسنادِه",
+                ),
+                compensator(
+                    status_effect.signature,
+                    lambda: self._set_case_status_row(case_id, previous_status),
+                    f"إعادةُ حالةِ القضيّةِ إلى '{previous_status}'",
+                ),
+            ),
+            metadata={
+                "tenant_id": tenant,
+                "reference": reference,
                 "outcome": outcome,
-                "official_id": entity["decided_by_official_id"],
-                "task_id": case_entity["task_id"],
-                "task_final_state": entity["task_final_state"],
-                "provenance": provenance["provenance_class"],
-                "identity_id": provenance["identity_id"],
-                "tenant_id": entity["tenant_id"],
+                "official_id": official_id_resolved,
+                "department_id": official_department_id,
+                "institution_id": case_institution_id,
+                "previous_status": previous_status,
             },
         )
-        return {**entity, "case": case_entity, "provenance": provenance, **trace}
+        if guarded.is_replay:
+            return {
+                "reference": reference,
+                "tenant_id": tenant,
+                "outcome": outcome,
+                "replayed": True,
+                "operation_key": guarded.outcome.operation_key,
+            }
+        entity = next(item for item in guarded.value if isinstance(item, dict))
+        return {**entity, "replayed": False}
 
     def _record_decision_provenance(
         self,
@@ -1146,37 +1393,96 @@ class GovernmentServices:
         }
 
     def close_case(self, *, context: AuthorizationContext, reference: str) -> dict[str, Any]:
-        """أغلق قضية صدر فيها قرار — ولا تُغلَق قضية بلا قرار."""
-        require_domain_permission(context, "gov.case.close", PERMISSIONS_CASE_ASSIGN)
+        """أغلق قضية صدر فيها قرار — ولا تُغلَق قضية بلا قرار. وعبرَ الحدِّ لا حولَه.
+
+        شرطُ القرارِ يُفحَصُ **قبلَ** العبورِ ولم يُنقَلْ إلى داخلِ المُطبِّق: إغلاقٌ بلا
+        قرارٍ منعٌ نطاقيٌّ لا فشلُ تنفيذ، فلا يُلبَسُ لباسَ خطأٍ ذرّيٍّ مُغلَّف.
+        """
+        require_domain_permission(context, ACTION_CASE_CLOSE, PERMISSIONS_CASE_ASSIGN)
+        tenant = self._tenant_of(context)
         session = self._session()
         try:
             case = self._case_row(session, context, reference)
             if case.status == "closed":
                 raise CaseStateError(f"القضية '{reference}' مغلقة بالفعل")
-            decision = session.query(DecisionModel).filter(DecisionModel.case_id == case.id).first()
+            decision = (
+                session.query(DecisionModel).filter(DecisionModel.case_id == case.id).first()
+            )
             if decision is None:
-                raise CaseStateError(f"القضية '{reference}' بلا قرار — لا تُغلق قضية بلا قرار فيها")
-            case.status = "closed"
-            case.updated_at = _now()
-            session.commit()
-            entity = self._case_dict(case)
+                raise CaseStateError(
+                    f"القضية '{reference}' بلا قرار — لا تُغلق قضية بلا قرار فيها"
+                )
+            case_id = case.id
             decision_id = decision.id
+            previous_status = case.status
         finally:
             session.close()
 
-        trace = record_domain_trace(
-            context,
-            "gov.case.close",
-            EVENT_CASE_CLOSED,
-            {
-                "case_id": entity["id"],
-                "reference": entity["reference"],
+        from amos_federation.services.executive_core.sovereignty_bridge import (
+            compensator,
+            declared_effect,
+            operation_key,
+        )
+
+        target = f"cases/{tenant}/{reference}"
+        effect = declared_effect(
+            "WRITE", f"{target}/closure", f"إغلاقُ القضيّةِ '{reference}'"
+        )
+
+        def _apply(_effect: Any) -> dict[str, Any]:
+            if not self._set_case_status_row(case_id, "closed"):
+                raise CaseNotFoundError(
+                    f"القضية '{reference}' غابت بين الفحص والتطبيق — لا أثر يُزعَم"
+                )
+            read_session = self._session()
+            try:
+                entity = self._case_dict(self._case_row(read_session, context, reference))
+            finally:
+                read_session.close()
+
+            trace = record_domain_trace(
+                context,
+                ACTION_CASE_CLOSE,
+                EVENT_CASE_CLOSED,
+                {
+                    "case_id": entity["id"],
+                    "reference": entity["reference"],
+                    "decision_id": decision_id,
+                    "task_id": entity["task_id"],
+                    "tenant_id": entity["tenant_id"],
+                },
+            )
+            return {**entity, **trace}
+
+        guarded = self.authorizer.guard_declared(
+            ACTION_CASE_CLOSE,
+            target,
+            declared_effects=(effect,),
+            applier=_apply,
+            operation_key=operation_key(CASE_CLOSE_SCOPE, f"{tenant}:{reference}"),
+            compensators=(
+                compensator(
+                    effect.signature,
+                    lambda: self._set_case_status_row(case_id, previous_status),
+                    f"إعادةُ حالةِ القضيّةِ إلى '{previous_status}'",
+                ),
+            ),
+            metadata={
+                "tenant_id": tenant,
+                "reference": reference,
                 "decision_id": decision_id,
-                "task_id": entity["task_id"],
-                "tenant_id": entity["tenant_id"],
+                "previous_status": previous_status,
             },
         )
-        return {**entity, **trace}
+        if guarded.is_replay:
+            return {
+                "reference": reference,
+                "tenant_id": tenant,
+                "status": "closed",
+                "replayed": True,
+                "operation_key": guarded.outcome.operation_key,
+            }
+        return {**guarded.value, "replayed": False}
 
     # ── قراءة ────────────────────────────────────────────────────────────
 
