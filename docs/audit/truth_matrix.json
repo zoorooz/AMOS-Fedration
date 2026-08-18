@@ -5,9 +5,9 @@
     "core": {
       "domain": "core",
       "md_files": 67,
-      "py_files": 36,
+      "py_files": 37,
       "yaml_files": 0,
-      "code_lines": 10971,
+      "code_lines": 11670,
       "nucleus_count": 14,
       "nucleus_status": {
         "unspecified": 14
@@ -19,7 +19,7 @@
       "secret_hits": 0,
       "observed_hits": 3,
       "api_routes": 0,
-      "test_refs": 310,
+      "test_refs": 321,
       "identity_violations": 2,
       "test_evidence": "PASS",
       "coverage_evidence": "PASS",
@@ -40,7 +40,7 @@
           "COVERAGE": "PASS",
           "DEPLOYMENT": "ABSENT"
         },
-        "TEST_NAME_MENTIONS": 310
+        "TEST_NAME_MENTIONS": 321
       },
       "maturity": "UNIT_TESTED",
       "findings_count": 2
@@ -478,9 +478,9 @@
     "tests": {
       "domain": "tests",
       "md_files": 14,
-      "py_files": 33,
+      "py_files": 34,
       "yaml_files": 0,
-      "code_lines": 9712,
+      "code_lines": 10610,
       "nucleus_count": 5,
       "nucleus_status": {
         "unspecified": 5
@@ -492,7 +492,7 @@
       "secret_hits": 0,
       "observed_hits": 0,
       "api_routes": 0,
-      "test_refs": 120,
+      "test_refs": 121,
       "identity_violations": 1,
       "test_evidence": "PASS",
       "coverage_evidence": "ABSENT",
@@ -513,7 +513,7 @@
           "COVERAGE": "ABSENT",
           "DEPLOYMENT": "ABSENT"
         },
-        "TEST_NAME_MENTIONS": 120
+        "TEST_NAME_MENTIONS": 121
       },
       "maturity": "INTEGRATED",
       "findings_count": 0
