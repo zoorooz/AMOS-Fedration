@@ -6,7 +6,7 @@
   "public": 186,
   "total_sites": 203,
   "program_mentions_168": 11,
-  "program_placeholders": 3,
+  "program_placeholders": 0,
   "program_todo_markers": 0,
   "questions_headed": [
     1,
@@ -46,6 +46,7 @@
     "1e9f817",
     "31adda0",
     "64b32ff",
+    "691ac97",
     "6a86205",
     "70e90a8",
     "72314a1",
