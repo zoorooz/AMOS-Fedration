@@ -22,7 +22,7 @@ tags: project-state, handoff, quick-reference
 | الفرع | `main` |
 | **Current Stage** | Stage 1 — أساس الدولة |
 | **Last Completed Stage** | **1I — التعويض عن الأثر المُطبَّق (Compensation)** · 2026-08-18 · `BUILT / VERIFIED / PUSHED` |
-| **Last Commit** | _(يُثبَّت أدناه بعد الالتزام)_ — STAGE 1I (الأساس: `b97f0cb`) |
+| **Last Commit** | `2c7b264` — STAGE 1I — التعويضُ عن الأثرِ المُطبَّق (الأساس: `b97f0cb`) |
 | **Last Handoff** | [`docs/audit/STAGE_1I_HANDOFF.md`](docs/audit/STAGE_1I_HANDOFF.md) · مرآته: `ACTIVE_EXECUTION_STATE.md § 33` |
 | **Next Authorized Stage** | **1J — النطاق غير محسوم · HUMAN DECISION REQUIRED** (انظر أدناه) |
 
