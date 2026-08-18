@@ -163,10 +163,25 @@ def locate_repo_root(start: Path | None = None) -> Path:
 class ConstitutionalAuthorizer:
     """المُنفِّذ الحقيقي: يستدعي `SovereignGateway` في `core/` فعلًا.
 
-    الفاعل هو الفرع التنفيذي (`Branch.EXECUTIVE`) — أي **طرف تابع** بمنطق E2.1:
-    كل قاعدة دستورية مُلزِمة ومانعة عليه، ولا يملك مسارًا سياديًّا. وهذا مقصود:
-    النواة التنفيذية ليست التاج، ولا يجوز أن تتصرّف كأنها هو.
+    الفاعل افتراضًا هو الفرع التنفيذي (`Branch.EXECUTIVE`) — أي **طرف تابع** بمنطق
+    E2.1: كل قاعدة دستورية مُلزِمة ومانعة عليه، ولا يملك مسارًا سياديًّا. وهذا
+    مقصود: النواة التنفيذية ليست التاج، ولا يجوز أن تتصرّف كأنها هو.
+
+    **الفاعلُ مُعلَنٌ لا مُثبَّتٌ (2A):** فصلُ السلطاتِ في المادة الثالثة يجعلُ
+    بعضَ الأفعالِ اختصاصَ فرعٍ آخر — و`allocate_budget` منها: البوابةُ ترفضُه
+    لـ`EXECUTIVE` بـ R-003-1 وتأذنُ به لـ`TREASURY`. فلو بقيَ الفاعلُ مُثبَّتًا في
+    الشيفرةِ لكان أمامَ مُنادي الخزانةِ طريقانِ فقط: تسميةُ الفعلِ باسمٍ تنفيذيٍّ
+    (تجاوزٌ مُقنَّع) أو بناءُ جسرٍ ثانٍ (مسارُ تنفيذٍ ثانٍ). فصارَ الفاعلُ معامَلًا
+    مُعلَنًا افتراضُه `EXECUTIVE`:
+
+    - لا يتغيّرُ سلوكُ 1N: كلُّ مُنادٍ قائمٍ لا يُمرِّرُ `actor` يبقى تنفيذيًّا.
+    - لا يوسّعُ صلاحيةً: الفاعلُ يُقيَّمُ في البوابةِ نفسِها، فمَن أعلنَ فاعلًا
+      لا يملكُ الفعلَ يُرفَض — والإعلانُ لا يأذنُ، بل يُعرِّفُ صاحبَ الطلب.
+    - لا معامَلَ تجاوزٍ ولا إعفاءَ حرس: `guard_declared` بعقدِه نفسِه.
     """
+
+    #: الفاعلُ الافتراضيُّ — اسمُ فرعٍ في `Branch`، يُترجَم وقتَ بناءِ الطلب.
+    DEFAULT_ACTOR = "EXECUTIVE"
 
     #: متغيّرُ البيئةِ الذي يُحدِّد موضعَ سجلِّ الذرّيّة (1H) للنواة التنفيذية.
     LEDGER_PATH_ENV = "AMOS_EXECUTIVE_IDEMPOTENCY_LEDGER"
@@ -179,10 +194,12 @@ class ConstitutionalAuthorizer:
         gateway: Any | None = None,
         *,
         channel: str = "official",
+        actor: str = DEFAULT_ACTOR,
         boundary: Any | None = None,
         idempotency_ledger_path: Any | None = None,
     ) -> None:
         self._channel = channel
+        self._actor = actor
         self._gateway = gateway if gateway is not None else self._build_gateway()
         self._ledger_path = idempotency_ledger_path
         self._boundary = boundary
@@ -281,8 +298,16 @@ class ConstitutionalAuthorizer:
         self._ensure_core_importable()
         from core.constitutional_engine.model import ActionRequest, Branch
 
+        try:
+            actor = Branch[self._actor] if isinstance(self._actor, str) else self._actor
+        except KeyError as exc:
+            # فاعلٌ لا وجودَ له في الدستورِ ليس خطأً يُصحَّحُ بافتراضٍ: الافتراضُ
+            # هنا يُنفِّذُ بصلاحيةِ فرعٍ لم يُقصَد. فالرفضُ صريحٌ قبلَ أيِّ طلب.
+            raise SovereigntyUnavailableError(
+                f"فاعلٌ غيرُ معروفٍ في الدستور «{self._actor}» — لا يُفترَضُ فرعٌ بديل"
+            ) from exc
         return ActionRequest(
-            actor=Branch.EXECUTIVE,
+            actor=actor,
             action=action,
             target=target,
             channel=self._channel,

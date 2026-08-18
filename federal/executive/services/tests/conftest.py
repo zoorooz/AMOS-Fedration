@@ -206,13 +206,35 @@ def _cleanup_test_db(workspace: Path) -> None:
             shutil.rmtree(egg_dir, ignore_errors=True)
 
 
+#: سجلُّ الذرّيّة (1H) الخاصُّ بالاختبارات — مُثبَّتٌ صراحةً منذ 2A.
+TEST_IDEMPOTENCY_LEDGER_FILE = "amos_federation_test_idempotency.json"
+
+
+def _cleanup_test_ledger(workspace: Path) -> Path:
+    """اعزِلْ سجلَّ الذرّيّةِ في ملفٍّ للاختباراتِ وامسَحْه مع قاعدةِ الاختبار.
+
+    منذ 2A صارت كتابتانِ إنتاجيّتانِ تعبرانِ ضمانَ الذرّيّة (1H)، وسجلُّه ملفٌّ
+    **يبقى** بعدَ انتهاءِ الجلسة بينما قاعدةُ الاختبارِ تُمسَح. فلو تُرِكَ السجلُّ
+    مشتركًا لصارَ نداءٌ ثانٍ في جلسةٍ تاليةٍ «إعادةً» لأثرٍ مُحيت قاعدتُه — أي
+    سجلٌّ يشهدُ بأثرٍ لا وجودَ له. فعزلُه ومسحُه مع القاعدةِ ليس تخفيفًا للضمان
+    بل جعلُ حالتَي التخزينِ تُمسحانِ معًا. أمّا الإنتاجُ فسجلُّه دائمٌ كما هو،
+    وتكرارُ النداءِ نفسِه فيه إعادةٌ لا أثرٌ ثانٍ.
+    """
+    ledger = workspace / TEST_IDEMPOTENCY_LEDGER_FILE
+    with contextlib.suppress(OSError):
+        ledger.unlink()
+    return ledger
+
+
 def pytest_sessionstart(session):
     """Clean up test database before test session starts."""
     workspace = Path(__file__).resolve().parent.parent
     _cleanup_test_db(workspace)
+    os.environ["AMOS_EXECUTIVE_IDEMPOTENCY_LEDGER"] = str(_cleanup_test_ledger(workspace))
 
 
 def pytest_sessionfinish(session, exitstatus):
     """Clean up test database after test session ends."""
     workspace = Path(__file__).resolve().parent.parent
     _cleanup_test_db(workspace)
+    _cleanup_test_ledger(workspace)

@@ -25,6 +25,27 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from amos_federation.common.database import get_database_url
 from amos_federation.common.persistent import PersistentAuditStore
+from amos_federation.services.executive_core.sovereignty_bridge import (
+    ConstitutionalAuthorizer,
+    UndeclaredExecutionError,
+    compensator,
+    declared_effect,
+    operation_key,
+)
+
+#: فاعلُ العمليّة: `allocate_budget` اختصاصُ الخزانةِ في المادة الثالثة، والبوابةُ
+#: ترفضُه لفاعلٍ تنفيذيٍّ بـ R-003-1. فالفاعلُ يُعلَنُ صادقًا لا يُقنَّعُ باسمٍ آخر.
+TREASURY_ACTOR = "TREASURY"
+
+#: فعلُ التوزيعِ كما يعرفُه الدستورُ نفسُه — لا اسمٌ محليٌّ يوازيه.
+ACTION_ALLOCATE_BUDGET = "allocate_budget"
+
+#: نطاقُ مفاتيحِ الذرّيّة (1H) لتوزيعِ الميزانية.
+BUDGET_OPERATION_SCOPE = "state_runtime.budget.allocate"
+
+
+class BudgetAllocationError(RuntimeError):
+    """توزيعُ ميزانيةٍ تعذّرَ تطبيقُه — رفعٌ صريحٌ لا قيمةٌ صامتة."""
 
 
 class StateBase(DeclarativeBase):
@@ -114,7 +135,7 @@ STATE_ADMIN_STRUCTURE = {
 class StateRuntime:
     """12.1: State Runtime — كل ولاية وحدة تشغيل معزولة."""
 
-    def __init__(self) -> None:
+    def __init__(self, authorizer: ConstitutionalAuthorizer | None = None) -> None:
         self._engine = create_engine(
             get_database_url(),
             connect_args={"check_same_thread": False}
@@ -124,6 +145,49 @@ class StateRuntime:
         StateBase.metadata.create_all(self._engine)
         self._Session = sessionmaker(bind=self._engine, autoflush=False, expire_on_commit=False)
         self._init_states()
+        # 2A: المُصرِّحُ نفسُه لا مُصرِّحٌ ثانٍ — والفاعلُ خزانةٌ لأنَّ `allocate_budget`
+        # اختصاصُ الخزانةِ في المادة الثالثة، وتمريرُه فاعلًا تنفيذيًّا يُرفَض بـ R-003-1.
+        self._authorizer = authorizer
+
+    @property
+    def authorizer(self) -> ConstitutionalAuthorizer:
+        """المُصرِّحُ السياديُّ بفاعلِ الخزانة — يُبنى عندَ أوّلِ حاجةٍ أو يسقطُ صريحًا."""
+        if self._authorizer is None:
+            self._authorizer = ConstitutionalAuthorizer(actor=TREASURY_ACTOR)
+        return self._authorizer
+
+    # ── المسارُ القديمُ المُغلَق · 2A ─────────────────────────────────────
+    def _allocate_budget_unguarded(self, state_id: str, amount: str) -> None:
+        """مسارٌ **مُغلَقٌ** منذ 2A — يُرفَعُ دائمًا ولا يمسُّ ميزانيةً.
+
+        هذا هو شكلُ الكتابةِ التي كانت تقعُ قبلَ 2A: قراءةُ الميزانيةِ وجمعُها
+        وتثبيتُها بلا إذنٍ سياديٍّ ولا أثرٍ مُعلَنٍ ولا ذرّيّةٍ ولا معوّض. وبقاءُ
+        التوقيعِ مقصودٌ: مَن أعادَه يرى رفضًا صريحًا لا أثرًا يقعُ بجانبِ الحدّ.
+        """
+        raise UndeclaredExecutionError(
+            f"توزيعُ ميزانيةٍ مباشرٌ على الولاية «{state_id}» بمقدار «{amount}» "
+            "لا يعبرُ حدَّ التنفيذِ السياديَّ. المسارُ الوحيدُ هو `allocate_budget` "
+            "بإذنِ خزانةٍ وأثرٍ مُعلَنٍ ومفتاحِ عمليّةٍ ومعوّضٍ يعكسُ الفرقَ فعلًا."
+        )
+
+    def _add_to_budget(self, state_id: str, delta: int) -> int | None:
+        """أضِفْ إلى ميزانيةِ ولايةٍ فرقًا موقَّعًا — تُستعملُ للأثرِ وللعكسِ معًا.
+
+        استعمالُها في المعوّضِ بفرقٍ سالبٍ يجعلُ العكسَ **حقيقيًّا**: الميزانيةُ
+        تعودُ إلى قيمتِها لا إلى قيمةٍ يُظنُّ أنّها كانت. وترجعُ `None` إن غابت
+        الولاية، فلا يُزعَمُ عكسٌ لما لا وجودَ له.
+        """
+        session = self._Session()
+        try:
+            state = session.query(StateModel).filter(StateModel.state_id == state_id).first()
+            if not state:
+                return None
+            updated = int(state.budget or "0") + delta
+            state.budget = str(updated)
+            session.commit()
+            return updated
+        finally:
+            session.close()
 
     def _init_states(self) -> None:
         """تهيئة الولايات التسع إذا لم تكن موجودة."""
@@ -312,19 +376,47 @@ class StateRuntime:
         finally:
             session.close()
 
-    def allocate_budget(self, state_id: str, amount: str, reason: str = "") -> dict[str, Any]:
-        """12.4: توزيع الميزانية الفدرالية."""
+    def allocate_budget(
+        self,
+        state_id: str,
+        amount: str,
+        reason: str = "",
+        allocation_id: str | None = None,
+    ) -> dict[str, Any]:
+        """12.4: توزيع الميزانية الفدرالية — عبرَ حدِّ التنفيذِ السياديّ (2A).
+
+        الفرقُ عن ما قبلَ 2A ليس شكليًّا: الأثرُ يُعلَنُ قبلَ وقوعِه، والإذنُ من
+        البوابةِ بفاعلِ **الخزانة** (المادة الثالثة: `allocate_budget` اختصاصُها)،
+        والعمليّةُ ذرّيّةٌ بمفتاحٍ، ولها معوّضٌ يعكسُ الفرقَ فعلًا.
+
+        `allocation_id` مفتاحُ العمليّةِ من المُنادي: توزيعانِ مقصودانِ بالمقدارِ
+        نفسِه عمليّتانِ مختلفتانِ، فيُمرَّرُ لكلٍّ مفتاحُه. وإذا لم يُمرَّر اشتُقَّ
+        المفتاحُ من (الولاية · المقدار · السبب)، فتكرارُ النداءِ نفسِه إعادةٌ لا
+        توزيعٌ ثانٍ — وهذا هو الافتراضُ الآمن.
+        """
         session = self._Session()
         try:
             state = session.query(StateModel).filter(StateModel.state_id == state_id).first()
             if not state:
                 return {"error": "state_not_found"}
             current = int(state.budget or "0")
-            new_budget = current + int(amount)
-            state.budget = str(new_budget)
-            session.commit()
-            audit = PersistentAuditStore()
-            audit.append(
+        finally:
+            session.close()
+
+        delta = int(amount)
+        target = f"federal_states/{state_id}"
+        effect = declared_effect(
+            "WRITE", f"{target}/budget", f"توزيعُ ميزانيةٍ بمقدار {delta}: {reason or 'بلا سبب'}"
+        )
+
+        def _apply(_effect: Any) -> dict[str, Any]:
+            """التطبيقُ الحقيقيّ: تغييرُ الميزانيةِ ثمّ تدقيقٌ دائم."""
+            new_budget = self._add_to_budget(state_id, delta)
+            if new_budget is None:  # pragma: no cover - فُحِصَ وجودُها قبلَ الحدّ
+                raise BudgetAllocationError(
+                    f"الولاية «{state_id}» غابت بينَ الفحصِ والتطبيق — لا أثرَ يُزعَم"
+                )
+            PersistentAuditStore().append(
                 "state.budget_allocated",
                 "treasury",
                 {"state_id": state_id, "amount": amount, "reason": reason},
@@ -333,10 +425,38 @@ class StateRuntime:
                 "state_id": state_id,
                 "previous_budget": current,
                 "new_budget": new_budget,
-                "allocated": int(amount),
+                "allocated": delta,
             }
-        finally:
-            session.close()
+
+        guarded = self.authorizer.guard_declared(
+            ACTION_ALLOCATE_BUDGET,
+            target,
+            declared_effects=(effect,),
+            applier=_apply,
+            operation_key=operation_key(
+                BUDGET_OPERATION_SCOPE,
+                allocation_id or f"{state_id}:{amount}:{reason}",
+            ),
+            compensators=(
+                compensator(
+                    effect.signature,
+                    lambda: self._add_to_budget(state_id, -delta),
+                    "طرحُ المقدارِ المُوزَّعِ من الميزانية — عكسٌ حقيقيٌّ للفرق",
+                ),
+            ),
+            metadata={"state_id": state_id, "amount": amount, "reason": reason},
+        )
+        if guarded.is_replay:
+            # إعادةٌ لمفتاحٍ مُثبَّت: لا توزيعَ ثانيًا. والصدقُ أن يُقال «أُعيدَ».
+            return {
+                "state_id": state_id,
+                "previous_budget": current,
+                "new_budget": current,
+                "allocated": 0,
+                "replayed": True,
+                "operation_key": guarded.outcome.operation_key,
+            }
+        return {**guarded.value, "replayed": False}
 
 
 class FederalMessageBus:

@@ -10,7 +10,7 @@ tags: project-state, handoff, quick-reference
 -->
 
 > **المرجع السريع للوكيل القادم:** اقرأ هذا الملف أولًا، ثم تسليم المرحلة الأخيرة
-> `docs/audit/STAGE_1N_HANDOFF.md`، ثم `docs/audit/ACTIVE_EXECUTION_STATE.md § 37`
+> `docs/audit/STAGE_2A_HANDOFF.md`، ثم `docs/audit/STAGE_1N_HANDOFF.md`، ثم `docs/audit/ACTIVE_EXECUTION_STATE.md § 37`
 > للتفاصيل. **لا تُعِد فحص ما ثبت.**
 
 ## الهوية والحالة
@@ -21,12 +21,29 @@ tags: project-state, handoff, quick-reference
 | المستودع | `https://github.com/zoorooz/AMOS-Fedration` |
 | الفرع | `main` |
 | **Current Stage** | Stage 1 — أساس الدولة |
-| **Last Completed Stage** | **1N — وصلُ الإنفاذ (Enforcement Integration)** · 2026-08-18 · `BUILT / VERIFIED / PUSHED` |
-| **Last Commit** | `72a6082` — 1N: هجرة المُنادين الفعليين إلى حدِّ التنفيذ السياديّ (الأساس: `1cae95f`) · ووثائقُه في العَقْبِ مباشرةً |
-| **Last Handoff** | [`docs/audit/STAGE_1N_HANDOFF.md`](docs/audit/STAGE_1N_HANDOFF.md) · مرآته: `ACTIVE_EXECUTION_STATE.md § 37` |
+| **Last Completed Stage** | **2A — وصلُ زمنِ التشغيلِ السياديّ (Sovereign Runtime Integration)** · 2026-08-18 · `BUILT / VERIFIED / PUSHED` |
+| **Previous Stage** | **1N — وصلُ الإنفاذ (Enforcement Integration)** · 2026-08-18 · `BUILT / VERIFIED / PUSHED` |
+| **Last Commit** | 2A: هجرة كتابتين إنتاجيّتين إلى حدِّ التنفيذ السياديّ (الأساس: `024f8ab`) · ووثائقُه في العَقْبِ مباشرةً |
+| **Commit قبله** | `72a6082` — 1N: هجرة المُنادين الفعليين إلى حدِّ التنفيذ السياديّ (الأساس: `1cae95f`) · ووثائقُه في العَقْبِ مباشرةً |
+| **Last Handoff** | [`docs/audit/STAGE_2A_HANDOFF.md`](docs/audit/STAGE_2A_HANDOFF.md) · وقبله [`STAGE_1N_HANDOFF.md`](docs/audit/STAGE_1N_HANDOFF.md) · مرآته: `ACTIVE_EXECUTION_STATE.md § 37` |
 | **Next Authorized Stage** | **غير مُثبَتة · HUMAN DECISION REQUIRED** — تُقرَأ من [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) ولا تُخترَع هنا |
 
-## Current Capability — ما صارت الدولة قادرة عليه بعد 1N
+## Current Capability — ما صارت الدولة قادرة عليه بعد 2A
+
+**تم إثبات نمط Sovereign Runtime Integration على كتابتين إنتاجيتين مختلفتين، وتم
+إغلاق مساراتهما القديمة، مع بقاء بقية نقاط التجاوز القائمة كـ migration debt.**
+
+العمليّتان: تأسيسُ المؤسسةِ في `state_registry.register_institution`، وتوزيعُ
+الميزانيةِ في `governance.state_runtime.allocate_budget`. كلتاهما تنفُذُ الآن من
+`guard_declared → SovereignExecutionBoundary → 1F–1N` بأثرٍ مُعلَنٍ قبلَ وقوعِه،
+ومفتاحِ ذرّيّةٍ، ومعوّضٍ يعكسُ عكسًا حقيقيًّا، وإغلاقٍ عندَ الفشل، وبلا مسارِ
+تجاوز. ومسارُهما القديمُ صارَ يُرفَعُ ولا يُنتِجُ أثرًا. والتفصيلُ والدَّينُ
+المُعلَنُ في [`docs/audit/STAGE_2A_HANDOFF.md`](docs/audit/STAGE_2A_HANDOFF.md).
+
+**ولا يُقال إنَّ State Runtime أصبح Sovereign بالكامل:** بقيّةُ كتاباتِ السجلِّ
+وزمنِ التشغيلِ والخزانةِ والاقتصادِ **لم تُهاجَر**، وهي دَينُ هجرةٍ لا إنجاز.
+
+## Capability بعد 1N
 
 **التنفيذُ الفدراليُّ صار يمرُّ من الحدِّ فعلًا، لا يستطيعُ ألّا يمرَّ.** 1M بنَت
 `SovereignExecutionBoundary` وأثبتت أنَّ حرسَه لا يُتجاوَز، لكنّها تركَت سؤالًا
@@ -320,6 +337,12 @@ tags: project-state, handoff, quick-reference
    PROVE → DOCUMENT → HANDOFF → UPDATE PROJECT STATE → COMMIT → PUSH → STOP.
 
 ## الخطوة التالية
+
+**2A مُنجَزة ومُثبَتة على عمليّتينِ إنتاجيّتينِ فقط** (تأسيسُ المؤسسةِ · توزيعُ
+الميزانية). وهجرةُ بقيّةِ الخدماتِ **لم تبدأ ولا تبدأُ بقرارِ مُنفِّذ** — وكذلك
+تشغيلُ التعويضِ تلقائيًّا عندَ الفشلِ بعدَ وقوعِ الأثر: قرارٌ بشريٌّ يُسجَّلُ في
+[`docs/MASTER_PLAN.md § 4`](docs/MASTER_PLAN.md) قبلَ أيِّ بناء. والدَّينُ المُعلَنُ
+كلُّه في [`docs/audit/STAGE_2A_HANDOFF.md`](docs/audit/STAGE_2A_HANDOFF.md).
 
 **1N مُنجَزة ومُثبَتة.** والتاليةُ **غير مُثبَتة في أيّ وثيقة معتمدة** — تُقرَأ من
 [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) § 3 و§ 4 و

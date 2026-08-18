@@ -39,6 +39,14 @@ from typing import TYPE_CHECKING, Any
 from amos_federation.common.database import get_session_factory, init_db
 from amos_federation.common.principal import DEFAULT_TENANT
 from amos_federation.services.executive_core.agent_identity import get_identity
+from amos_federation.services.executive_core.sovereignty_bridge import (
+    ConstitutionalAuthorizer,
+    UndeclaredExecutionError,
+    compensator,
+    declared_effect,
+    get_authorizer,
+    operation_key,
+)
 from amos_federation.services.state_registry.authorization import (
     PERMISSIONS_DEPARTMENT_WRITE,
     PERMISSIONS_INSTITUTION_WRITE,
@@ -124,11 +132,63 @@ def _iso(value: datetime | None) -> str | None:
     return value.isoformat() if value else None
 
 
+#: نطاقُ مفاتيحِ الذرّيّة (1H) لتأسيسِ المؤسسة — نطاقٌ واحدٌ لا يتصادمُ مع غيرِه.
+INSTITUTION_REGISTER_SCOPE = "state_registry.institution.register"
+
+#: فعلُ التأسيسِ كما تراه البوابةُ السياديّة — وهو نفسُ فعلِ التخويلِ المحليٍّ القائم،
+#: فلا يوجدُ فعلانِ لعمليّةٍ واحدةٍ يفترقان في التدقيق.
+ACTION_INSTITUTION_REGISTER = "registry.institution.register"
+
+
 class StateRegistry:
     """السجل الفدرالي للمؤسسات والإدارات والمسؤولين."""
 
-    def __init__(self) -> None:
+    def __init__(self, authorizer: ConstitutionalAuthorizer | None = None) -> None:
         init_db()
+        # 2A: المُصرِّحُ يُمرَّرُ للاختبارِ بسجلِّ ذرّيّةٍ معزول، والافتراضُ مُصرِّحُ
+        # النواةِ التنفيذيّةِ نفسُه — لا مُصرِّحٌ ثانٍ ولا بوابةٌ ثانية.
+        self._authorizer = authorizer
+
+    @property
+    def authorizer(self) -> ConstitutionalAuthorizer:
+        """المُصرِّحُ السياديُّ — يُبنى عندَ أوّلِ حاجةٍ أو يسقطُ صريحًا."""
+        if self._authorizer is None:
+            self._authorizer = get_authorizer()
+        return self._authorizer
+
+    def _write_institution_unguarded(self, **fields: Any) -> None:
+        """مسارٌ **مُغلَقٌ** منذ 2A — يُرفَعُ دائمًا ولا يكتبُ شيءًا.
+
+        بقاءُه مقصودٌ: مَن أعادَ الكتابةَ المباشرةَ في جدولِ المؤسساتِ من هذه
+        الطبقةِ يرى رفضًا صريحًا يدلُّه على البديل، لا `AttributeError` غامضًا ولا — وهو
+        الأسوأ — أثرًا يقعُ بجانبِ الحدّ.
+        """
+        raise UndeclaredExecutionError(
+            "كتابةٌ مباشرةٌ في سجلِّ المؤسساتِ لا تعبرُ حدَّ التنفيذِ السياديَّ "
+            f"(حقولٌ: {sorted(fields)}). المسارُ الوحيدُ هو `register_institution` "
+            "بأثرٍ مُعلَنٍ ومفتاحِ عمليّةٍ ومعوّضٍ حقيقيٍّ."
+        )
+
+    def _delete_institution_row(self, institution_id: str) -> bool:
+        """العكسُ الحقيقيُّ للتأسيس (1I) — حذفُ الصفّ لا ادّعاءُ حذفِه.
+
+        معوّضٌ لا يعكسُ أثرًا فعلًا وعدٌ لا خطّةٌ، و 1I يشترطُ العكسَ لا الوعد.
+        ولا يُستعملُ إلاّ معوّضًا مربوطًا في خطّةِ التعويضِ قبلَ التنفيذ.
+        """
+        session = self._session()
+        try:
+            row = (
+                session.query(InstitutionModel)
+                .filter(InstitutionModel.id == institution_id)
+                .first()
+            )
+            if row is None:
+                return False
+            session.delete(row)
+            session.commit()
+            return True
+        finally:
+            session.close()
 
     # ── أدوات داخلية ─────────────────────────────────────────────────────
 
@@ -405,39 +465,87 @@ class StateRegistry:
                         f"المؤسسة الأمّ '{parent_code}' حالتها '{parent.status}' — لا تبعية تحتها"
                     )
                 parent_id = parent.id
-
-            row = InstitutionModel(
-                id=f"inst-{uuid.uuid4()}",
-                code=code,
-                name=name,
-                kind=kind,
-                branch=branch,
-                status="active",
-                mandate=mandate,
-                parent_institution_id=parent_id,
-                tenant_id=tenant,
-                created_by=context.principal_id,
-            )
-            session.add(row)
-            session.commit()
-            institution = self._institution_dict(row)
         finally:
             session.close()
 
-        trace = self._record(
-            context,
-            "registry.institution.register",
-            EVENT_INSTITUTION_REGISTERED,
-            {
-                "institution_id": institution["id"],
-                "code": institution["code"],
-                "kind": institution["kind"],
-                "branch": institution["branch"],
-                "tenant_id": institution["tenant_id"],
-                "parent_institution_id": institution["parent_institution_id"],
-            },
+        # ── 2A: الأثرُ يُعلَنُ قبلَ وقوعِه ثمّ يُطبَّقُ داخلَ الحدّ ──────────────
+        #
+        # المعرّفُ يُولَّدُ هنا لا في المُطبِّق: المعوّضُ يجب أن يعرفَ ما يعكسُه قبلَ
+        # أن يقع، وإلاّ كان وعدًا بعكسٍ مجهولِ الهدف.
+        institution_id = f"inst-{uuid.uuid4()}"
+        target = f"institutions/{tenant}/{code}"
+        effect = declared_effect(
+            "WRITE", target, f"تأسيسُ مؤسسةٍ '{code}' نوعُها '{kind}' في فرع '{branch}'"
         )
-        return {**institution, **trace}
+
+        def _apply(_effect: Any) -> dict[str, Any]:
+            """التطبيقُ الحقيقيُّ — كتابةُ الصفِّ ثمّ أثرُ التدقيقِ ثمّ الحدث.
+
+            الترتيبُ هو ترتيبُ R7-A نفسُه ولم يُقلَب: القاعدةُ ثمّ التدقيقُ ثمّ
+            الحدث. وكونُه داخلَ المُطبِّقِ يعني أنَّ الإعادةَ (1H) لا تُنتِجُ حدثًا
+            ثانيًا لأثرٍ واحد.
+            """
+            write_session = self._session()
+            try:
+                row = InstitutionModel(
+                    id=institution_id,
+                    code=code,
+                    name=name,
+                    kind=kind,
+                    branch=branch,
+                    status="active",
+                    mandate=mandate,
+                    parent_institution_id=parent_id,
+                    tenant_id=tenant,
+                    created_by=context.principal_id,
+                )
+                write_session.add(row)
+                write_session.commit()
+                institution = self._institution_dict(row)
+            finally:
+                write_session.close()
+
+            trace = self._record(
+                context,
+                ACTION_INSTITUTION_REGISTER,
+                EVENT_INSTITUTION_REGISTERED,
+                {
+                    "institution_id": institution["id"],
+                    "code": institution["code"],
+                    "kind": institution["kind"],
+                    "branch": institution["branch"],
+                    "tenant_id": institution["tenant_id"],
+                    "parent_institution_id": institution["parent_institution_id"],
+                },
+            )
+            return {**institution, **trace}
+
+        guarded = self.authorizer.guard_declared(
+            ACTION_INSTITUTION_REGISTER,
+            target,
+            declared_effects=(effect,),
+            applier=_apply,
+            operation_key=operation_key(INSTITUTION_REGISTER_SCOPE, f"{tenant}:{code}"),
+            compensators=(
+                compensator(
+                    effect.signature,
+                    lambda: self._delete_institution_row(institution_id),
+                    "حذفُ صفِّ المؤسسةِ المُؤسَّسة — عكسٌ حقيقيٌّ لا ادّعاء",
+                ),
+            ),
+            metadata={"tenant_id": tenant, "code": code, "kind": kind, "branch": branch},
+        )
+        if guarded.is_replay:
+            # إعادةٌ لمفتاحٍ مُثبَّتٍ: لا أثرَ ثانيًا ولا حدثَ ثانيًا. والصدقُ أن
+            # يُقال «أُعيدَ» لا أن يُزعَمَ تأسيسٌ جديد.
+            return {
+                "code": code,
+                "tenant_id": tenant,
+                "institution_id": institution_id,
+                "replayed": True,
+                "operation_key": guarded.outcome.operation_key,
+            }
+        return {**guarded.value, "replayed": False}
 
     def set_institution_status(
         self,
