@@ -49,6 +49,20 @@ _EXPORTS: dict[str, str] = {
     "PermitScopeError": "enforcement",
     "PolicyEnforcementPoint": "enforcement",
     "issue_permit": "enforcement",
+    # jurisdiction — جدارُ الاختصاصِ القضائيّ (1G)
+    "FORBIDDEN_JUDICIAL_ACTIONS": "jurisdiction",
+    "JUDICIAL_ACTIONS": "jurisdiction",
+    "JUDICIAL_EFFECT_KINDS": "jurisdiction",
+    "JUDICIAL_SCOPES": "jurisdiction",
+    "JudicialAction": "jurisdiction",
+    "JudicialOverreachError": "jurisdiction",
+    "JurisdictionError": "jurisdiction",
+    "JurisdictionWall": "jurisdiction",
+    "NON_JUDICIAL_EFFECT_KINDS": "jurisdiction",
+    "NON_JUDICIAL_SCOPE": "jurisdiction",
+    "ROYAL_JUDICIAL_PREROGATIVES": "jurisdiction",
+    "RoyalSupremacyViolationError": "jurisdiction",
+    "WALL": "jurisdiction",
     # crown
     "Crown": "crown",
     "CrownError": "crown",
@@ -89,7 +103,7 @@ _EXPORTS: dict[str, str] = {
     "SovereigntyViolation": "gateway",
 }
 
-__all__ = sorted(_EXPORTS)
+__all__ = sorted(_EXPORTS)  # noqa: PLE0605 — sorted() returns list at runtime
 
 
 def __getattr__(name: str) -> Any:
