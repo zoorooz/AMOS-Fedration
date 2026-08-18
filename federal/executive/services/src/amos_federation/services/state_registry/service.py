@@ -139,6 +139,14 @@ INSTITUTION_REGISTER_SCOPE = "state_registry.institution.register"
 #: فلا يوجدُ فعلانِ لعمليّةٍ واحدةٍ يفترقان في التدقيق.
 ACTION_INSTITUTION_REGISTER = "registry.institution.register"
 
+#: نطاقُ مفاتيحِ الذرّيّة (1H) لتغييرِ حالةِ المؤسسة — نطاقٌ مستقلٌّ عن التأسيس،
+#: فمفتاحُ تأسيسٍ ومفتاحُ تغييرِ حالةٍ لا يتصادمان ولو تشابهت قيمتُهما.
+INSTITUTION_STATUS_SCOPE = "state_registry.institution.status"
+
+#: فعلُ تغييرِ الحالةِ كما تراه البوابة — هو نصُّ التخويلِ المحلّيِّ القائمِ نفسُه
+#: (`registry.institution.status`)، فلا فعلٌ جديدٌ يُختَرعُ ولا فعلٌ حصريٌّ يُنتحَل.
+ACTION_INSTITUTION_STATUS = "registry.institution.status"
+
 
 class StateRegistry:
     """السجل الفدرالي للمؤسسات والإدارات والمسؤولين."""
@@ -185,6 +193,31 @@ class StateRegistry:
             if row is None:
                 return False
             session.delete(row)
+            session.commit()
+            return True
+        finally:
+            session.close()
+
+    def _set_institution_status_row(self, institution_id: str, status: str) -> bool:
+        """اكتبْ حالةَ المؤسسةِ في الصفِّ مباشرةً — أثرٌ وعكسُه بالأداةِ نفسِها.
+
+        تُستعملُ في موضعينِ فقط: داخلَ مُطبِّقِ `set_institution_status` عبرَ الحدّ،
+        ومعوّضًا يُعيدُ الحالةَ السابقة. فالعكسُ **حقيقيٌّ** لا وعدٌ: صفٌّ يُكتَبُ
+        بقيمةٍ محفوظةٍ قبلَ العبور، لا `pass` ولا تسجيلُ نيّة.
+
+        وليست هذه بابًا خلفيًّا: هي معاونةٌ خاصّةٌ لا يُنادِيها إلاّ الحدُّ ومعوّضُه،
+        والمسارُ العامُّ الوحيدُ هو `set_institution_status`.
+        """
+        session = self._session()
+        try:
+            row = (
+                session.query(InstitutionModel)
+                .filter(InstitutionModel.id == institution_id)
+                .first()
+            )
+            if row is None:
+                return False
+            row.status = status
             session.commit()
             return True
         finally:
@@ -554,18 +587,33 @@ class StateRegistry:
         code: str,
         status: str,
         reason: str,
+        change_id: str | None = None,
     ) -> dict[str, Any]:
-        """غيّر حالة مؤسسة — والحلّ يُرفَض ما بقي تحتها أثر نشط."""
-        require_domain_permission(
-            context, "registry.institution.status", PERMISSIONS_INSTITUTION_WRITE
-        )
+        """غيّر حالة مؤسسة — عبرَ حدِّ التنفيذِ السياديّ، والحلّ يُرفَض ما بقي تحتها أثر نشط.
+
+        الفحوصُ القائمةُ لم تُنقَل ولم تُضعَّف: التخويلُ المحلّيُّ وحصرُ الحالاتِ
+        المعروفةِ ومنعُ إحياءِ المحلولِ ومنعُ الحلِّ ما بقيت إدارةٌ نشطةٌ أو مسؤولٌ
+        مُقلَّد — كلُّها **قبلَ** العبور، لأنَّ الحدَّ يحرسُ الأثرَ ولا ينوبُ عن
+        قواعدِ النطاق. ثمّ يُعلَنُ الأثرُ ويُطبَّقُ داخلَ الحدِّ بمفتاحِ ذرّيّةٍ
+        ومعوّضٍ يعيدُ الحالةَ السابقة.
+
+        `change_id` مفتاحُ العمليّةِ من المُنادي: إيقافانِ مقصودانِ متعاقبانِ
+        عمليّتانِ مختلفتان، فيُمرَّرُ لكلٍّ مفتاحُه. وإن لم يُمرَّر اشتُقَّ المفتاحُ
+        من (المستأجر · الرمز · الحالةِ السابقةِ ← الحالةِ المطلوبةِ · السبب)،
+        فتكرارُ النداءِ نفسِه إعادةٌ لا تغييرٌ ثانٍ — وهذا هو الافتراضُ الآمن.
+        """
+        require_domain_permission(context, ACTION_INSTITUTION_STATUS, PERMISSIONS_INSTITUTION_WRITE)
         if status not in INSTITUTION_STATUSES:
             raise RegistryError(
                 f"حالة مؤسسة غير معروفة '{status}' — المعروف: {list(INSTITUTION_STATUSES)}"
             )
+        tenant = self._tenant_of(context)
         session = self._session()
         try:
             row = self._institution_row(session, context, code)
+            # المعرّفُ والحالةُ السابقةُ يُقتنَصانِ **قبلَ** العبور: المعوّضُ لا يعرفُ
+            # ما يعكسُه إن قُرِئت الحالةُ بعدَ تغييرِها.
+            institution_id = row.id
             previous = row.status
             if previous == "dissolved" and status != "dissolved":
                 raise RegistryError(f"المؤسسة '{code}' محلولة — لا إحياء لها في هذا المسار")
@@ -591,26 +639,87 @@ class StateRegistry:
                         f"لا تُحلّ '{code}': إدارات نشطة={active_departments}، "
                         f"مسؤولون مُقلَّدون={appointed_officials}"
                     )
-            row.status = status
-            session.commit()
-            institution = self._institution_dict(row)
         finally:
             session.close()
 
-        trace = self._record(
-            context,
-            "registry.institution.status",
-            EVENT_INSTITUTION_STATUS_CHANGED,
-            {
-                "institution_id": institution["id"],
-                "code": institution["code"],
+        target = f"institutions/{tenant}/{code}"
+        effect = declared_effect(
+            "WRITE",
+            f"{target}/status",
+            f"تغييرُ حالةِ المؤسسةِ '{code}' من '{previous}' إلى '{status}': "
+            f"{reason or 'بلا سبب'}",
+        )
+
+        def _apply(_effect: Any) -> dict[str, Any]:
+            """التطبيقُ الحقيقيّ: الحالةُ في القاعدةِ ثمّ التدقيقُ ثمّ الحدث.
+
+            الترتيبُ هو ترتيبُ R7-A نفسُه ولم يُقلَب، وكونُه داخلَ المُطبِّقِ يعني
+            أنَّ الإعادةَ (1H) لا تُنتِجُ حدثًا ثانيًا لأثرٍ واحد.
+            """
+            if not self._set_institution_status_row(institution_id, status):
+                raise InstitutionNotFoundError(
+                    f"المؤسسة '{code}' غابت بينَ الفحصِ والتطبيق — لا أثرَ يُزعَم"
+                )
+            read_session = self._session()
+            try:
+                institution = self._institution_dict(
+                    self._institution_row(read_session, context, code)
+                )
+            finally:
+                read_session.close()
+
+            trace = self._record(
+                context,
+                ACTION_INSTITUTION_STATUS,
+                EVENT_INSTITUTION_STATUS_CHANGED,
+                {
+                    "institution_id": institution["id"],
+                    "code": institution["code"],
+                    "from_status": previous,
+                    "to_status": status,
+                    "reason": reason,
+                    "tenant_id": institution["tenant_id"],
+                },
+            )
+            return {**institution, "from_status": previous, **trace}
+
+        guarded = self.authorizer.guard_declared(
+            ACTION_INSTITUTION_STATUS,
+            target,
+            declared_effects=(effect,),
+            applier=_apply,
+            operation_key=operation_key(
+                INSTITUTION_STATUS_SCOPE,
+                change_id or f"{tenant}:{code}:{previous}->{status}:{reason}",
+            ),
+            compensators=(
+                compensator(
+                    effect.signature,
+                    lambda: self._set_institution_status_row(institution_id, previous),
+                    f"إعادةُ حالةِ المؤسسةِ إلى '{previous}' — عكسٌ حقيقيٌّ لا ادّعاء",
+                ),
+            ),
+            metadata={
+                "tenant_id": tenant,
+                "code": code,
                 "from_status": previous,
                 "to_status": status,
                 "reason": reason,
-                "tenant_id": institution["tenant_id"],
             },
         )
-        return {**institution, "from_status": previous, **trace}
+        if guarded.is_replay:
+            # إعادةٌ لمفتاحٍ مُثبَّت: لا تغييرَ ثانيًا ولا حدثَ ثانيًا. والصدقُ أن
+            # يُقال «أُعيدَ» لا أن يُزعَمَ تغييرٌ جديد.
+            return {
+                "code": code,
+                "tenant_id": tenant,
+                "institution_id": institution_id,
+                "from_status": previous,
+                "status": status,
+                "replayed": True,
+                "operation_key": guarded.outcome.operation_key,
+            }
+        return {**guarded.value, "replayed": False}
 
     # ── كتابة: الإدارات ──────────────────────────────────────────────────
 

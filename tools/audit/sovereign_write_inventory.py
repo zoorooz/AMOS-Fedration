@@ -16,7 +16,15 @@
 - يقيسُ **مواضعَ** الكتابةِ في المصدر، لا عددَ الكتاباتِ في التشغيل.
 - «عمليّةٌ عامّةٌ مُغيِّرة» = دالّةٌ عامّةٌ في صنفٍ أو وحدةٍ إنتاجيّةٍ يقعُ في جسمِها
   `add/add_all/commit/delete/merge` أو SQL خامٌّ تغييريّ.
-- المعاوناتُ الخاصّة (`_name`) تُحصى منفصلةً ولا تُعدُّ عمليّاتٍ مستقلّة.
+- المعاوناتُ الخاصّة (`_name`) لا تُعدُّ عمليّاتٍ مستقلّة. وكتابتُها **تُنسَبُ**
+  إلى العمليّةِ العامّةِ التي تُناديها في الوحدةِ نفسِها (تتبُّعٌ ساكنٌ للاستدعاء،
+  عمقٌ غيرُ محدود، دورانٌ محميّ). وبلا هذا النسبِ يكونُ المقياسُ مضلِّلًا: عمليّةٌ
+  هُوجِرت هجرةً صحيحةً — فصارت كتابتُها في معاونٍ يُنادى من داخلِ الحدِّ — تسقطُ من
+  العدِّ كأنّها لم تكنْ، فلا تُرى سياديّةً ولا مُتجاوِزة (قِيسَ هذا فعلًا في P1أ).
+- «تعبرُ الحدَّ» = يقعُ `guard_declared(` في جسدِ العمليّةِ العامّةِ نفسِها. ولا
+  يكفي أن يعبرَ معاونُها: الإعلانُ مسؤوليّةُ العمليّةِ لا مسؤوليّةُ أداةِ قياس.
+- معاونٌ خاصٌّ يكتبُ ولا تصلُ إليه عمليّةٌ عامّةٌ في وحدتِه يُحصى موضعًا مستقلًّا
+  ولا يُسقَط، لأنّ الكتابةَ التي لا يُعرَفُ مدخلُها أخطرُ لا أهون.
 - كونُ الدالّةِ «مُغيِّرةً» لا يعني وجوبَ هجرتِها: الوجوبُ حكمٌ دستوريٌّ يُقرَّر في
   سجلِّ القرارات، وهذه الأداةُ تعدُّ فقط.
 """
@@ -26,7 +34,7 @@ from __future__ import annotations
 import argparse
 import ast
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -59,6 +67,8 @@ class WriteSite:
     writes: tuple[str, ...]
     guarded: bool
     closed_legacy: bool
+    #: كتابةٌ وصلت من معاونٍ خاصٍّ لا من جسدِ العمليّةِ نفسِها — يُصرَّحُ بها ولا تُخفى.
+    writes_via: tuple[str, ...] = ()
 
 
 class _WriteVisitor(ast.NodeVisitor):
@@ -67,6 +77,8 @@ class _WriteVisitor(ast.NodeVisitor):
         self._source = source
         self._classes: list[str] = []
         self.sites: list[WriteSite] = []
+        #: خريطةُ الاستدعاءِ داخلَ الوحدة: دالّةٌ ← أسماءُ ما تُناديه.
+        self.calls: dict[str, set[str]] = {}
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:  # noqa: N802
         self._classes.append(node.name)
@@ -76,7 +88,14 @@ class _WriteVisitor(ast.NodeVisitor):
     def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         segment = ast.get_source_segment(self._source, node) or ""
         writes: set[str] = set()
+        called: set[str] = self.calls.setdefault(node.name, set())
         for sub in ast.walk(node):
+            if isinstance(sub, ast.Call):
+                target = sub.func
+                if isinstance(target, ast.Name):
+                    called.add(target.id)
+                elif isinstance(target, ast.Attribute):
+                    called.add(target.attr)
             if (
                 isinstance(sub, ast.Call)
                 and isinstance(sub.func, ast.Attribute)
@@ -130,6 +149,105 @@ def is_production_file(relative: Path) -> bool:
     return not (name.startswith("test_") or name.endswith("_test.py") or name == "conftest.py")
 
 
+def attribute_helper_writes(
+    sites: list[WriteSite], calls: dict[str, set[str]]
+) -> list[WriteSite]:
+    """انسبْ كتابةَ المعاونينِ الخاصّينِ إلى العمليّةِ العامّةِ التي تُناديهم.
+
+    وحدةُ العملِ ملفٌّ واحد. والتتبُّعُ عبرَ الأسماءِ لا عبرَ الأنواع: أداةُ جردٍ
+    ساكنةٌ لا مُحلِّلُ أنواع، وهذا حدٌّ مُعلَنٌ لا نقصٌ مسكوتٌ عنه.
+    """
+    writers = {site.function for site in sites if site.writes}
+    helper_writers = {name for name in writers if name.startswith("_")}
+    if not helper_writers:
+        return sites
+
+    def reaches(entry: str) -> set[str]:
+        """أيُّ معاونينِ كاتبينِ تصلُ إليهم `entry` — بعمقٍ وبحمايةٍ من الدوران."""
+        seen: set[str] = set()
+        stack = list(calls.get(entry, ()))
+        found: set[str] = set()
+        while stack:
+            name = stack.pop()
+            if name in seen or not name.startswith("_"):
+                continue
+            seen.add(name)
+            if name in helper_writers:
+                found.add(name)
+            stack.extend(calls.get(name, ()))
+        return found
+
+    attributed: dict[str, set[str]] = {}
+    for site in sites:
+        if site.public:
+            attributed[site.function] = reaches(site.function)
+    reached = {name for names in attributed.values() for name in names}
+
+    resolved: list[WriteSite] = []
+    for site in sites:
+        if site.public:
+            via = tuple(sorted(attributed.get(site.function, ())))
+            resolved.append(replace(site, writes_via=via) if via else site)
+        elif site.function in reached and site.writes:
+            # مُحصًى في عمليّتِه العامّة — وعدُّه ثانيًا تضخيمٌ للرقم لا دقّةٌ فيه.
+            continue
+        else:
+            resolved.append(site)
+    return resolved
+
+
+def synthesize_public_sites(
+    sites: list[WriteSite], calls: dict[str, set[str]], path: str, source: str, tree: ast.AST
+) -> list[WriteSite]:
+    """أضِفْ عمليّاتٍ عامّةً تكتبُ **بمعاونِها** ولا كتابةَ في جسدِها.
+
+    هذه بعينُها الحالةُ التي كان المقياسُ يُسقِطها: `set_institution_status` بعدَ
+    هجرتِها في P1أ.
+    """
+    writer_helpers = {s.function for s in sites if s.writes and not s.public}
+    known = {s.function for s in sites}
+    added: list[WriteSite] = []
+    classes: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            for child in node.body:
+                if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef):
+                    classes[child.name] = node.name
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            continue
+        if node.name.startswith("_") or node.name in known:
+            continue
+        seen: set[str] = set()
+        stack = list(calls.get(node.name, ()))
+        via: set[str] = set()
+        while stack:
+            name = stack.pop()
+            if name in seen or not name.startswith("_"):
+                continue
+            seen.add(name)
+            if name in writer_helpers:
+                via.add(name)
+            stack.extend(calls.get(name, ()))
+        if not via:
+            continue
+        segment = ast.get_source_segment(source, node) or ""
+        added.append(
+            WriteSite(
+                path=path,
+                owner=classes.get(node.name, "-"),
+                function=node.name,
+                line=node.lineno,
+                public=True,
+                writes=(),
+                guarded=GUARD_MARKER in segment,
+                closed_legacy=CLOSED_MARKER in segment and GUARD_MARKER not in segment,
+                writes_via=tuple(sorted(via)),
+            )
+        )
+    return added
+
+
 def collect(root: Path, subtree: Path | None = None) -> list[WriteSite]:
     """اجمعْ مواضعَ الكتابةِ كلَّها تحتَ `root` (أو تحتَ `subtree` منه)."""
     base = root / subtree if subtree else root
@@ -145,7 +263,10 @@ def collect(root: Path, subtree: Path | None = None) -> list[WriteSite]:
             continue
         visitor = _WriteVisitor(str(relative), source)
         visitor.visit(tree)
-        sites.extend(visitor.sites)
+        module_sites = visitor.sites + synthesize_public_sites(
+            visitor.sites, visitor.calls, str(relative), source, tree
+        )
+        sites.extend(attribute_helper_writes(module_sites, visitor.calls))
     return sites
 
 
