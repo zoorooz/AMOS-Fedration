@@ -33,6 +33,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+
+from cryptography.hazmat.primitives.asymmetric import ed25519
 from typing import Any, TypeVar
 
 from core.constitutional_engine.engine import ConstitutionalEngine, ConstitutionalViolation
@@ -53,6 +55,11 @@ from core.sovereignty.contract import (
     bind_contract,
 )
 from core.sovereignty.crown import crown_is_provisioned
+from core.sovereignty.enforcement import (
+    DEFAULT_PERMIT_TTL_SECONDS,
+    EnforcementPermit,
+    issue_permit,
+)
 from core.sovereignty.decree import DecreeRegistry, RoyalDecree
 from core.sovereignty.prerogatives import is_royal_exclusive
 from core.sovereignty.security_events import SecurityEventKind, SecurityEventLog
@@ -123,6 +130,10 @@ class ExecutionRecord:
     decision_kind: str = ""
     authority_layer: str = ""
     advisory_articles: tuple[str, ...] = ()
+    #: ما جرى عند هذا الأثر: تنفيذٌ مباشرٌ `DIRECT` أم إصدارُ إذنٍ
+    #: `PERMIT_ISSUED` بلا مسٍّ للحالة. دونَ هذا الحقل كان السجلُ يقول
+    #: «نُفِّذ» عن إصدارِ رخصة — وذلك وصفٌ غيرُ صادقٍ لما جرى.
+    enforcement: str = "DIRECT"
 
     @property
     def sovereign(self) -> bool:
@@ -140,6 +151,7 @@ class ExecutionRecord:
             "decision_kind": self.decision_kind,
             "authority_layer": self.authority_layer,
             "advisory_articles": list(self.advisory_articles),
+            "enforcement": self.enforcement,
         }
 
 
@@ -167,6 +179,14 @@ class SovereignGateway:
         # مواضعُ الأثرِ في `_records` التي جرت تحتَ عقد. الموضعُ لا البصمة: طلبان
         # متطابقان لهما بصمةٌ واحدة، فالعدُّ بالبصمة يُنقِص عددَ ما بلا عقد.
         self._contracted_positions: set[int] = set()
+        # نمطُ الإنفاذِ الجاري: يُكتَب في الأثرِ **عند كتابتِه** لا بتعديلٍ لاحق
+        # (القاعدة 22). يُبدَّل داخل `decide` وحدَها ويعود في `finally`.
+        self._enforcement_mode: str = "DIRECT"
+        # مفتاحُ توقيعِ الأذونات. خاصٌّ باسمِه ولا يُصدَّر في واجهةٍ عامّة:
+        # من ملكَه أذِنَ لنفسِه، فحجبُه عن موضعِ الإنفاذِ هو الفصلُ نفسُه.
+        # وهو عابرٌ مع العمليّة ولا يُحفَظ — حدٌّ مُعلَنٌ في القسم 30.
+        self._permit_key = ed25519.Ed25519PrivateKey.generate()
+        self._permits: list[str] = []
 
     # ── الاستعلام ─────────────────────────────────────────────────────────
     @property
@@ -362,6 +382,68 @@ class SovereignGateway:
             applied_effects=tuple(applied),
         )
 
+    # ── موضعُ القرار · PDP (1F) ───────────────────────────────────────────
+    @property
+    def verifying_key_hex(self) -> str:
+        """مفتاحُ التحقّقِ العامّ — يُعطى لموضعِ الإنفاذ، ولا يُعطى سواه.
+
+        ولا نظيرَ له للمفتاحِ الخاصّ: من ملك مفتاحَ التوقيعِ ملك أن يأذن لنفسِه،
+        فحجبُه هو الفصلُ نفسُه لا تزيينٌ له.
+        """
+        return self._permit_key.public_key().public_bytes_raw().hex()
+
+    def decide(
+        self,
+        request: ActionRequest,
+        *,
+        declared_effects: tuple[SovereignEffect, ...],
+        ttl_seconds: int = DEFAULT_PERMIT_TTL_SECONDS,
+    ) -> EnforcementPermit:
+        """احكمْ ولا تُنفِّذ: يُرجِع إذنًا موقَّعًا يحمِلُه موضعُ الإنفاذ.
+
+        **لا منطقَ قرارٍ جديدٌ هنا ولا حرفٌ منه مكرَّر:** هذه الدالّةُ تمرُّ من
+        `execute` نفسِها، وتُمرِّر مُنفِّذًا لا يمسُّ حالةً بل يلتقط أثرَ الحكم.
+        فتباعُدُ قرارِ `decide` عن قرارِ `execute` ممتنعٌ **بنيويًّا لا اتّفاقًا**،
+        وهذه حراسةُ القاعدتين 5 و6 بالبناءِ لا بالوصيّة.
+
+        وما يمنع `execute` يمنع `decide`: انتحالُ الملكيّة · الصلاحيّةُ المسحوبة ·
+        المخالفةُ الدستوريّة — فلا يُصدَر إذنٌ لممنوع.
+
+        ويُكتب الأثرُ بـ`enforcement="PERMIT_ISSUED"` **عند كتابتِه** لا بتعديلٍ
+        لاحقٍ (القاعدة 22)، فلا يقول السجلُّ «نُفِّذ» عن رخصةٍ أُصدِرَت.
+        """
+        contract = bind_contract(
+            actor=request.actor.value,
+            action=request.action,
+            target=request.target,
+            declared_effects=declared_effects,
+        )
+        صندوق: dict[str, ExecutionRecord] = {}
+
+        def _إصدار() -> None:
+            """لا يمسُّ حالةً: يلتقط أثرَ الحكمِ عند لحظةِ صدورِه فحسب."""
+            صندوق["record"] = self._records[-1]
+
+        self._enforcement_mode = "PERMIT_ISSUED"
+        try:
+            self.execute(request, _إصدار)
+        finally:
+            self._enforcement_mode = "DIRECT"
+
+        record = صندوق["record"]
+        permit = issue_permit(
+            contract=contract,
+            request_fingerprint=record.fingerprint,
+            decision=record.decision,
+            ledger_entry_hash=record.ledger_entry_hash,
+            private_key=self._permit_key,
+            authority_layer=record.authority_layer,
+            decision_kind=record.decision_kind,
+            ttl_seconds=ttl_seconds,
+        )
+        self._permits.append(permit.permit_id)
+        return permit
+
     # ── أ — المسار السيادي ────────────────────────────────────────────────
     def _execute_sovereign(
         self,
@@ -428,6 +510,7 @@ class SovereignGateway:
                 actor=request.actor.value,
                 decision=verdict.decision.value,
                 executed=True,
+                enforcement=self._enforcement_mode,
                 ledger_entry_hash=verdict.ledger_entry_hash,
                 decree_id=decree_id,
                 decision_kind=classification.kind.value,
@@ -514,6 +597,7 @@ class SovereignGateway:
                 actor=request.actor.value,
                 decision=verdict.decision.value,
                 executed=True,
+                enforcement=self._enforcement_mode,
                 ledger_entry_hash=verdict.ledger_entry_hash,
                 decree_id=decree_id,
                 decision_kind=classification.kind.value,
@@ -541,6 +625,7 @@ class SovereignGateway:
             "active_withdrawals": len(self._grants.active_withdrawals()),
             # الدولةُ اليومَ فيها مسارٌ بعقدٍ ومسارٌ بلا عقد، والثاني يُعلَن ولا يُخفى.
             "contracted_executions": len(self._contracts),
+            "permits_issued": len(self._permits),
             "uncontracted_executions": sum(
                 1
                 for i, r in enumerate(self._records)

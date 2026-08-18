@@ -39,6 +39,16 @@ _EXPORTS: dict[str, str] = {
     "bind_contract": "contract",
     "digest_of_payload": "contract",
     "in_scope": "contract",
+    # enforcement — فصلُ موضعِ القرارِ عن موضعِ الإنفاذ (1F)
+    "ConsumedPermitLedger": "enforcement",
+    "EnforcementError": "enforcement",
+    "EnforcementPermit": "enforcement",
+    "PermitExpiredError": "enforcement",
+    "PermitInvalidError": "enforcement",
+    "PermitReplayError": "enforcement",
+    "PermitScopeError": "enforcement",
+    "PolicyEnforcementPoint": "enforcement",
+    "issue_permit": "enforcement",
     # crown
     "Crown": "crown",
     "CrownError": "crown",

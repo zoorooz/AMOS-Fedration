@@ -243,6 +243,44 @@ class ConstitutionalAuthorizer:
             evidence=self._evidence_from_record(action, target, records[-1]),
         )
 
+    # ── فصل القرار عن الإنفاذ · 1F ────────────────────────────────────────
+    def request_permit(
+        self,
+        action: str,
+        target: str,
+        declared_effects: tuple[Any, ...],
+        metadata: dict[str, Any] | None = None,
+    ) -> Any:
+        """اطلب إذن إنفاذ موقّعًا بدل أن تُنفّذ بنفسك.
+
+        هذا مخرج النواة التنفيذية من كونها حاكمة ومُنفّذة معًا: تطلب الإذن ولا
+        تصنعه، ثم تُسلّمه إلى موضع إنفاذ لا يملك بوابة.
+        """
+        return self._gateway.decide(
+            self._request(action, target, metadata),
+            declared_effects=declared_effects,
+        )
+
+    def enforcement_point(self, consumed: Any | None = None) -> Any:
+        """ابنِ موضع إنفاذ لا يحمل بوابة ولا محرّكًا ولا مفتاح توقيع.
+
+        يُعطى مفتاح التحقّق العامّ وحده، فما يخرج من هنا **لا يستطيع** أن يأذن
+        لنفسه — امتناع بنيوي لا وعد سلوكي.
+        """
+        self._ensure_core_importable()
+        from core.sovereignty.enforcement import (
+            ConsumedPermitLedger,
+            PolicyEnforcementPoint,
+        )
+        from cryptography.hazmat.primitives.asymmetric import ed25519
+
+        return PolicyEnforcementPoint(
+            verifying_key=ed25519.Ed25519PublicKey.from_public_bytes(
+                bytes.fromhex(self._gateway.verifying_key_hex)
+            ),
+            consumed=consumed if consumed is not None else ConsumedPermitLedger(),
+        )
+
     def review_only(
         self,
         action: str,
