@@ -147,6 +147,13 @@ INSTITUTION_STATUS_SCOPE = "state_registry.institution.status"
 #: (`registry.institution.status`)، فلا فعلٌ جديدٌ يُختَرعُ ولا فعلٌ حصريٌّ يُنتحَل.
 ACTION_INSTITUTION_STATUS = "registry.institution.status"
 
+#: نطاقُ مفاتيحِ الذرّيّة (1H) لإنشاءِ الإدارة — مستقلٌّ عن نطاقَي المؤسسة.
+DEPARTMENT_CREATE_SCOPE = "state_registry.department.create"
+
+#: فعلُ إنشاءِ الإدارةِ كما تراه البوابة — هو نصُّ التخويلِ المحلّيِّ القائمِ نفسُه
+#: (`registry.department.create`)، فلا فعلٌ جديدٌ يُختَرعُ ولا فعلٌ حصريٌّ يُنتحَل.
+ACTION_DEPARTMENT_CREATE = "registry.department.create"
+
 
 class StateRegistry:
     """السجل الفدرالي للمؤسسات والإدارات والمسؤولين."""
@@ -188,6 +195,27 @@ class StateRegistry:
             row = (
                 session.query(InstitutionModel)
                 .filter(InstitutionModel.id == institution_id)
+                .first()
+            )
+            if row is None:
+                return False
+            session.delete(row)
+            session.commit()
+            return True
+        finally:
+            session.close()
+
+    def _delete_department_row(self, department_id: str) -> bool:
+        """العكسُ الحقيقيُّ لإنشاءِ الإدارة (1I) — حذفُ الصفِّ لا ادّعاءُ حذفِه.
+
+        لا يُستعملُ إلاّ معوّضًا مربوطًا في خطّةِ التعويضِ قبلَ التنفيذ، ولا يُنادى
+        من مسارٍ عامّ: المسارُ العامُّ الوحيدُ لإنشاءِ إدارةٍ هو `create_department`.
+        """
+        session = self._session()
+        try:
+            row = (
+                session.query(DepartmentModel)
+                .filter(DepartmentModel.id == department_id)
                 .first()
             )
             if row is None:
@@ -732,10 +760,23 @@ class StateRegistry:
         name: str,
         mandate: str = "",
     ) -> dict[str, Any]:
-        """أنشئ إدارة تحت مؤسسة نشطة."""
+        """أنشئ إدارة تحت مؤسسة نشطة — عبرَ حدِّ التنفيذِ السياديّ.
+
+        الفحوصُ القائمةُ لم تُنقَل ولم تُضعَّف: التخويلُ المحلّيُّ، ووجودُ المؤسسةِ
+        في مستأجرِ السياق، وكونُها نشطةً، ومنعُ تكرارِ الرمزِ تحتَها — كلُّها
+        **قبلَ** العبور، لأنَّ الحدَّ يحرسُ الأثرَ ولا ينوبُ عن قواعدِ النطاق.
+
+        والمعرّفُ يُولَّدُ قبلَ العبورِ لا في المُطبِّق: المعوّضُ يجبُ أن يعرفَ ما
+        يعكسُه قبلَ أن يقع، وإلاّ كان وعدًا بعكسٍ مجهولِ الهدف.
+
+        ولا مفتاحَ عمليّةٍ من المُنادي هنا خلافًا لـ`set_institution_status`: هويّةُ
+        الإنشاءِ طبيعيّةٌ ومُقيَّدةٌ أصلًا بمنعِ تكرارِ الرمز (المستأجر · رمزُ
+        المؤسسة · رمزُ الإدارة)، فتكرارُ النداءِ نفسِه إعادةٌ لا إنشاءٌ ثانٍ.
+        """
         require_domain_permission(
-            context, "registry.department.create", PERMISSIONS_DEPARTMENT_WRITE
+            context, ACTION_DEPARTMENT_CREATE, PERMISSIONS_DEPARTMENT_WRITE
         )
+        tenant = self._tenant_of(context)
         session = self._session()
         try:
             institution = self._institution_row(session, context, institution_code)
@@ -755,36 +796,91 @@ class StateRegistry:
                 raise DuplicateCodeError(
                     f"رمز الإدارة '{code}' مستعمل في المؤسسة '{institution_code}'"
                 )
-            row = DepartmentModel(
-                id=f"dept-{uuid.uuid4()}",
-                institution_id=institution.id,
-                code=code,
-                name=name,
-                mandate=mandate,
-                status="active",
-                tenant_id=institution.tenant_id,
-                created_by=context.principal_id,
-            )
-            session.add(row)
-            session.commit()
-            department = self._department_dict(row)
+            institution_id = institution.id
+            institution_tenant = institution.tenant_id
             institution_code_value = institution.code
         finally:
             session.close()
 
-        trace = self._record(
-            context,
-            "registry.department.create",
-            EVENT_DEPARTMENT_CREATED,
-            {
-                "department_id": department["id"],
-                "institution_id": department["institution_id"],
-                "institution_code": institution_code_value,
-                "code": department["code"],
-                "tenant_id": department["tenant_id"],
+        department_id = f"dept-{uuid.uuid4()}"
+        target = f"institutions/{tenant}/{institution_code}/departments/{code}"
+        effect = declared_effect(
+            "WRITE",
+            target,
+            f"إنشاءُ إدارةٍ '{code}' تحتَ المؤسسةِ '{institution_code}': {name}",
+        )
+
+        def _apply(_effect: Any) -> dict[str, Any]:
+            """التطبيقُ الحقيقيّ — الصفُّ ثمّ التدقيقُ ثمّ الحدث.
+
+            الترتيبُ هو ترتيبُ R7 نفسُه ولم يُقلَب، وكونُه داخلَ المُطبِّقِ يعني أنَّ
+            الإعادةَ (1H) لا تُنتِجُ حدثًا ثانيًا لأثرٍ واحد.
+            """
+            write_session = self._session()
+            try:
+                row = DepartmentModel(
+                    id=department_id,
+                    institution_id=institution_id,
+                    code=code,
+                    name=name,
+                    mandate=mandate,
+                    status="active",
+                    tenant_id=institution_tenant,
+                    created_by=context.principal_id,
+                )
+                write_session.add(row)
+                write_session.commit()
+                department = self._department_dict(row)
+            finally:
+                write_session.close()
+
+            trace = self._record(
+                context,
+                ACTION_DEPARTMENT_CREATE,
+                EVENT_DEPARTMENT_CREATED,
+                {
+                    "department_id": department["id"],
+                    "institution_id": department["institution_id"],
+                    "institution_code": institution_code_value,
+                    "code": department["code"],
+                    "tenant_id": department["tenant_id"],
+                },
+            )
+            return {**department, **trace}
+
+        guarded = self.authorizer.guard_declared(
+            ACTION_DEPARTMENT_CREATE,
+            target,
+            declared_effects=(effect,),
+            applier=_apply,
+            operation_key=operation_key(
+                DEPARTMENT_CREATE_SCOPE, f"{tenant}:{institution_code}:{code}"
+            ),
+            compensators=(
+                compensator(
+                    effect.signature,
+                    lambda: self._delete_department_row(department_id),
+                    "حذفُ صفِّ الإدارةِ المُنشأة — عكسٌ حقيقيٌّ لا ادّعاء",
+                ),
+            ),
+            metadata={
+                "tenant_id": tenant,
+                "institution_code": institution_code,
+                "code": code,
             },
         )
-        return {**department, **trace}
+        if guarded.is_replay:
+            # إعادةٌ لمفتاحٍ مُثبَّت: لا صفَّ ثانيًا ولا حدثَ ثانيًا. والصدقُ أن
+            # يُقالَ «أُعيدَ» لا أن يُزعَمَ إنشاءٌ جديد.
+            return {
+                "code": code,
+                "institution_code": institution_code,
+                "tenant_id": tenant,
+                "department_id": department_id,
+                "replayed": True,
+                "operation_key": guarded.outcome.operation_key,
+            }
+        return {**guarded.value, "replayed": False}
 
     # ── كتابة: المسؤولون ─────────────────────────────────────────────────
 

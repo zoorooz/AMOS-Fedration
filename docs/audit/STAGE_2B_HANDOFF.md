@@ -6,9 +6,10 @@
 |---|---|
 | الأساس | `6a86205ce635a777673dce7a125f6b6bfeec433e` |
 | P0 | `7823bf12f16fdafc7f635764cb27293ca8649511` — مدفوعٌ إلى GitHub |
+| P1أ | `e814cd2cc966cea2980725ddab4a230177a4671b` — مدفوعٌ إلى GitHub |
 | النطاق | `set_institution_status` · `create_department` · `appoint_official` · `revoke_official` · إغلاقُ المسارِ القديمِ في `state_registry/main.py` |
-| المُنجَزُ حتى الآن | **1 من 5** (`set_institution_status`) |
-| الرقمُ المرجعيّ | `non_sovereign_write_operations` بأداةِ الجردِ v2: خطُّ الأساس **208** ← الآن **207** |
+| المُنجَزُ حتى الآن | **2 من 5** (`set_institution_status` · `create_department`) |
+| الرقمُ المرجعيّ | `non_sovereign_write_operations` بأداةِ الجردِ v2: خطُّ الأساس **208** ← الآن **206** |
 
 ---
 
@@ -68,3 +69,50 @@
 
 - المسارُ القديمُ في `state_registry/main.py` **لم يُغلَقْ بعد** — إغلاقُه في P1د كما في خطّةِ المرحلة.
 - `create_department` · `appoint_official` · `revoke_official` — لم تُهاجَرْ بعد.
+
+---
+
+## P1ب · `state_registry.create_department` — **MIGRATED**
+
+### 1. ما تغيّر
+
+| الموضع | التغيير |
+|---|---|
+| `create_department` | تعبرُ الحدَّ بـ`guard_declared` بأثرٍ مُعلَنٍ ومُعوِّضٍ مربوطٍ ومفتاحِ ذرّيّة |
+| المُعوِّض | `_delete_department_row` — حذفُ الصفِّ المُنشأِ فعلًا، على سُنّةِ `_delete_institution_row` المُثبَتةِ في 2A |
+| الهدف | `institutions/{tenant}/{institution_code}/departments/{code}` — التبعيّةُ ظاهرةٌ في الهدفِ نفسِه لا مُستنبَطة |
+| الثوابت | `DEPARTMENT_CREATE_SCOPE` · `ACTION_DEPARTMENT_CREATE = "registry.department.create"` (نصُّ التخويلِ المحلّيِّ القائمِ نفسُه) |
+| المُنشئُ الوحيد | `DepartmentModel(...)` لا يُبنى إلاّ في مُطبِّقِ الأثرِ داخلَ الحدّ — مقيسٌ بشجرةِ المصدرِ بعدَ طرحِ الدوالِّ الداخليّة |
+
+### 2. الأدلّة
+
+| الدعوى | الدليل |
+|---|---|
+| العبورُ والمراحلُ والإذن | `test_creation_writes_row_and_passes_mandatory_stages` |
+| النطاق | `test_declared_effect_stays_within_the_target` |
+| المنعُ محلّيًّا وبالبوّابة | `test_local_authorization_denial_creates_no_row` · `test_gateway_denial_creates_no_row` (بحكمِ رفضٍ حقيقيٍّ من الدستور) |
+| تعويضٌ حقيقيّ | `test_compensation_plan_covers_the_effect_and_reverses_it` — يُنادى المُعوِّضُ فيُحذَفُ الصفُّ فعلًا |
+| الفشل | `test_failure_inside_applier_does_not_claim_success` |
+| الإعادة | `test_duplicate_code_is_refused_before_the_boundary` · `test_replay_of_a_proven_key_creates_nothing` |
+| إغلاقُ التجاوز | `test_department_rows_are_built_in_one_function_only` |
+| الإنفاذُ الساكن | `test_no_forbidden_bypass_parameter_in_the_migrated_operation` |
+| الانحدار | `test_department_under_inactive_institution_is_refused` · `test_department_under_unknown_institution_is_refused` |
+
+### 3. ملاحظاتٌ مُصرَّحٌ بها
+
+- **الحرسُ الطبيعيُّ يسبقُ الحدَّ:** منعُ تكرارِ رمزِ الإدارةِ فحصٌ قبلَ العبورِ كما كان قبلَ الهجرة، فمسارُ الإعادةِ (1H) لا يُرى إلاّ إن غابَ الصفُّ وبقيَ المفتاح (ما بعدَ تعويضٍ أو حذف). وقد قيسَ هذا الفرعُ صراحةً ولم يُترَكْ مجهولًا.
+- **Q-11 لا يمسُّ هذه العمليّةَ:** إنشاءُ إدارتينِ مختلفتينِ في الثانيةِ نفسِها هدفُهما مختلفٌ فعقدُهما مختلفٌ فإذنُهما مختلف. والتصادمُ إنّما يقعُ على الهدفِ الواحد.
+- **لا مفتاحَ عمليّةٍ من المُنادي:** لم يُضَفْ `change_id` هنا — الهويّةُ الطبيعيّةُ (مستأجر · مؤسسة · رمز) كافيةٌ ومُقيَّدةٌ أصلًا، وإضافةُ مفتاحٍ اختياريٍّ بلا حاجةٍ توسيعٌ للسطحِ لا إحكامٌ له.
+
+### 4. الاختبارات
+
+| المجموعة | النتيجة |
+|---|---|
+| ملفُّ إثباتِ 2B (P1أ + P1ب) | **30 passed** |
+| مجموعةُ الانحدار | **193 passed** |
+| `tests/sovereignty/` | **795 passed · 1 skipped** |
+
+| المقياس | قبلَ P1ب | بعدَ P1ب |
+|---|---|---|
+| تعبرُ الحدَّ | 4 | **5** |
+| لا تعبرُ الحدَّ | 207 | **206** |

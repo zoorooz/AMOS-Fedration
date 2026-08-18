@@ -1,6 +1,7 @@
 """الهدف: إثباتُ هجرةِ عائلةِ `state_registry` إلى حدِّ التنفيذِ السياديّ (2B · P1)
 
-النطاق: `StateRegistry.set_institution_status` (P1أ) — ويُضافُ إليها ما يُهاجَرُ لاحقًا
+النطاق: `StateRegistry.set_institution_status` (P1أ) · `create_department` (P1ب)
+       — ويُضافُ إليها ما يُهاجَرُ لاحقًا
 المالك: federal/executive/services
 تاريخ الإنشاء: 2026-08-18
 تاريخ آخر تعديل: 2026-08-18
@@ -43,9 +44,15 @@ from amos_federation.services.executive_core.sovereignty_bridge import (
     GuardedResult,
 )
 from amos_federation.services.state_registry import service as registry_module
-from amos_federation.services.state_registry.models import InstitutionModel
+from amos_federation.services.state_registry.models import (
+    DepartmentModel,
+    InstitutionModel,
+)
 from amos_federation.services.state_registry.service import (
+    ACTION_DEPARTMENT_CREATE,
     ACTION_INSTITUTION_STATUS,
+    DuplicateCodeError,
+    InstitutionInactiveError,
     InstitutionNotEmptyError,
     RegistryError,
     StateRegistry,
@@ -653,3 +660,356 @@ class TestPreMigrationRulesStillHold:
                 context=king, code=institution, status="dissolved", reason="حلٌّ غيرُ نظيف"
             )
         assert _status_of(institution) == "active", "حُلَّت مؤسسةٌ تحتها إدارةٌ نشطة."
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# P1ب · `create_department` — الدعاوى العشرُ نفسُها على عمليّةِ إنشاء
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def _department_row(institution_code: str, code: str) -> Any:
+    """اقرأِ الإدارةَ من **قاعدةِ البيانات** لا من حصيلةِ النداء."""
+    session = get_session_factory()()
+    try:
+        institution = (
+            session.query(InstitutionModel)
+            .filter(
+                InstitutionModel.code == institution_code,
+                InstitutionModel.tenant_id == DEFAULT_TENANT,
+            )
+            .first()
+        )
+        if institution is None:
+            return None
+        return (
+            session.query(DepartmentModel)
+            .filter(
+                DepartmentModel.institution_id == institution.id,
+                DepartmentModel.code == code,
+            )
+            .first()
+        )
+    finally:
+        session.close()
+
+
+def _department_count(institution_code: str, code: str) -> int:
+    session = get_session_factory()()
+    try:
+        institution = (
+            session.query(InstitutionModel)
+            .filter(
+                InstitutionModel.code == institution_code,
+                InstitutionModel.tenant_id == DEFAULT_TENANT,
+            )
+            .first()
+        )
+        if institution is None:
+            return 0
+        return (
+            session.query(DepartmentModel)
+            .filter(
+                DepartmentModel.institution_id == institution.id,
+                DepartmentModel.code == code,
+            )
+            .count()
+        )
+    finally:
+        session.close()
+
+
+@pytest.fixture
+def dept_code() -> str:
+    return f"DEPT-{uuid.uuid4().hex[:8].upper()}"
+
+
+class TestDepartmentCreationCrossesTheBoundary:
+    """S-1 · S-2 · S-4 — العبورُ والمراحلُ والأثرُ في نطاقِ الهدف."""
+
+    def test_creation_writes_row_and_passes_mandatory_stages(
+        self,
+        registry: tuple[StateRegistry, RecordingAuthorizer],
+        institution: str,
+        dept_code: str,
+    ) -> None:
+        service, authorizer = registry
+        result = service.create_department(
+            context=_context("king", _KING_PERMISSIONS),
+            institution_code=institution,
+            code=dept_code,
+            name="إدارةُ قياسٍ",
+            mandate="إثباتُ العبور",
+        )
+        assert result["replayed"] is False
+        row = _department_row(institution, dept_code)
+        assert row is not None and row.status == "active", "لم يقعِ الأثرُ في القاعدة."
+        assert len(authorizer.results) == 1, "لم تعبرِ العمليّةُ الحدَّ مرّةً واحدةً بيّنة."
+        outcome = authorizer.results[0].outcome
+        assert _mandatory_stages() <= set(outcome.stages), (
+            f"مراحلُ الحدِّ الإلزاميّةُ لم تمرَّ كلُّها: {_mandatory_stages() - set(outcome.stages)}"
+        )
+        assert outcome.contract.action == ACTION_DEPARTMENT_CREATE
+        assert outcome.permit_id, "لا إذنَ في الحصيلة — فالعبورُ غيرُ مُثبَت."
+
+    def test_declared_effect_stays_within_the_target(
+        self,
+        registry: tuple[StateRegistry, RecordingAuthorizer],
+        institution: str,
+        dept_code: str,
+    ) -> None:
+        """الأثرُ المُعلَنُ في نطاقِ الهدفِ — والهدفُ يُظهِرُ تبعيّةَ الإدارةِ لمؤسستِها."""
+        service, authorizer = registry
+        service.create_department(
+            context=_context("king", _KING_PERMISSIONS),
+            institution_code=institution,
+            code=dept_code,
+            name="إدارةُ قياسٍ",
+        )
+        outcome = authorizer.results[0].outcome
+        target = outcome.contract.target
+        assert target == (
+            f"institutions/{DEFAULT_TENANT}/{institution}/departments/{dept_code}"
+        ), f"هدفٌ غيرُ متوقَّع: {target}"
+        for effect in outcome.contract.declared_effects:
+            assert effect.resource == target or effect.resource.startswith(target + "/"), (
+                f"أثرٌ خارجَ نطاقِ الهدف: {effect.signature}"
+            )
+
+
+class TestDepartmentUnauthorizedCreatesNothing:
+    """S-3 — المنعُ محلّيًّا وبالبوّابةِ: لا صفَّ في القاعدةِ في الحالتين."""
+
+    def test_local_authorization_denial_creates_no_row(
+        self,
+        registry: tuple[StateRegistry, RecordingAuthorizer],
+        institution: str,
+        dept_code: str,
+    ) -> None:
+        service, authorizer = registry
+        with pytest.raises(Exception):  # noqa: B017,PT011
+            service.create_department(
+                context=_context("citizen", _CITIZEN_PERMISSIONS),
+                institution_code=institution,
+                code=dept_code,
+                name="إدارةٌ ممنوعة",
+            )
+        assert _department_row(institution, dept_code) is None, "وقعَ أثرٌ رغمَ المنع."
+        assert authorizer.results == [], "عبرت العمليّةُ الحدَّ رغمَ المنعِ المحلّيّ."
+
+    def test_gateway_denial_creates_no_row(
+        self,
+        registry: tuple[StateRegistry, RecordingAuthorizer],
+        institution: str,
+        dept_code: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from core.sovereignty.gateway import SovereigntyViolation
+
+        service, authorizer = registry
+        gateway = authorizer.boundary.gateway
+        denial = _real_denial_verdict()
+        assert denial.decision.name == "DENY"
+
+        def _deny(*_args: Any, **_kwargs: Any) -> None:
+            raise SovereigntyViolation(denial)
+
+        monkeypatch.setattr(gateway, "decide", _deny)
+        with pytest.raises(SovereigntyViolation):
+            service.create_department(
+                context=_context("king", _KING_PERMISSIONS),
+                institution_code=institution,
+                code=dept_code,
+                name="إدارةٌ مرفوضة",
+            )
+        assert _department_row(institution, dept_code) is None, (
+            "وقعَ أثرٌ رغمَ رفضِ البوّابةِ — والحدُّ إذنْ لم يحرسْ شيئًا."
+        )
+
+
+class TestDepartmentCompensationIsReal:
+    """S-5 — المعوّضُ عكسٌ حقيقيٌّ يُنادى فيحذفُ الصفَّ فعلًا."""
+
+    def test_compensation_plan_covers_the_effect_and_reverses_it(
+        self,
+        registry: tuple[StateRegistry, RecordingAuthorizer],
+        institution: str,
+        dept_code: str,
+    ) -> None:
+        service, authorizer = registry
+        service.create_department(
+            context=_context("king", _KING_PERMISSIONS),
+            institution_code=institution,
+            code=dept_code,
+            name="إدارةُ قياسٍ",
+        )
+        outcome = authorizer.results[0].outcome
+        plan = outcome.compensation_plan
+        assert plan is not None, "لم تُبنَ خطّةُ تعويض."
+        applied = set(outcome.applied_signatures)
+        assert applied and applied <= plan.covered_signatures, (
+            f"أثرٌ واقعٌ بلا معوّضٍ مربوط: {applied - plan.covered_signatures}"
+        )
+        assert _department_row(institution, dept_code) is not None
+        entry = plan.compensator_for(next(iter(applied)))
+        assert entry.apply() is True, "المعوّضُ لم يفعلْ شيئًا."
+        assert _department_row(institution, dept_code) is None, (
+            "المعوّضُ المربوطُ لم يحذفِ الصفَّ — فهو وعدٌ لا عكس."
+        )
+
+
+class TestDepartmentFailureIsFailClosed:
+    """S-6 — الفشلُ بعدَ الأثرِ لا يُدَّعى نجاحًا، وخطّةُ التعويضِ تُغطّيه."""
+
+    def test_failure_inside_applier_does_not_claim_success(
+        self,
+        registry: tuple[StateRegistry, RecordingAuthorizer],
+        institution: str,
+        dept_code: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        service, authorizer = registry
+
+        def _explode(*_args: Any, **_kwargs: Any) -> None:
+            raise RuntimeError("سقوطُ التدقيقِ بعدَ وقوعِ الأثر")
+
+        monkeypatch.setattr(service, "_record", _explode)
+        with pytest.raises(Exception):  # noqa: B017,PT011
+            service.create_department(
+                context=_context("king", _KING_PERMISSIONS),
+                institution_code=institution,
+                code=dept_code,
+                name="إدارةٌ ساقطة",
+            )
+        assert authorizer.results == [], "أُرجِعت حصيلةُ نجاحٍ من نداءٍ فاشل."
+
+
+class TestDepartmentReplayProducesNoSecondEffect:
+    """S-7 — مفتاحٌ واحدٌ لا يُنتِجُ صفًّا ثانيًا."""
+
+    def test_duplicate_code_is_refused_before_the_boundary(
+        self,
+        registry: tuple[StateRegistry, RecordingAuthorizer],
+        institution: str,
+        dept_code: str,
+    ) -> None:
+        """الهويّةُ الطبيعيّةُ تحرسُ التكرارَ **قبلَ** الحدِّ كما كانت قبلَ الهجرة."""
+        service, authorizer = registry
+        king = _context("king", _KING_PERMISSIONS)
+        service.create_department(
+            context=king, institution_code=institution, code=dept_code, name="أوّل"
+        )
+        with pytest.raises(DuplicateCodeError):
+            service.create_department(
+                context=king, institution_code=institution, code=dept_code, name="ثانٍ"
+            )
+        assert _department_count(institution, dept_code) == 1, "أُنشِئَ صفٌّ ثانٍ للرمزِ نفسِه."
+        assert len(authorizer.results) == 1, "عبرَ النداءُ الثاني الحدَّ — وكان يجبُ منعُه قبلَه."
+
+    def test_replay_of_a_proven_key_creates_nothing(
+        self,
+        registry: tuple[StateRegistry, RecordingAuthorizer],
+        institution: str,
+        dept_code: str,
+    ) -> None:
+        """مفتاحٌ مُثبَّتٌ في سجلِّ الذرّيّةِ (1H) لا يُنشئُ صفًّا ثانيًا.
+
+        الحرسُ الطبيعيُّ (منعُ تكرارِ الرمز) يسبقُ الحدَّ، فلا يُرى مسارُ الإعادةِ
+        إلاّ إن غابَ الصفُّ وبقيَ المفتاح — وهي حالُ ما بعدَ تعويضٍ أو حذفٍ خارجيّ.
+        فتُقاسُ هنا صراحةً: لا إنشاءَ ثانيًا، ويُقالُ «أُعيدَ» لا «أُنشِئ».
+        """
+        service, _ = registry
+        king = _context("king", _KING_PERMISSIONS)
+        first = service.create_department(
+            context=king, institution_code=institution, code=dept_code, name="أوّل"
+        )
+        assert service._delete_department_row(first["id"]) is True  # noqa: SLF001
+        assert _department_row(institution, dept_code) is None
+
+        replayed = service.create_department(
+            context=king, institution_code=institution, code=dept_code, name="أوّل"
+        )
+        assert replayed["replayed"] is True, "عُدَّت الإعادةُ إنشاءً جديدًا."
+        assert replayed["operation_key"], "إعادةٌ بلا مفتاحٍ مُعلَن."
+        assert _department_row(institution, dept_code) is None, "أُنشِئَ صفٌّ في إعادة."
+
+
+class TestDepartmentNoBypassPathRemains:
+    """S-8 · S-9 — لا مسارَ إنشاءٍ عامًّا بجانبِ الحدّ، ولا معامَلَ تجاوز."""
+
+    def test_department_rows_are_built_in_one_function_only(self) -> None:
+        """أيُّ دالّةٍ تُنشئُ `DepartmentModel` — قياسٌ بشجرةِ المصدرِ لا بالنصّ."""
+        import ast
+
+        source = Path(registry_module.__file__).read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        def _own_body(node: ast.FunctionDef) -> str:
+            """جسدُ الدالّةِ بعدَ طرحِ ما في دوالِّها الداخليّة.
+
+            بلا هذا الطرحِ تُحسَبُ الدالّةُ الحاويةُ منشئةً لأنَّ مُطبِّقَها الداخليَّ
+            يُنشئ — فيُقاسُ حجمُ التداخلِ لا عددُ مواضعِ الإنشاء.
+            """
+            segment = ast.get_source_segment(source, node) or ""
+            for child in ast.walk(node):
+                if child is node or not isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef):
+                    continue
+                inner = ast.get_source_segment(source, child) or ""
+                segment = segment.replace(inner, "")
+            return segment
+
+        builders = [
+            node.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef) and "DepartmentModel(" in _own_body(node)
+        ]
+        assert builders == ["_apply"], (
+            f"مواضعُ إنشاءِ إدارةٍ غيرُ متوقَّعة: {builders} — "
+            "والمنشئُ الوحيدُ يجبُ أن يكونَ مُطبِّقَ الأثرِ داخلَ الحدّ."
+        )
+
+    def test_no_forbidden_bypass_parameter_in_the_migrated_operation(self) -> None:
+        import inspect
+
+        from amos_federation.services.executive_core.sovereignty_bridge import (
+            FORBIDDEN_BYPASS_PARAMS,
+        )
+
+        names = set(inspect.signature(StateRegistry.create_department).parameters)
+        assert not (names & FORBIDDEN_BYPASS_PARAMS), (
+            f"معامَلُ تجاوزٍ في عمليّةٍ مُهاجَرة: {names & FORBIDDEN_BYPASS_PARAMS}"
+        )
+
+
+class TestDepartmentPreMigrationRulesStillHold:
+    """S-10 — ما كان يُمنَعُ قبلَ الهجرةِ ما زالَ يُمنَع."""
+
+    def test_department_under_inactive_institution_is_refused(
+        self,
+        registry: tuple[StateRegistry, RecordingAuthorizer],
+        institution: str,
+        dept_code: str,
+    ) -> None:
+        service, _ = registry
+        king = _context("king", _KING_PERMISSIONS)
+        service.set_institution_status(
+            context=king, code=institution, status="suspended", reason="قياسُ الانحدار"
+        )
+        with pytest.raises(InstitutionInactiveError):
+            service.create_department(
+                context=king, institution_code=institution, code=dept_code, name="إدارة"
+            )
+        assert _department_row(institution, dept_code) is None
+
+    def test_department_under_unknown_institution_is_refused(
+        self,
+        registry: tuple[StateRegistry, RecordingAuthorizer],
+        dept_code: str,
+    ) -> None:
+        service, authorizer = registry
+        with pytest.raises(RegistryError):
+            service.create_department(
+                context=_context("king", _KING_PERMISSIONS),
+                institution_code="INST-LA-WUJUD",
+                code=dept_code,
+                name="إدارةٌ بلا مؤسسة",
+            )
+        assert authorizer.results == [], "عبرت العمليّةُ الحدَّ بمؤسسةٍ لا وجودَ لها."
