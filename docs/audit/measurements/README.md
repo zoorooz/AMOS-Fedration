@@ -17,6 +17,8 @@
 |---|---|---|
 | `treasury_gate_matrix.json` | `tools/audit/treasury_gate_probe.py` | حكمُ البوابةِ على 20 فعلًا ماليًّا × 3 فاعلين (P6) |
 | `judicial_gate_matrix.json` | `tools/audit/judicial_gate_probe.py` | حكمُ البوابةِ على 32 فعلًا قضائيًّا وتشريعيًّا × 4 فاعلين (P7) |
+| `write_inventory_p13.json` | `tools/audit/sovereign_write_inventory.py --json` | جردُ 203 موضعِ كتابةٍ بعدَ P13 (الدَّينُ 168) · مُدخَلُ التدقيقِ النهائيّ |
+| `final_audit_p14.json` | `tools/audit/final_audit.py` | 21 قياسَ مطابقةٍ بينَ المستودعِ والوثيقةِ (P14) |
 
 ## الحدّ
 هذه مُخرَجاتُ قياسٍ لا أحكامَ قدرات. لا تُقرأُ شهادةَ نجاحٍ لأيِّ إقليم، ولا تُغني عن
