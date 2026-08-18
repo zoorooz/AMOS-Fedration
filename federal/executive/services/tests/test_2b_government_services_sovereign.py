@@ -35,8 +35,11 @@ from amos_federation.services.governance.security import DEFAULT_ROLES
 from amos_federation.services.government_services.authorization import RegistryAuthorizationError
 from amos_federation.services.government_services.models import CaseModel, DecisionModel, ServiceModel
 from amos_federation.services.government_services.service import (
+    ACTION_SERVICE_PUBLISH,
     ACTION_SERVICE_STATUS,
+    SERVICE_PUBLISH_SCOPE,
     SERVICE_STATUS_SCOPE,
+    DuplicateServiceCodeError,
     GovernmentServiceError,
     GovernmentServices,
     reset_government_services,
@@ -249,7 +252,9 @@ def test_04_pre_boundary_invariants_are_unchanged(
                 status=status,
                 reason=reason,
             )
-    assert authorizer.decisions == []
+    # لا يُقاسُ خلوُّ السجلِّ كلِّه: إعلانُ الخدمةِ في التهيئةِ يعبرُ الحدَّ أيضًا منذ
+    # P5ب. والمقصودُ أنَّ فعلَ تغييرِ الحالةِ **لم يُعرَضْ على البوابةِ أصلًا**.
+    assert ACTION_SERVICE_STATUS not in [action for action, _ in authorizer.decisions]
     assert _status_of(published["service"]["id"]) == "active"
 
 
@@ -421,3 +426,158 @@ def test_13_the_legacy_guard_helper_still_refuses_undeclared_execution() -> None
     authorizer = ConstitutionalAuthorizer()
     with pytest.raises(UndeclaredExecutionError):
         authorizer.guard("gov.service.status", "services/probe", lambda: None)
+
+# ── 7. إعلانُ الخدمة (P5ب) ────────────────────────────────────────────────
+
+
+@pytest.fixture
+def institution(crown: AuthorizationContext) -> str:
+    registry = StateRegistry()
+    return registry.register_institution(
+        context=crown,
+        code=_code("INST"),
+        name="وزارة الخدمات",
+        kind="ministry",
+        branch="executive",
+    )["code"]
+
+
+def _publish(
+    gov: GovernmentServices, crown: AuthorizationContext, institution_code: str, code: str, **kw
+) -> dict:
+    return gov.publish_service(
+        context=crown,
+        institution_code=institution_code,
+        code=code,
+        name="إصدار وثيقة",
+        **kw,
+    )
+
+
+def test_14_publishing_passes_through_the_gateway_with_all_stages(
+    gov: GovernmentServices,
+    crown: AuthorizationContext,
+    institution: str,
+    authorizer: RecordingAuthorizer,
+) -> None:
+    """إعلانُ الخدمةِ يعبرُ البوابةَ على فعلِه وهدفِه، وتُقطَعُ المراحلُ الإلزاميّةُ كلُّها."""
+    code = _code("SVC")
+    result = _publish(gov, crown, institution, code)
+    target = f"services/{DEFAULT_TENANT}/{institution}/{code}"
+    assert (ACTION_SERVICE_PUBLISH, target) in authorizer.decisions
+    outcome = authorizer.results[-1].outcome  # type: ignore[union-attr]
+    assert _mandatory_stages() <= set(outcome.stages)
+    assert outcome.contract.action == ACTION_SERVICE_PUBLISH
+    assert outcome.permit_id, "لا إذنَ في الحصيلة — فالعبورُ غيرُ مُثبَت."
+    assert result["status"] == "active"
+
+
+def test_15_declared_effect_is_the_published_service_and_nothing_wider(
+    gov: GovernmentServices,
+    crown: AuthorizationContext,
+    institution: str,
+    authorizer: RecordingAuthorizer,
+) -> None:
+    """الأثرُ المُعلَنُ هدفُ الخدمةِ نفسُه — لا المؤسسةُ ولا المستأجرُ كلُّه."""
+    code = _code("SVC")
+    _publish(gov, crown, institution, code)
+    outcome = authorizer.results[-1].outcome  # type: ignore[union-attr]
+    target = f"services/{DEFAULT_TENANT}/{institution}/{code}"
+    assert [effect.signature for effect in outcome.applied_effects] == [f"WRITE:{target}"]
+    for effect in outcome.contract.declared_effects:
+        assert effect.resource == target or effect.resource.startswith(target + "/")
+
+
+def test_16_the_compensator_really_deletes_the_created_row(
+    gov: GovernmentServices,
+    crown: AuthorizationContext,
+    institution: str,
+    authorizer: RecordingAuthorizer,
+) -> None:
+    """المُعوِّضُ يعملُ فعلًا: يُنادى فيغيبُ الصفُّ من القاعدة — لا `pass` ولا وعد."""
+    code = _code("SVC")
+    published = _publish(gov, crown, institution, code)
+    outcome = authorizer.results[-1].outcome  # type: ignore[union-attr]
+    signature = outcome.applied_effects[0].signature
+    assert outcome.compensation_plan.covers(signature)
+    assert _status_of(published["id"]) == "active"
+    outcome.compensation_plan.compensator_for(signature).apply()
+    assert _status_of(published["id"]) is None
+
+
+def test_17_publishing_invariants_are_refused_before_the_gateway(
+    gov: GovernmentServices,
+    crown: AuthorizationContext,
+    institution: str,
+    authorizer: RecordingAuthorizer,
+) -> None:
+    """مدّةٌ غيرُ موجبةٍ وإدارةٌ غيرُ قائمةٍ ورمزٌ مكرَّرٌ — كلُّها تُرَدُّ قبلَ العبور."""
+    code = _code("SVC")
+    _publish(gov, crown, institution, code)
+    before = len(authorizer.decisions)
+
+    with pytest.raises(GovernmentServiceError):
+        _publish(gov, crown, institution, _code("SVC"), sla_hours=0)
+    with pytest.raises(GovernmentServiceError):
+        _publish(gov, crown, institution, _code("SVC"), department_code="DEPT-LA-WUJUD")
+    with pytest.raises(GovernmentServiceError):
+        _publish(gov, crown, institution, code)
+
+    assert len(authorizer.decisions) == before
+
+
+def test_18_the_duplicate_code_contract_is_not_broken_by_the_boundary(
+    gov: GovernmentServices, crown: AuthorizationContext, institution: str
+) -> None:
+    """رمزٌ مكرَّرٌ يُخرِجُ `DuplicateServiceCodeError` نفسَه لا خطأَ ذرّيّةٍ ملفوفًا.
+
+    وهذا هو سببُ الفحصِ الصريحِ قبلَ العبور: عقدٌ قائمٌ لا يُكسَرُ بحجّةِ الهجرة.
+    """
+    code = _code("SVC")
+    _publish(gov, crown, institution, code)
+    with pytest.raises(DuplicateServiceCodeError):
+        _publish(gov, crown, institution, code)
+
+
+def test_19_local_permission_is_still_required_for_publishing(
+    gov: GovernmentServices, institution: str, authorizer: RecordingAuthorizer
+) -> None:
+    """مواطنٌ لا يُعلِنُ خدمةً — والحدُّ لم يُصبِحْ طريقًا يتخطّى الصلاحيّةَ المحلّيّة."""
+    with pytest.raises(RegistryAuthorizationError):
+        _publish(gov, _context("citizen"), institution, _code("SVC"))
+    assert authorizer.decisions == []
+
+
+def test_20_an_identical_publication_is_refused_and_no_second_row_appears(
+    gov: GovernmentServices, crown: AuthorizationContext, institution: str
+) -> None:
+    """نداءٌ ثانٍ مطابقٌ يُرَدُّ بحرسِ الرمزِ المكرَّرِ — والصفُّ يبقى واحدًا.
+
+    ولا يُدَّعى هنا أنَّ الإعادةَ (1H) مرئيّةٌ في هذه العمليّة: حرسُ تكرارِ الرمزِ
+    القائمُ **قبلَ** الحدِّ يسبقُ مفتاحَ العمليّة، فالنداءُ المطابقُ يُرَدُّ ولا يبلغُ
+    البوابةَ ليُعلَنَ إعادةً. وهذا عقدٌ قائمٌ لا أُلغيه لتظهرَ ميزةُ الإعادة: تعطيلُ
+    الحرسِ لإثباتِ دعوى هو ما نُهِيَ عنه صريحًا. فالمُثبَتُ ما يُقاسُ: صفٌّ واحدٌ لا
+    صفّان، والمفتاحُ باقٍ حرسًا للسباقِ داخلَ الحدّ لا للعرض.
+    """
+    code = _code("SVC")
+    first = _publish(gov, crown, institution, code)
+    assert first["replayed"] is False
+    with pytest.raises(DuplicateServiceCodeError):
+        _publish(gov, crown, institution, code)
+    session = get_session_factory()()
+    try:
+        rows = session.query(ServiceModel).filter(ServiceModel.code == code).count()
+    finally:
+        session.close()
+    assert rows == 1
+    assert SERVICE_PUBLISH_SCOPE  # النطاقُ مُعلَنٌ ومستعملٌ في مفتاحِ العمليّة
+
+
+def test_21_publishing_writes_no_row_outside_the_boundary(gov: GovernmentServices) -> None:
+    """الحرسُ الساكن: جسدُ الإعلانِ نفسِه لا يُضيفُ صفًّا ولا يُثبِّتُ جلسة."""
+    body = _own_body(GovernmentServices.publish_service)
+    assert "session.add(" not in body
+    assert "session.commit()" not in body
+    assert "guard_declared" in body
+    for parameter in FORBIDDEN_BYPASS_PARAMS:
+        assert parameter not in body

@@ -90,6 +90,12 @@ if TYPE_CHECKING:
 EVENT_SERVICE_PUBLISHED = "amos_federation.gov.service_published"
 EVENT_SERVICE_STATUS_CHANGED = "amos_federation.gov.service_status_changed"
 
+#: نطاقُ مفاتيحِ الذرّيّة (1H) لإعلانِ خدمةٍ حكوميّة.
+SERVICE_PUBLISH_SCOPE = "government_services.service.publish"
+
+#: فعلُ إعلانِ الخدمةِ كما تراه البوابة — نصُّ الصلاحيّةِ المحلّيِّ القائمُ نفسُه.
+ACTION_SERVICE_PUBLISH = "gov.service.publish"
+
 #: نطاقُ مفاتيحِ الذرّيّة (1H) لتغييرِ حالةِ خدمةٍ حكوميّة.
 SERVICE_STATUS_SCOPE = "government_services.service.status"
 
@@ -204,6 +210,23 @@ class GovernmentServices:
 
             self._authorizer = get_authorizer()
         return self._authorizer
+
+    def _delete_service_row(self, service_id: str) -> bool:
+        """احذفْ صفَّ خدمةٍ أُنشِئَ في هذه العمليّة — عكسُ الإنشاءِ حذفُه لا سحبُه.
+
+        وسحبُ الخدمةِ (`retired`) فعلٌ مُعلَنٌ آخرُ له سببُه ومُدقِّقُه، فلا يُنتحَلُ
+        هنا مكانَ العكس. وترجعُ `False` إن غابَ الصفُّ فلا يُزعَمُ عكسٌ لما لا وجودَ له.
+        """
+        session = self._session()
+        try:
+            row = session.query(ServiceModel).filter(ServiceModel.id == service_id).first()
+            if row is None:
+                return False
+            session.delete(row)
+            session.commit()
+            return True
+        finally:
+            session.close()
 
     def _set_service_status_row(self, service_id: str, status: str) -> bool:
         """إسنادُ حالةِ خدمةٍ — تُستعملُ للأثرِ وللعكسِ معًا.
@@ -349,10 +372,26 @@ class GovernmentServices:
         department_code: str | None = None,
         sla_hours: int = 72,
     ) -> dict[str, Any]:
-        """أعلن خدمة حكومية تُقدِّمها مؤسسة قائمة ونشطة."""
-        require_domain_permission(context, "gov.service.publish", PERMISSIONS_SERVICE_WRITE)
+        """أعلن خدمة حكومية تُقدِّمها مؤسسة قائمة ونشطة — عبرَ حدِّ التنفيذِ السياديّ.
+
+        الفحوصُ القائمةُ لم تُنقَلْ ولم تُضعَّفْ: التخويلُ المحلّيُّ، ومدّةُ الاستجابةِ
+        الموجبة، ووجودُ المؤسسةِ في مستأجرِ السياقِ وكونُها نشطةً، ووجودُ الإدارةِ
+        المذكورةِ تحتَها وحدُّ مستأجرِها — كلُّها **قبلَ** العبور، لأنَّ الحدَّ يحرسُ
+        الأثرَ ولا ينوبُ عن قواعدِ النطاق.
+
+        والمعرّفُ يُولَّدُ قبلَ العبورِ لا في المُطبِّق: المُعوِّضُ يجبُ أن يعرفَ ما
+        يحذفُه قبلَ أن يقعَ الأثر.
+
+        ومنعُ تكرارِ الرمزِ صارَ فحصًا صريحًا قبلَ العبورِ إلى جانبِ حرسِ القاعدة:
+        لو تُرِكَ للمفتاحِ الأجنبيِّ وحدَه لخرجَ الخطأُ من داخلِ المُطبِّقِ ملفوفًا
+        بخطأِ الذرّيّة، فينكسرُ عقدُ `DuplicateServiceCodeError` القائم. والحرسُ
+        داخلَ المُطبِّقِ باقٍ للسباقِ بينَ الفحصِ والتطبيق.
+        """
+        require_domain_permission(context, ACTION_SERVICE_PUBLISH, PERMISSIONS_SERVICE_WRITE)
         if sla_hours <= 0:
             raise GovernmentServiceError("مدّة الاستجابة يجب أن تكون ساعاتٍ موجبة")
+
+        tenant = self._tenant_of(context)
         session = self._session()
         try:
             institution = self._institution_row(session, context, institution_code)
@@ -376,43 +415,110 @@ class GovernmentServices:
                     )
                 require_tenant(context, department.tenant_id)
                 department_id = department.id
-
-            row = ServiceModel(
-                id=f"svc-{uuid.uuid4()}",
-                code=code,
-                name=name,
-                institution_id=institution.id,
-                department_id=department_id,
-                description=description,
-                status="active",
-                sla_hours=sla_hours,
-                tenant_id=self._tenant_of(context),
-                created_by=context.principal_id,
+            existing = (
+                session.query(ServiceModel)
+                .filter(
+                    ServiceModel.institution_id == institution.id,
+                    ServiceModel.code == code,
+                )
+                .first()
             )
-            session.add(row)
-            try:
-                session.commit()
-            except IntegrityError as exc:
-                session.rollback()
+            if existing is not None:
                 raise DuplicateServiceCodeError(
                     f"رمز الخدمة '{code}' مستعمل في المؤسسة '{institution_code}'"
-                ) from exc
-            entity = self._service_dict(row)
+                )
+            institution_id = institution.id
         finally:
             session.close()
 
-        trace = record_domain_trace(
-            context,
-            "gov.service.publish",
-            EVENT_SERVICE_PUBLISHED,
-            {
-                "service_id": entity["id"],
-                "code": entity["code"],
-                "institution_id": entity["institution_id"],
-                "tenant_id": entity["tenant_id"],
+        from amos_federation.services.executive_core.sovereignty_bridge import (
+            compensator,
+            declared_effect,
+            operation_key,
+        )
+
+        service_id = f"svc-{uuid.uuid4()}"
+        target = f"services/{tenant}/{institution_code}/{code}"
+        effect = declared_effect(
+            "WRITE", target, f"إعلانُ خدمةٍ '{code}' تحتَ المؤسسةِ '{institution_code}': {name}"
+        )
+
+        def _apply(_effect: Any) -> dict[str, Any]:
+            """التطبيقُ الحقيقيّ — الصفُّ ثمّ التدقيقُ، بترتيبِ R7 نفسِه.
+
+            وكونُه داخلَ المُطبِّقِ يعني أنَّ الإعادةَ (1H) لا تُنتِجُ حدثًا ثانيًا
+            لأثرٍ واحد.
+            """
+            write_session = self._session()
+            try:
+                row = ServiceModel(
+                    id=service_id,
+                    code=code,
+                    name=name,
+                    institution_id=institution_id,
+                    department_id=department_id,
+                    description=description,
+                    status="active",
+                    sla_hours=sla_hours,
+                    tenant_id=tenant,
+                    created_by=context.principal_id,
+                )
+                write_session.add(row)
+                try:
+                    write_session.commit()
+                except IntegrityError as exc:
+                    write_session.rollback()
+                    raise DuplicateServiceCodeError(
+                        f"رمز الخدمة '{code}' مستعمل في المؤسسة '{institution_code}'"
+                    ) from exc
+                entity = self._service_dict(row)
+            finally:
+                write_session.close()
+
+            trace = record_domain_trace(
+                context,
+                ACTION_SERVICE_PUBLISH,
+                EVENT_SERVICE_PUBLISHED,
+                {
+                    "service_id": entity["id"],
+                    "code": entity["code"],
+                    "institution_id": entity["institution_id"],
+                    "tenant_id": entity["tenant_id"],
+                },
+            )
+            return {**entity, **trace}
+
+        guarded = self.authorizer.guard_declared(
+            ACTION_SERVICE_PUBLISH,
+            target,
+            declared_effects=(effect,),
+            applier=_apply,
+            operation_key=operation_key(
+                SERVICE_PUBLISH_SCOPE, f"{tenant}:{institution_code}:{code}"
+            ),
+            compensators=(
+                compensator(
+                    effect.signature,
+                    lambda: self._delete_service_row(service_id),
+                    f"حذفُ صفِّ الخدمةِ '{code}' — عكسُ الإنشاءِ لا سحبُها",
+                ),
+            ),
+            metadata={
+                "tenant_id": tenant,
+                "institution_code": institution_code,
+                "service_code": code,
+                "department_code": department_code,
             },
         )
-        return {**entity, **trace}
+        if guarded.is_replay:
+            return {
+                "code": code,
+                "institution_code": institution_code,
+                "tenant_id": tenant,
+                "replayed": True,
+                "operation_key": guarded.outcome.operation_key,
+            }
+        return {**guarded.value, "replayed": False}
 
     def set_service_status(
         self,

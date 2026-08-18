@@ -228,7 +228,8 @@ python tools/audit/sovereign_write_inventory.py
 | P2 | إعادةُ الجردِ وخِتامُ 2B | ANALYZED | — | 177 | 177 | `bcdeccc` — مدفوعٌ |
 | P3 | State Runtime | **BLOCKED** (Q-13 · Q-14) | — | 177 | 177 | `8e93684` — مدفوعٌ |
 | P4 | هويّةُ الوكيلِ والسكّان | **BLOCKED** (Q-15) | — | 177 | 177 | `d0ce623` — مدفوعٌ |
-| P5أ | `set_service_status` (خدماتٌ حكوميّة) | **MIGRATED** | 13 | 177 | **176** | يُسجَّلُ عند الدفع |
+| P5أ | `set_service_status` (خدماتٌ حكوميّة) | **MIGRATED** | 13 | 177 | **176** | `df850ea` — مدفوعٌ |
+| P5ب | `publish_service` | **MIGRATED** | 21 (الملفُّ كلُّه) | 176 | **175** | يُسجَّلُ عند الدفع |
 
 ---
 
