@@ -34,12 +34,16 @@ from core.sovereignty.gateway import (
     SovereignGateway,
     SovereigntyViolation,
 )
+from core.sovereignty.compensation import Compensator
+from core.sovereignty.contract import EffectKind, SovereignEffect
+from core.sovereignty.enforcement_boundary import SovereignExecutionBoundary
 from core.sovereignty.gateways import (
     AgentGateway,
     LayerEscalationError,
     StateGateway,
     SubordinateGateway,
 )
+from core.sovereignty.idempotency import IdempotencyKey, IdempotencyLedger
 from core.sovereignty.prerogatives import ROYAL_EXCLUSIVE_ACTIONS
 from core.sovereignty.security_events import SecurityEventKind
 from cryptography.hazmat.primitives import serialization
@@ -339,10 +343,34 @@ class Testتكامل_شامل:
         assert بوابة.security_log.events[-1].kind is SecurityEventKind.ROYAL_SIGNATURE_INVALID, "سلسلة الرفض لم تسجل التوقيع المزور."
         assert نُفذ == [], "سلسلة التوقيع المزور وصلت إلى التنفيذ."
 
-    def test_سلسلة_القرار_التابع_تسمح_بالسليم_وتمنع_المخالف(self, بوابة) -> None:
-        بوابة_ولاية = StateGateway(بوابة)
+    def test_سلسلة_القرار_التابع_تسمح_بالسليم_وتمنع_المخالف(self, بوابة, tmp_path) -> None:
+        """هُجِّر في 1N إلى `execute_declared`: التمييزُ نفسُه، عبرَ الحدِّ لا بجانبِه.
+
+        الأثرُ يُعلَن قبلَ وقوعِه ومعوّضُه مربوط، فما كان يُقاسُ على قيمةِ إرجاعٍ
+        صار يُقاسُ على الحالةِ نفسِها — وهو قياسٌ أصدق.
+        """
+        حدّ = SovereignExecutionBoundary(
+            gateway=بوابة,
+            idempotency_ledger=IdempotencyLedger(path=tmp_path / "ذرّيّة.json"),
+        )
+        بوابة_ولاية = StateGateway(بوابة, boundary=حدّ)
         نُفذ: list[str] = []
-        نتيجة = بوابة_ولاية.execute(ActionRequest(actor=Branch.STATE, action="execute_task"), lambda: نُفذ.append("سليم") or "نجاح")
+        أثر = SovereignEffect(kind=EffectKind.WRITE, resource="ولاية-أ")
+        معوّض = (Compensator(effect_signature=أثر.signature, apply=lambda: None),)
+
+        حصيلة = بوابة_ولاية.execute_declared(
+            ActionRequest(actor=Branch.STATE, action="execute_task", target="ولاية-أ"),
+            declared_effects=(أثر,),
+            applier=lambda _أثر: نُفذ.append("سليم"),
+            operation_key=IdempotencyKey(scope="اختبار.تابع", value="سليم"),
+            compensators=معوّض,
+        )
         with pytest.raises(SovereigntyViolation):
-            بوابة_ولاية.execute(ActionRequest(actor=Branch.STATE, action="opt_out_constitution"), lambda: نُفذ.append("مخالف"))
-        assert نتيجة == "نجاح" and نُفذ == ["سليم"], "البوابات التابعة لم تميز بين القرار السليم والمخالف."
+            بوابة_ولاية.execute_declared(
+                ActionRequest(actor=Branch.STATE, action="opt_out_constitution", target="ولاية-أ"),
+                declared_effects=(أثر,),
+                applier=lambda _أثر: نُفذ.append("مخالف"),
+                operation_key=IdempotencyKey(scope="اختبار.تابع", value="مخالف"),
+                compensators=معوّض,
+            )
+        assert حصيلة.applied_signatures == (أثر.signature,) and نُفذ == ["سليم"], "البوابات التابعة لم تميز بين القرار السليم والمخالف."

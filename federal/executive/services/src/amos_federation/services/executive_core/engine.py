@@ -3,7 +3,7 @@
 النطاق: federal/executive/services — النواة التنفيذية
 المالك: federal/executive/services
 تاريخ الإنشاء: 2026-08-16
-تاريخ آخر تعديل: 2026-08-16
+تاريخ آخر تعديل: 2026-08-18
 
 ما كان موجودًا قبل هذه الوحدة، بالقياس لا بالوصف:
 
@@ -59,9 +59,13 @@ from amos_federation.services.executive_core.sovereignty_bridge import (
     AuthorityEvidence,
     ConstitutionalAuthorizer,
     GuardedResult,
+    compensator,
+    declared_effect,
+    operation_key,
 )
 from amos_federation.services.executive_core.states import (
     TaskState,
+    assert_transition,
     is_terminal,
     parse_state,
 )
@@ -71,6 +75,11 @@ TRANSITION_SUBJECT = "amos_federation.executive.task_transitioned"
 
 #: الفاعل المُسجَّل في سلسلة التدقيق — الفرع التنفيذي لا التاج.
 AUDIT_ACTOR = "federal.executive.core"
+
+#: نطاقا مفتاحِ الذرّيّة (1H). النطاقُ يمنعُ تصادمَ «قبولِ مهمّة» بـ«انتقالِ حالة»
+#: على المهمّةِ نفسِها، فلا تُعَدُّ إحداهما إعادةً للأخرى.
+SUBMIT_KEY_SCOPE = "federal.executive.task.submit"
+TRANSITION_KEY_SCOPE = "federal.executive.task.transition"
 
 #: أمانة المخرَج: تنفيذ الأدوات محاكاة حتى يُستبدل صندوق الأدوات بأدوات حقيقية.
 #: القيمة تأتي من مفردات واحدة (`fidelity.ExecutionFidelity`) لا من نصّ حرّ، كي
@@ -208,26 +217,58 @@ class ExecutiveCore:
         fields: dict[str, Any] | None = None,
         detail: dict[str, Any] | None = None,
     ) -> TransitionOutcome:
-        """انتقال محكوم: بوابة سيادية → كتابة ذرّية → تدقيق → حدث.
+        """انتقال محكوم: حدُّ التنفيذ السياديّ → كتابة ذرّية → تدقيق → حدث.
 
-        الكتابة تحدث **داخل** مُنفِّذ البوابة، فلا تقع خارج الإذن. وإن سبقنا
+        الكتابة تحدث **داخل** مُطبِّقِ الحدّ، فلا تقع خارج الإذن. وإن سبقنا
         مُنفِّذ آخر إلى الحالة نفسها، يُرفع `ExecutionRefusedError` — ولا يُدّعى نجاح.
-        """
-        payload = dict(fields or {})
 
-        def _write() -> bool:
+        ما أضافته 1N فوقَ ما كان: أثرٌ مُعلَنٌ واحدٌ (`WRITE` على المهمّة) يُقاسُ
+        عليه العقد، ومفتاحُ ذرّيّةٍ يجعلُ الانتقالَ الواحدَ غيرَ قابلٍ للتكرار،
+        ومعوّضٌ يُعيدُ الحالةَ إلى `expected` إن فشلت العمليّة بعدَ الكتابة.
+        والإعادةُ (`is_replay`) تُرفَض هنا كما يُرفَض السَّبْق: الانتقالُ الواحدُ
+        لا يقعُ مرّتين، وإرجاعُ نجاحٍ ثانٍ كان سيكون ادّعاءً.
+        """
+        # مشروعيّةُ الانتقال تُفحَص **قبل** الحدّ: آلةُ الحالاتِ ليست سؤالَ سلطةٍ،
+        # وانتقالٌ مستحيلٌ لا يُصدَر له إذنٌ ولا يُحجَز له مفتاحُ ذرّيّة. وبهذا يبقى
+        # `IllegalTransitionError` كما كان يراه المُنادي، لا ملفوفًا في خطأِ سجلّ.
+        assert_transition(expected, target)
+        payload = dict(fields or {})
+        resource = f"task:{task_id}"
+
+        def _write(_effect: Any) -> bool:
             return self._repo.compare_and_set(task_id, expected, target, **payload)
 
-        guarded: GuardedResult = self._authorizer.guard(
-            action,
-            f"task:{task_id}",
-            _write,
-            {"from_state": expected.value, "to_state": target.value},
+        def _revert() -> None:
+            self._repo.compare_and_set(task_id, target, expected)
+
+        effect = declared_effect(
+            "WRITE", resource, f"{expected.value} → {target.value}"
         )
-        if not guarded.value:
+        guarded: GuardedResult = self._authorizer.guard_declared(
+            action,
+            resource,
+            declared_effects=(effect,),
+            applier=_write,
+            operation_key=operation_key(
+                TRANSITION_KEY_SCOPE, f"{task_id}:{expected.value}->{target.value}"
+            ),
+            compensators=(
+                compensator(
+                    effect.signature,
+                    _revert,
+                    f"إرجاع {task_id} إلى {expected.value}",
+                ),
+            ),
+            metadata={"from_state": expected.value, "to_state": target.value},
+        )
+        if guarded.is_replay or not guarded.value:
             raise ExecutionRefusedError(
                 f"لم يُطبَّق الانتقال {expected.value} → {target.value} للمهمّة {task_id}: "
-                "الحالة تغيّرت قبلنا (تنفيذ متزامن)"
+                + (
+                    "العمليّة مُثبَّتة سابقًا في سجل الذرّيّة (إعادة)"
+                    if guarded.is_replay
+                    else "الحالة تغيّرت قبلنا (تنفيذ متزامن)"
+                )
             )
         return self._record(task_id, expected, target, guarded.evidence, dict(detail or {}))
 
@@ -242,10 +283,15 @@ class ExecutiveCore:
         domain: str = "general",
         tenant_id: str = "default",
     ) -> dict[str, Any]:
-        """قبول مهمّة جديدة: إذن دستوري ثم كتابة في القاعدة ثم تدقيق وحدث."""
-        new_id = task_id or f"task-{uuid.uuid4()}"
+        """قبول مهمّة جديدة عبر حدِّ التنفيذ: إذن ثم كتابة ثم تدقيق وحدث.
 
-        def _create() -> dict[str, Any]:
+        الأثرُ المُعلَنُ `CREATE` على المهمّة، ومعوّضُه محوُ الصفِّ — ولولا وجودُ
+        معكوسٍ حقيقيٍّ في المستودع لرفض 1I العقدَ قبلَ أن يُنشَأ شيء.
+        """
+        new_id = task_id or f"task-{uuid.uuid4()}"
+        resource = f"task:{new_id}"
+
+        def _create(_effect: Any) -> dict[str, Any]:
             return self._repo.create(
                 new_id,
                 task_type,
@@ -255,12 +301,25 @@ class ExecutiveCore:
                 tenant_id=tenant_id,
             )
 
-        guarded: GuardedResult = self._authorizer.guard(
+        def _erase() -> None:
+            self._repo.delete(new_id)
+
+        effect = declared_effect("CREATE", resource, task_type)
+        guarded: GuardedResult = self._authorizer.guard_declared(
             "task.submit",
-            f"task:{new_id}",
-            _create,
-            {"type": task_type, "priority": priority, "domain": domain},
+            resource,
+            declared_effects=(effect,),
+            applier=_create,
+            operation_key=operation_key(SUBMIT_KEY_SCOPE, new_id),
+            compensators=(
+                compensator(effect.signature, _erase, f"محو المهمّة {new_id}"),
+            ),
+            metadata={"type": task_type, "priority": priority, "domain": domain},
         )
+        if guarded.is_replay:
+            raise ExecutionRefusedError(
+                f"المهمّة {new_id} مُثبَّتة سابقًا في سجل الذرّيّة — لا قبولَ ثانٍ لها"
+            )
         outcome = self._record(
             new_id,
             TaskState.CREATED,

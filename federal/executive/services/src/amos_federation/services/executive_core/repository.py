@@ -3,7 +3,7 @@
 النطاق: federal/executive/services — النواة التنفيذية
 المالك: federal/executive/services
 تاريخ الإنشاء: 2026-08-16
-تاريخ آخر تعديل: 2026-08-16
+تاريخ آخر تعديل: 2026-08-18
 
 `PersistentTaskStore.update_status` القائم يكتب الحالة الجديدة بلا شرط: يقرأ
 الصفّ ثم يكتب. وذلك كافٍ لواجهة إدارية، وغير كافٍ لمحرّك تنفيذ: مُنفِّذان
@@ -16,6 +16,9 @@
    الصفوف المتأثّرة. صفر يعني «سبقك غيرك»، لا يعني «نجح».
 2. `claim_next` — التقاط مهمّة غير منتهية للتقدّم بها.
 3. `list_unfinished` — أساس الاسترداد بعد إعادة التشغيل.
+4. `delete` — معكوسُ `create` (أضافته 1N). ليس مرفقًا إداريًّا: خطّةُ التعويض
+   (1I) لا تُربَط بأثرِ إنشاءٍ لا يملكُ معكوسًا، والدولةُ لا تدخلُ فعلًا لا تعرفُ
+   كيف تخرجُ منه. فبلا هذه الدالّة كان إعلانُ `CREATE` سيُرفَض قبلَ التنفيذ.
 
 ولا يُنشئ نموذجًا ثانيًا لجدول `tasks`: يستخدم `TaskModel` نفسه، احترامًا لقرار
 الهجرة 004 (نموذج واحد مرجعي لهذا الجدول).
@@ -26,7 +29,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import update
+from sqlalchemy import delete, update
 
 from amos_federation.common.database import TaskModel, get_session_factory
 from amos_federation.services.executive_core.states import (
@@ -136,6 +139,21 @@ class ExecutiveTaskRepository:
                 .where(TaskModel.id == task_id, TaskModel.status == expected.value)
                 .values(**values)
             )
+            session.commit()
+            return bool(result.rowcount)
+        finally:
+            session.close()
+
+    def delete(self, task_id: str) -> bool:
+        """امحُ صفَّ مهمّةٍ — معكوسُ `create` وحدَه، لا أداةَ تنظيفٍ عامّة.
+
+        يُستدعى من معوّضِ 1I عندَ فشلِ عمليّةٍ أعلنت أثرَ `CREATE`. الإرجاع
+        `False` معناه لا صفَّ لِيُمحى (سبقَنا غيرُنا أو لم يُنشَأ قطُّ) — لا
+        يعني فشلًا يُبتلَع، والمُنادي يقرؤه.
+        """
+        session = get_session_factory()()
+        try:
+            result = session.execute(delete(TaskModel).where(TaskModel.id == task_id))
             session.commit()
             return bool(result.rowcount)
         finally:

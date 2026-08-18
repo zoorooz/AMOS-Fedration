@@ -49,6 +49,16 @@ _EXPORTS: dict[str, str] = {
     "PermitScopeError": "enforcement",
     "PolicyEnforcementPoint": "enforcement",
     "issue_permit": "enforcement",
+    # gateways — بوابات الطبقات التابعة (E2.1) ووصلُها بالحدّ (1N)
+    "AgentGateway": "gateways",
+    "BoundaryNotConfiguredError": "gateways",
+    "FederalGateway": "gateways",
+    "InstitutionGateway": "gateways",
+    "LayerEscalationError": "gateways",
+    "SUBORDINATE_GATEWAYS": "gateways",
+    "StateGateway": "gateways",
+    "SubordinateGateway": "gateways",
+    "UndeclaredExecutionError": "gateways",
     # jurisdiction — جدارُ الاختصاصِ القضائيّ (1G)
     "FORBIDDEN_JUDICIAL_ACTIONS": "jurisdiction",
     "JUDICIAL_ACTIONS": "jurisdiction",

@@ -3,7 +3,7 @@
 النطاق: federal/executive/services — النواة التنفيذية
 المالك: federal/executive/services
 تاريخ الإنشاء: 2026-08-16
-تاريخ آخر تعديل: 2026-08-16
+تاريخ آخر تعديل: 2026-08-18
 
 الدَّين الذي تُغلقه هذه الوحدة (وُصف في E2.3-A):
 
@@ -21,6 +21,20 @@
 
 وممنوع في هذا الحدّ — ويحرسه اختبار يفحص توقيع الدوال نفسه — أي معامل
 `force` أو `bypass` أو `override` أو ما يشبهها.
+
+ما غيّرته المرحلة 1N (وصلُ الإنفاذ):
+
+    كان `guard` يستدعي `SovereignGateway.execute` مباشرةً بمُنفِّذٍ **مُبهَم**
+    (`Callable[[], T]`)، فتمرُّ السلطةُ والإذنُ (1D · 1F · 1J) ولا يمرُّ شيءٌ
+    آخر: لا عقدُ آثارٍ مُعلَنة (1E)، ولا ذرّيّةٌ (1H)، ولا خطّةُ تعويضٍ (1I)،
+    ولا توجيهُ الأثرِ الخارجيِّ إلى الصادر (1K). أي أنّ البوابةَ كانت تُسأل
+    «هل يجوز؟» ولا تُسأل «ماذا سيقع بالضبط؟».
+
+    فأُغلِق `guard` وحُلَّ محلَّه `guard_declared`: المُنادي يُعلِن آثارَه
+    ومفتاحَ عمليّتِه ومعوّضاتِه، والتنفيذُ يمرُّ من
+    `SovereignExecutionBoundary` وحدَه. والإغلاقُ صريحٌ لا صامت:
+    `UndeclaredExecutionError` تُرفَع بنصٍّ يدلُّ على البديل، فلا يبقى مسارُ
+    تنفيذٍ ثانٍ يُمرِّر مُنفِّذًا لا يعرفُ الحدُّ ما يفعله.
 """
 
 from __future__ import annotations
@@ -39,6 +53,14 @@ T = TypeVar("T")
 FORBIDDEN_BYPASS_PARAMS = frozenset(
     {"force", "bypass", "skip_check", "unchecked", "override", "no_verify", "unsafe"}
 )
+
+
+class UndeclaredExecutionError(RuntimeError):
+    """تنفيذٌ بمُنفِّذٍ مُبهَمٍ لا يعبرُ حدَّ التنفيذِ السياديّ — فلا يقع.
+
+    ليس خطأً تقنيًّا يُعاد المحاولةُ بعده: هو رفضُ الحدِّ أن يأذن لما لا يعرفُ
+    آثارَه. البديلُ `guard_declared` لا معامَلُ تجاوزٍ.
+    """
 
 
 class SovereigntyUnavailableError(RuntimeError):
@@ -79,24 +101,39 @@ class AuthorityEvidence:
 
 @dataclass(frozen=True)
 class GuardedResult:
-    """نتيجة فعل نُفِّذ عبر البوابة، مقرونة بأثره الدستوري."""
+    """نتيجة فعل نُفِّذ عبر حدّ التنفيذ السياديّ، مقرونة بأثره الدستوري.
+
+    `outcome` حصيلةُ الحدّ (`BoundaryOutcome`) كما هي، بلا إعادةِ تسميةٍ ولا
+    تلخيصٍ يُخفي مرحلةً لم تُمَرّ. و`is_replay` تُقرأ منها لا تُخترَع هنا:
+    الإعادةُ ليست نجاحًا ثانيًا، والمُنادي يجب أن يراها.
+    """
 
     value: Any
     evidence: AuthorityEvidence
+    outcome: Any | None = None
+
+    @property
+    def is_replay(self) -> bool:
+        """هل كانت هذه إعادةً لعمليّةٍ مُثبَّتةٍ سابقًا؟ (سجلّ 1H)"""
+        return bool(getattr(self.outcome, "is_replay", False))
 
 
 class SovereignAuthorizer(Protocol):
     """الحدّ الذي تعتمد عليه النواة التنفيذية.
 
-    `guard` تُقيَّم دستوريًّا **قبل** استدعاء `executor`، فإن مُنِعت لم يُستدعَ
-    المُنفِّذ إطلاقًا. لا معامل يعكس هذا الترتيب.
+    `guard_declared` هو مسارُ التنفيذِ الوحيد بعد 1N: الآثارُ تُعلَن قبل وقوعِها،
+    فيقدرُ الحدُّ أن يمنعَ ما لم يُعلَن. ولا معامل يعكس هذا الترتيب.
     """
 
-    def guard(
+    def guard_declared(
         self,
         action: str,
         target: str,
-        executor: Callable[[], T],
+        *,
+        declared_effects: tuple[Any, ...],
+        applier: Callable[[Any], Any],
+        operation_key: Any,
+        compensators: tuple[Any, ...] = (),
         metadata: dict[str, Any] | None = None,
     ) -> GuardedResult: ...
 
@@ -131,9 +168,24 @@ class ConstitutionalAuthorizer:
     النواة التنفيذية ليست التاج، ولا يجوز أن تتصرّف كأنها هو.
     """
 
-    def __init__(self, gateway: Any | None = None, *, channel: str = "official") -> None:
+    #: متغيّرُ البيئةِ الذي يُحدِّد موضعَ سجلِّ الذرّيّة (1H) للنواة التنفيذية.
+    LEDGER_PATH_ENV = "AMOS_EXECUTIVE_IDEMPOTENCY_LEDGER"
+
+    #: الموضعُ الافتراضيُّ داخلَ `.runtime/` — مُستثنًى من الدفعِ في `.gitignore`.
+    DEFAULT_LEDGER_RELPATH = ".runtime/sovereignty/executive_core_idempotency.json"
+
+    def __init__(
+        self,
+        gateway: Any | None = None,
+        *,
+        channel: str = "official",
+        boundary: Any | None = None,
+        idempotency_ledger_path: Any | None = None,
+    ) -> None:
         self._channel = channel
         self._gateway = gateway if gateway is not None else self._build_gateway()
+        self._ledger_path = idempotency_ledger_path
+        self._boundary = boundary
 
     # ── الاستيراد الحقيقي للنواة السيادية ─────────────────────────────────
     @staticmethod
@@ -157,6 +209,62 @@ class ConstitutionalAuthorizer:
     @property
     def gateway(self) -> Any:
         return self._gateway
+
+    # ── حدُّ التنفيذِ السياديّ · 1M/1N ────────────────────────────────────
+    def _ledger_location(self) -> Path:
+        """موضعُ سجلِّ الذرّيّة: صريحٌ ثمّ بيئةٌ ثمّ افتراضٌ داخل المستودع.
+
+        لا يُخترَع مسارٌ مطلقٌ في الشيفرة: الافتراضُ نسبيٌّ لجذرِ المستودع الذي
+        يُعثَر عليه بوجودِ النواةِ السيادية نفسِها.
+        """
+        if self._ledger_path is not None:
+            return Path(self._ledger_path)
+        from os import environ
+
+        chosen = environ.get(self.LEDGER_PATH_ENV, "").strip()
+        if chosen:
+            return Path(chosen)
+        return locate_repo_root() / self.DEFAULT_LEDGER_RELPATH
+
+    def _build_boundary(self) -> Any:
+        """ابنِ حدَّ التنفيذِ حولَ البوابةِ نفسِها — لا بوابةً ثانية.
+
+        غيابُ النواةِ أو تعذّرُ تهيئةِ السجلِّ يعني **توقّفَ التنفيذ**
+        (`SovereigntyUnavailableError`) لا تجاوزَ الحدّ.
+        """
+        self._ensure_core_importable()
+        try:
+            from core.sovereignty.enforcement import ConsumedPermitLedger
+            from core.sovereignty.enforcement_boundary import SovereignExecutionBoundary
+            from core.sovereignty.idempotency import IdempotencyLedger
+        except ImportError as exc:
+            raise SovereigntyUnavailableError(
+                f"تعذّر استيراد حدِّ التنفيذِ السياديّ، فلا تنفيذ: {exc}"
+            ) from exc
+        location = self._ledger_location()
+        try:
+            location.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            raise SovereigntyUnavailableError(
+                f"تعذّر تهيئةُ موضعِ سجلِّ الذرّيّة «{location}»، فلا تنفيذ: {exc}"
+            ) from exc
+        # سجلُّ الأذونِ المُستهلَكةِ يُوضَع بجانبِ سجلِّ الذرّيّةِ في موضعِ التشغيل،
+        # لا في موضعِه الافتراضيِّ داخلَ الشجرةِ المُتعقَّبة: كتابةُ حالةِ تشغيلٍ
+        # في ملفٍّ مُتعقَّبٍ تُلوِّثُ المستودعَ وتُخالفُ بطاقةَ الهويّة.
+        return SovereignExecutionBoundary(
+            gateway=self._gateway,
+            idempotency_ledger=IdempotencyLedger(path=location),
+            consumed_permits=ConsumedPermitLedger(
+                path=location.parent / "executive_core_consumed_permits.json"
+            ),
+        )
+
+    @property
+    def boundary(self) -> Any:
+        """حدُّ التنفيذ — يُبنى عند أول حاجةٍ ويُحفَظ، أو يسقط صريحًا."""
+        if self._boundary is None:
+            self._boundary = self._build_boundary()
+        return self._boundary
 
     def crown_status(self) -> str:
         """حالة التاج كما تراها البوابة نفسها (`provisioned` / `unprovisioned`)."""
@@ -218,7 +326,55 @@ class ConstitutionalAuthorizer:
             advisory_violations=tuple(record.advisory_articles),
         )
 
-    # ── المسار الوحيد للتنفيذ ─────────────────────────────────────────────
+    # ── المسار الوحيد للتنفيذ · 1N ────────────────────────────────────────
+    def guard_declared(
+        self,
+        action: str,
+        target: str,
+        *,
+        declared_effects: tuple[Any, ...],
+        applier: Callable[[Any], Any],
+        operation_key: Any,
+        compensators: tuple[Any, ...] = (),
+        metadata: dict[str, Any] | None = None,
+    ) -> GuardedResult:
+        """نفِّذْ عبر حدِّ التنفيذِ السياديّ — أو لا تنفُذ.
+
+        الفرقُ عن `guard` المُغلَق ليس شكليًّا: الحدُّ يعرفُ الآثارَ قبلَ وقوعِها،
+        فيربطُ عقدًا (1E) وخطّةَ تعويضٍ (1I) ومفتاحَ ذرّيّةٍ (1H)، ويُوجِّهُ الأثرَ
+        الخارجيَّ إلى الصادرِ (1K) بلا أن يمسَّه `applier` هنا.
+
+        قيمةُ المُنادي تُلتقَط من `applier` نفسِه — الحدُّ لا يُرجِعُها ولا يجوز
+        أن يُرجِعَها: هو يعرفُ الأثرَ لا محتوى العمليّة.
+
+        `SovereigntyViolation` و`RoyalImpersonation` واستثناءاتُ الحدِّ كلُّها
+        تُترك ترتفع كما هي: منعٌ دستوريٌّ ليس فشلًا تقنيًّا يُبتلع.
+        """
+        request = self._request(action, target, metadata)
+        captured: list[Any] = []
+
+        def _apply(effect: Any) -> None:
+            captured.append(applier(effect))
+
+        outcome = self.boundary.execute(
+            request,
+            declared_effects=tuple(declared_effects),
+            planner=lambda _permit: tuple(declared_effects),
+            applier=_apply,
+            operation_key=operation_key,
+            compensators=tuple(compensators),
+        )
+        records = self._gateway.records
+        if not records:  # pragma: no cover - البوابة تسجّل كل قرار
+            raise SovereigntyUnavailableError(
+                "صدرَ إذنٌ بلا أثرٍ في سجل البوابة — أثرٌ مفقود يعني تدقيقًا مفقودًا"
+            )
+        return GuardedResult(
+            value=captured[0] if len(captured) == 1 else tuple(captured),
+            evidence=self._evidence_from_record(action, target, records[-1]),
+            outcome=outcome,
+        )
+
     def guard(
         self,
         action: str,
@@ -226,21 +382,18 @@ class ConstitutionalAuthorizer:
         executor: Callable[[], T],
         metadata: dict[str, Any] | None = None,
     ) -> GuardedResult:
-        """تنفيذ فعل عبر البوابة السيادية، مع إرجاع أثره الدستوري.
+        """مسارٌ **مُغلَق** منذ 1N — يُرفَع دائمًا ولا يُنفَّذ شيء.
 
-        `SovereigntyViolation` و`RoyalImpersonation` تُترك ترتفع كما هي: منع
-        دستوري ليس فشلًا تقنيًّا يُبتلع، بل قرار يجب أن يراه المُنادي.
+        بقاءُ التوقيعِ مقصود: مُنادٍ قديمٌ يجب أن يرى رفضًا صريحًا يدلُّه على
+        البديل، لا `AttributeError` غامضًا ولا — أسوأ — تنفيذًا يمرُّ بجانبِ
+        الحدّ. و`executor` لا يُستدعى قطُّ هنا.
         """
-        request = self._request(action, target, metadata)
-        value = self._gateway.execute(request, executor)
-        records = self._gateway.records
-        if not records:  # pragma: no cover - البوابة تسجّل كل تنفيذ
-            raise SovereigntyUnavailableError(
-                "نُفِّذ فعل بلا أثر في سجل البوابة — أثرٌ مفقود يعني تدقيقًا مفقودًا"
-            )
-        return GuardedResult(
-            value=value,
-            evidence=self._evidence_from_record(action, target, records[-1]),
+        raise UndeclaredExecutionError(
+            f"مُنفِّذٌ مُبهَمٌ للفعل «{action}» على «{target}» "
+            f"({getattr(executor, '__name__', type(executor).__name__)}) "
+            "لا يعبرُ حدَّ التنفيذِ السياديّ: الحدُّ لا يأذنُ لما لا يعرفُ آثارَه. "
+            "استعملْ `guard_declared` بآثارٍ مُعلَنةٍ ومفتاحِ عمليّةٍ ومعوّضات. "
+            f"(بيانات: {sorted((metadata or {}).keys())})"
         )
 
     # ── فصل القرار عن الإنفاذ · 1F ────────────────────────────────────────
@@ -290,6 +443,47 @@ class ConstitutionalAuthorizer:
         """حكم دستوري بلا تنفيذ — يُستخدَم لتقييم مهمّة قبل قبولها."""
         verdict = self._gateway.review(self._request(action, target, metadata))
         return self._evidence_from_verdict(action, target, verdict)
+
+
+# ── مُنشِئاتُ الإعلانِ · وصلٌ لا اختراع ──────────────────────────────────────
+#
+# النواةُ التنفيذيةُ تحت `federal/` لا تستوردُ `core` وقتَ التحميل (المسارُ يُضاف
+# وقتَ التشغيل). فهذه ثلاثُ دوالٍّ **تُمرِّرُ** إلى أنواعِ 1E و1H و1I كما هي، ولا
+# تُعيدُ تعريفَ مفهومٍ ولا تُخزِّنُ حالة: لو نُسِخَت الأنواعُ هنا لصار في الدولةِ
+# مفهومانِ لـ«الأثر» يفترقان.
+
+
+def _core_sovereignty(module: str) -> Any:
+    """استوردْ وحدةً من النواةِ السيادية بعد ضمانِ وجودِها على المسار."""
+    ConstitutionalAuthorizer._ensure_core_importable()
+    from importlib import import_module
+
+    try:
+        return import_module(f"core.sovereignty.{module}")
+    except ImportError as exc:
+        raise SovereigntyUnavailableError(
+            f"تعذّر استيراد «core.sovereignty.{module}»، فلا إعلانَ أثرٍ ولا تنفيذ: {exc}"
+        ) from exc
+
+
+def declared_effect(kind: str, resource: str, detail: str = "") -> Any:
+    """أثرٌ مُعلَنٌ واحد (1E) — `kind` من مفردات `EffectKind` لا نصٌّ حرّ."""
+    contract = _core_sovereignty("contract")
+    return contract.SovereignEffect(
+        kind=contract.EffectKind(kind), resource=resource, detail=detail
+    )
+
+
+def operation_key(scope: str, value: str) -> Any:
+    """مفتاحُ ذرّيّةٍ (1H) — نطاقٌ وقيمةٌ، فلا تصادمَ بين الوحدات."""
+    return _core_sovereignty("idempotency").IdempotencyKey(scope=scope, value=value)
+
+
+def compensator(effect_signature: str, apply: Callable[[], None], description: str = "") -> Any:
+    """معوّضُ أثرٍ واحد (1I) — مُعلَنٌ قبلَ التنفيذِ لا مُرتجَلٌ بعدَ الفشل."""
+    return _core_sovereignty("compensation").Compensator(
+        effect_signature=effect_signature, apply=apply, description=description
+    )
 
 
 def get_authorizer() -> ConstitutionalAuthorizer:
