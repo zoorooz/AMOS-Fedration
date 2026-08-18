@@ -2,7 +2,7 @@
 
 المالك: core/sovereignty/ — التاج
 تاريخ الإنشاء: 2026-08-16
-تاريخ آخر تعديل: 2026-08-16
+تاريخ آخر تعديل: 2026-08-18
 
 التصدير هنا **متأخر** (PEP 562) بقصد معماري: النواة الدستورية تستورد
 `core.sovereignty.prerogatives` و`core.sovereignty.crown` لتُنفّذ المادة العاشرة،
@@ -51,7 +51,17 @@ _EXPORTS: dict[str, str] = {
     "DecreeSignatureError": "decree",
     "RoyalDecree": "decree",
     "sign_decree": "decree",
+    # authority_grants — أثرُ المادة العاشرة · 10 التشغيليّ
+    "ALL_CAPABILITIES": "authority_grants",
+    "CONSTITUTIONAL_CARVE_OUTS": "authority_grants",
+    "AuthorityGrant": "authority_grants",
+    "AuthorityGrantError": "authority_grants",
+    "AuthorityGrantRegistry": "authority_grants",
+    "GrantState": "authority_grants",
+    "NonSovereignGrantError": "authority_grants",
+    "RoyalAuthorityErosionError": "authority_grants",
     # gateway — يعتمد على النواة الدستورية
+    "AuthorityWithdrawn": "gateway",
     "ExecutionRecord": "gateway",
     "GatewayError": "gateway",
     "SovereignGateway": "gateway",

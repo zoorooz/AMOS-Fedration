@@ -44,6 +44,7 @@ from core.sovereignty.authority import (
     RoyalAuthenticityError,
     classify,
 )
+from core.sovereignty.authority_grants import AuthorityGrantRegistry
 from core.sovereignty.crown import crown_is_provisioned
 from core.sovereignty.decree import DecreeRegistry, RoyalDecree
 from core.sovereignty.prerogatives import is_royal_exclusive
@@ -70,6 +71,22 @@ class SovereigntyViolation(GatewayError):
     def __init__(self, verdict: Verdict) -> None:
         self.verdict = verdict
         super().__init__(verdict.explain())
+
+
+class AuthorityWithdrawn(GatewayError):
+    """فاعلٌ تابعٌ يحاول فعلًا سحبَ الملكُ صلاحيتَه فيه (المادة العاشرة · 10 · 1).
+
+    ليس حكمًا دستوريًّا: القاعدةُ لم تُخالَف، بل **زال الاختصاصُ** نفسُه. ولذلك
+    لا يُقدَّم كـ`SovereigntyViolation` ولا يمرّ في مسارِ التقييم.
+    """
+
+    def __init__(self, grant: Any) -> None:
+        self.grant = grant
+        super().__init__(
+            f"سُحِبت صلاحيةُ «{grant.grantee}» في «{grant.capability}» بالمرسوم "
+            f"«{grant.decree_id}» بتاريخ {grant.recorded_at}. "
+            "لا تُستعاد إلّا بمرسومٍ ملكيٍّ جديد."
+        )
 
 
 class RoyalImpersonation(GatewayError):
@@ -132,11 +149,13 @@ class SovereignGateway:
         *,
         decree_registry: DecreeRegistry | None = None,
         security_log: SecurityEventLog | None = None,
+        grant_registry: AuthorityGrantRegistry | None = None,
     ) -> None:
         self._engine = engine or ConstitutionalEngine()
         self._decrees = decree_registry or DecreeRegistry()
         self._records: list[ExecutionRecord] = []
         self._security = security_log or SecurityEventLog(self._engine.ledger)
+        self._grants = grant_registry or AuthorityGrantRegistry()
 
     # ── الاستعلام ─────────────────────────────────────────────────────────
     @property
@@ -150,6 +169,11 @@ class SovereignGateway:
     @property
     def security_log(self) -> SecurityEventLog:
         return self._security
+
+    @property
+    def grants(self) -> AuthorityGrantRegistry:
+        """سجلُّ منحِ الصلاحياتِ وسحبِها — أثرُ المادة العاشرة · 10 التشغيليّ."""
+        return self._grants
 
     @property
     def supreme_authority(self) -> AuthorityLayer:
@@ -320,9 +344,42 @@ class SovereignGateway:
         executor: Callable[[], T],
         classification: AuthorityClassification,
     ) -> T:
-        """تنفيذ قرار تابع — الدستور ملزِم ومانع، ولم يتغير شيء هنا."""
+        """تنفيذ قرار تابع — الدستور ملزِم ومانع، ولم يتخفَّف شيء هنا.
+
+        أُضيفت خطوةٌ سابقةٌ للتقييم (1D): **هل بقي الاختصاصُ أصلًا؟** فإن سحبَ
+        الملكُ صلاحيةَ هذا الفاعلِ في هذا الفعلِ فلا معنى لتقييمِ فعلٍ لا يملكه:
+        يُرفَض رفضًا مُغلَقًا ويُسجَّل، ولا يُستدعى المُنفِّذ.
+        """
         decree = request.royal_decree
         decree_id = getattr(decree, "decree_id", None) if decree is not None else None
+
+        withdrawn = self._grants.latest_for(request.actor.value, request.action)
+        if withdrawn is not None and withdrawn.is_withdrawn:
+            self._security.record(
+                SecurityEventKind.WITHDRAWN_AUTHORITY_USE,
+                actor=request.actor.value,
+                action=request.action,
+                target=request.target or "",
+                reason=(
+                    f"صلاحيةُ «{withdrawn.capability}» مسحوبةٌ بالمرسوم "
+                    f"«{withdrawn.decree_id}». الفعلُ يُمنَع قبل التقييم."
+                ),
+                decree_id=withdrawn.decree_id,
+            )
+            self._records.append(
+                ExecutionRecord(
+                    fingerprint="",
+                    action=request.action,
+                    actor=request.actor.value,
+                    decision="AUTHORITY_WITHDRAWN",
+                    executed=False,
+                    ledger_entry_hash=None,
+                    decree_id=withdrawn.decree_id,
+                    decision_kind=classification.kind.value,
+                    authority_layer=classification.layer.name,
+                )
+            )
+            raise AuthorityWithdrawn(withdrawn)
 
         verdict = self._engine.evaluate(
             request,
@@ -381,10 +438,12 @@ class SovereignGateway:
             "supreme_authority": self.supreme_authority.name,
             "security_events": len(self._security.events),
             "sovereign_executions": sum(1 for r in self._records if r.sovereign),
+            "active_withdrawals": len(self._grants.active_withdrawals()),
         }
 
 
 __all__ = [
+    "AuthorityWithdrawn",
     "ExecutionRecord",
     "GatewayError",
     "RoyalImpersonation",

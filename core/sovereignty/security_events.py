@@ -36,7 +36,8 @@ class SecurityEventKind(str, Enum):
 
     الأربعة الأولى ادّعاءات ملكية فاشلة. والخامس أثر تدخّل سيادي ناجح — يُسجَّل
     لأن التدخّل الشرعي يجب أن يكون **مرئيًّا** لا خفيًّا. والسادس محاولة طرف تابع
-    أن يُنشئ نقضًا على التاج.
+    أن يُنشئ نقضًا على التاج. والأخير استعمالُ صلاحيةٍ سحبَها الملكُ بمرسوم
+    (المادة العاشرة · 10 · 1): ليس مخالفةً لقاعدةٍ بل تصرُّفًا بلا اختصاص.
     """
 
     ROYAL_COMMAND_UNSIGNED = "ROYAL_COMMAND_UNSIGNED"
@@ -48,6 +49,7 @@ class SecurityEventKind(str, Enum):
     SOVEREIGN_INTERVENTION = "SOVEREIGN_INTERVENTION"
     SOVEREIGNTY_ALTERING_DECREE = "SOVEREIGNTY_ALTERING_DECREE"
     SUBORDINATE_VETO_ATTEMPT = "SUBORDINATE_VETO_ATTEMPT"
+    WITHDRAWN_AUTHORITY_USE = "WITHDRAWN_AUTHORITY_USE"
 
     @property
     def severity(self) -> SecurityEventSeverity:
@@ -72,6 +74,7 @@ _SEVERITY: dict[SecurityEventKind, SecurityEventSeverity] = {
     SecurityEventKind.SOVEREIGN_INTERVENTION: SecurityEventSeverity.NOTICE,
     SecurityEventKind.SOVEREIGNTY_ALTERING_DECREE: SecurityEventSeverity.CRITICAL,
     SecurityEventKind.SUBORDINATE_VETO_ATTEMPT: SecurityEventSeverity.HIGH,
+    SecurityEventKind.WITHDRAWN_AUTHORITY_USE: SecurityEventSeverity.HIGH,
 }
 
 
