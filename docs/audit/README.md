@@ -42,6 +42,9 @@ python tools/governance/check_completion_ledger.py --staged     # قبل الا�
 python tools/governance/check_completion_ledger.py --self-check  # شكلُ السجلِّ وحده
 ```
 
+وتُنفَذُ في التكاملِ المستمرِّ بوظيفةِ `ledger-gate` — ثلاثُ بوابات: سلامةُ
+شكلِ السجلّ، وقيدُ كلِّ عملٍ مدفوع، ومُراقبةُ البوّابةِ نفسِها باختباراتِها.
+
 ## القاعدة
 
 > `DONE = Capability Proven`
