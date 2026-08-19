@@ -93,7 +93,7 @@
       "md_files": 60,
       "py_files": 213,
       "yaml_files": 3,
-      "code_lines": 60946,
+      "code_lines": 60990,
       "nucleus_count": 7,
       "nucleus_status": {
         "unspecified": 7
@@ -103,7 +103,7 @@
       "fake_hits": 1,
       "in_memory_hits": 60,
       "secret_hits": 0,
-      "observed_hits": 125,
+      "observed_hits": 127,
       "api_routes": 178,
       "test_refs": 150,
       "identity_violations": 2,

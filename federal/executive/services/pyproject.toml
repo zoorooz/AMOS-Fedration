@@ -51,6 +51,14 @@ dependencies = [
     # كانت مستخدَمةً في الكود وغيرَ مُعلَنةٍ هنا، فكان الفحصان
     # `test_chart_generate_*` يفشلان بـ ModuleNotFoundError في بيئةٍ نظيفة.
     "matplotlib>=3.9.0",
+    # Event schema validation — تعتمدُها `validate_event` في
+    # `common/event_schemas.py`. كانتْ مستخدَمةً في الكودِ وغيرَ مُعلَنةٍ هنا
+    # إطلاقًا، فتحضُرُ في وظيفةِ `Tests` وحدَها (تُركِّبُ `requirements.lock`)
+    # وتغيبُ عن `Coverage` و`Cross-System` و`Lockfile Consistency` (تُركِّبُ
+    # `.[dev]`)، فيهبِطُ التحقُّقُ فيها إلى فحصِ الحقولِ المطلوبةِ وحدَه.
+    # والحدُّ الأدنى هو المُقفولُ المُقاسُ؛ ولا يُدَّعى دعمُ أقدمَ منه
+    # لأنَّه غيرُ مقيسٍ هنا.
+    "jsonschema>=4.26.0",
 ]
 
 [project.optional-dependencies]
