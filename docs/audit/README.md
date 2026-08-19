@@ -16,7 +16,7 @@ royal/ — المجلس التأسيسي، بتفويض التنفيذ إلى `t
 2026-08-16
 
 ## تاريخ آخر تعديل
-2026-08-16
+2026-08-19
 
 ## المحتويات
 
@@ -26,6 +26,7 @@ royal/ — المجلس التأسيسي، بتفويض التنفيذ إلى `t
 | [`DEFINITION_OF_DONE.md`](DEFINITION_OF_DONE.md) | تعريف الإنجاز ونظام الحالات | يدوي |
 | [`TRUTH_MATRIX.md`](TRUTH_MATRIX.md) | مصفوفة الحقيقة بالأدلة | **آلي — لا تحرره** |
 | `truth_matrix.json` | المصفوفة الآلية لبوابات CI | **آلي — لا تحرره** |
+| [`COMPLETION_LEDGER.md`](COMPLETION_LEDGER.md) | سجلُّ الإكمال — خريطةُ الطريقِ إلى 100٪، والقاعدةُ الملزمةُ (التوثيقُ قبلَ الدفع)، وسجلُّ ما نُفِّذ | يدوي — **مُلزِمٌ لكلِّ عامل** |
 
 ## إعادة توليد المصفوفة
 
@@ -34,8 +35,16 @@ python tools/governance/truth_audit.py            # توليد
 python tools/governance/truth_audit.py --strict   # بوابة CI (تفشل عند CRITICAL)
 ```
 
+## بوابةُ التوثيقِ قبلَ الدفع
+
+```bash
+python tools/governance/check_completion_ledger.py --staged     # قبل الالتزام
+python tools/governance/check_completion_ledger.py --self-check  # شكلُ السجلِّ وحده
+```
+
 ## القاعدة
 
 > `DONE = Capability Proven`
+> `PUSH = Work + Its Record, Together` — [`COMPLETION_LEDGER.md`](COMPLETION_LEDGER.md) § 2
 
 راجع [`WORKING_PRINCIPLE.md`](../governance/WORKING_PRINCIPLE.md) — المبدأ الملزم لكل من يعمل في هذا المستودع.

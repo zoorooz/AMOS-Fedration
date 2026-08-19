@@ -115,6 +115,42 @@ jobs:
           done
           echo "✓ الخاتم يشتقّ ولا يختلق."
 
+  ledger-gate:
+    name: Completion Ledger (القاعدة الملزمة — التوثيقُ قبلَ الدفع)
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 لازمٌ لا زينة: البوابة تقرأ فارقَ الالتزام من git، وفي
+      # استنساخٍ ضحلٍ لا يوجد أصلٌ يُقارَنُ به فيسقط الفحص لسببٍ لا علاقة له
+      # بصحّة القيد.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # البوابةُ لا تحتاج تبعيّات: مكتبةٌ قياسيّةٌ و git وحدهما.
+      - name: بوابة 1 — سجلُّ الإكمالِ قائمٌ وسليمُ الشكل
+        run: python tools/governance/check_completion_ledger.py --self-check
+
+      # على طلبِ الدمج: يُقاسُ المدى كلُّه — عملٌ في أيِّ التزامٍ من الطلبِ بلا
+      # قيدٍ في السجلّ يُسقِط الطلب.
+      - name: بوابة 2 — كلُّ عملٍ في هذا الطلبِ مُقيَّدٌ في السجلّ
+        if: github.event_name == 'pull_request'
+        run: |
+          python tools/governance/check_completion_ledger.py \
+            --range "origin/${{ github.base_ref }}..HEAD"
+
+      # على الدفعِ المباشر: يُقاسُ الالتزامُ الواحد.
+      - name: بوابة 2 — الالتزامُ المدفوعُ يحملُ قيدَه
+        if: github.event_name == 'push'
+        run: python tools/governance/check_completion_ledger.py --commit HEAD
+
+      - name: بوابة 3 — البوّابةُ نفسُها مُراقَبةٌ باختباراتها
+        run: |
+          pip install pytest
+          pytest tests/governance/test_completion_ledger_gate.py -v --tb=short
+
   constitutional-kernel:
     name: Constitutional Kernel (E1 — بوابات الدستور)
     runs-on: ubuntu-latest
