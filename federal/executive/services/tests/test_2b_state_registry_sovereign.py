@@ -40,12 +40,12 @@ from amos_federation.common.principal import (
     AuthorizationContext,
     Principal,
 )
+from amos_federation.services.executive_core.agent_identity import register_identity
 from amos_federation.services.executive_core.sovereignty_bridge import (
     ConstitutionalAuthorizer,
     GuardedResult,
 )
 from amos_federation.services.state_registry import service as registry_module
-from amos_federation.services.executive_core.agent_identity import register_identity
 from amos_federation.services.state_registry.models import (
     DepartmentModel,
     InstitutionModel,
@@ -53,14 +53,14 @@ from amos_federation.services.state_registry.models import (
 )
 from amos_federation.services.state_registry.service import (
     ACTION_DEPARTMENT_CREATE,
+    ACTION_INSTITUTION_STATUS,
     ACTION_OFFICIAL_APPOINT,
     ACTION_OFFICIAL_REVOKE,
-    ACTION_INSTITUTION_STATUS,
     DepartmentHeadConflictError,
     DuplicateCodeError,
     InstitutionInactiveError,
-    OfficialNotFoundError,
     InstitutionNotEmptyError,
+    OfficialNotFoundError,
     RegistryError,
     StateRegistry,
 )
@@ -202,9 +202,9 @@ class TestStatusChangeCrossesTheBoundary:
         assert len(authorizer.results) == 1, "لم تعبرْ العمليّةُ الحدَّ ولا مرّةً واحدة."
 
         outcome = authorizer.results[0].outcome
-        assert _mandatory_stages() <= set(outcome.stages), (
-            f"مرحلةٌ إلزاميّةٌ لم تُمَرّ: {_mandatory_stages() - set(outcome.stages)}"
-        )
+        assert _mandatory_stages() <= set(
+            outcome.stages
+        ), f"مرحلةٌ إلزاميّةٌ لم تُمَرّ: {_mandatory_stages() - set(outcome.stages)}"
 
     def test_declared_effect_stays_within_the_target(
         self,
@@ -331,9 +331,9 @@ class TestCompensationIsReal:
         assert plan is not None, "لم تُبنَ خطّةُ تعويضٍ للأثر."
         applied = set(outcome.applied_signatures)
         assert applied, "لم يُطبَّقْ أثرٌ — فالقياسُ على تغطيتِه لا معنى له."
-        assert applied <= plan.covered_signatures, (
-            f"أثرٌ واقعٌ بلا معوّضٍ مربوط: {applied - plan.covered_signatures}"
-        )
+        assert (
+            applied <= plan.covered_signatures
+        ), f"أثرٌ واقعٌ بلا معوّضٍ مربوط: {applied - plan.covered_signatures}"
         # والمعوّضُ المربوطُ ليس وصفًا: يُنادى فعلًا فيعيدُ الحالةَ السابقة.
         entry = plan.compensator_for(next(iter(applied)))
         assert entry.apply() is True
@@ -375,9 +375,9 @@ class TestFailureIsFailClosed:
                 change_id="s6",
             )
         assert "نجَح" not in str(failure.value), "ادُّعيَ نجاحٌ في نصِّ الفشل."
-        assert _status_of(institution) == "suspended", (
-            "الأثرُ لم يقعْ قبلَ الفشلِ — فالقياسُ التالي لا معنى له."
-        )
+        assert (
+            _status_of(institution) == "suspended"
+        ), "الأثرُ لم يقعْ قبلَ الفشلِ — فالقياسُ التالي لا معنى له."
         assert len(authorizer.results) == 0, "أُرجِعت حصيلةُ نجاحٍ من نداءٍ فاشل."
 
         # وإعادةُ العمليّةِ الفاشلةِ: **لا ضمانَ** بإغلاقِها. كُتِبَ هذا الفحصُ أوّلًا
@@ -400,9 +400,9 @@ class TestFailureIsFailClosed:
             )
         except IdempotencyError:
             retried = None  # فرعُ الإغلاق — تصادفَ التصريحُ في الثانيةِ نفسِها.
-        assert _status_of(institution) == "suspended", (
-            "أوقعتِ الإعادةُ حالةً مُغايرةً — وهذا انفلاتٌ لا يحتملُه الدَّينُ المُعلَن."
-        )
+        assert (
+            _status_of(institution) == "suspended"
+        ), "أوقعتِ الإعادةُ حالةً مُغايرةً — وهذا انفلاتٌ لا يحتملُه الدَّينُ المُعلَن."
         if retried is not None:
             assert retried.get("status") == "suspended"
 
@@ -492,10 +492,9 @@ class TestReplayProducesNoSecondEffect:
         """
         from datetime import datetime
 
-        from cryptography.hazmat.primitives.asymmetric import ed25519
-
         from core.sovereignty.contract import EffectKind, SovereignEffect, bind_contract
         from core.sovereignty.enforcement import issue_permit
+        from cryptography.hazmat.primitives.asymmetric import ed25519
 
         target = f"institutions/{DEFAULT_TENANT}/INST-PROBE"
         shape = {
@@ -512,9 +511,9 @@ class TestReplayProducesNoSecondEffect:
 
         first = bind_contract(declared_effects=(_effect("active ← suspended"),), **shape)
         second = bind_contract(declared_effects=(_effect("suspended ← active"),), **shape)
-        assert first.contract_id == second.contract_id, (
-            "تغيّرَ رقمُ العقدِ بتغيّرِ التفصيل — فوصفُ القيدِ أعلاه صارَ غيرَ صحيح."
-        )
+        assert (
+            first.contract_id == second.contract_id
+        ), "تغيّرَ رقمُ العقدِ بتغيّرِ التفصيل — فوصفُ القيدِ أعلاه صارَ غيرَ صحيح."
 
         moment = datetime.fromisoformat("2026-08-18T12:00:00+00:00")
         key = ed25519.Ed25519PrivateKey.generate()
@@ -529,9 +528,9 @@ class TestReplayProducesNoSecondEffect:
             ).permit_id
             for contract in (first, second)
         ]
-        assert permits[0] == permits[1], (
-            "اختلفَ الإذنانِ في الثانيةِ نفسِها — فالقيدُ المُوثَّقُ لم يعدْ قائمًا."
-        )
+        assert (
+            permits[0] == permits[1]
+        ), "اختلفَ الإذنانِ في الثانيةِ نفسِها — فالقيدُ المُوثَّقُ لم يعدْ قائمًا."
 
     def test_two_distinct_transitions_on_one_target_show_the_constraint(
         self,
@@ -558,9 +557,9 @@ class TestReplayProducesNoSecondEffect:
                 context=king, code=institution, status="active", reason="ثانٍ"
             )
         except IdempotencyError as refusal:
-            assert "استُهلِك" in str(refusal), (
-                "الرفضُ لم يكنْ لاستهلاكِ الإذن — فوصفُ القيدِ صارَ غيرَ صحيح."
-            )
+            assert "استُهلِك" in str(
+                refusal
+            ), "الرفضُ لم يكنْ لاستهلاكِ الإذن — فوصفُ القيدِ صارَ غيرَ صحيح."
             assert _status_of(institution) == "suspended", "وقعَ أثرٌ رغمَ رفضِ الإذن."
         else:
             assert second["replayed"] is False
@@ -591,9 +590,9 @@ class TestNoBypassPathRemains:
             segment = ast.get_source_segment(source, node) or ""
             if "row.status = status" in segment or 'row.status = "dissolved"' in segment:
                 writers.append(node.name)
-        assert writers == ["_set_institution_status_row"], (
-            f"مواضعُ كتابةٍ لحالةِ المؤسسةِ غيرُ متوقَّعة: {writers}"
-        )
+        assert writers == [
+            "_set_institution_status_row"
+        ], f"مواضعُ كتابةٍ لحالةِ المؤسسةِ غيرُ متوقَّعة: {writers}"
 
     def test_no_public_status_write_outside_the_guarded_operation(self) -> None:
         """المسارُ العامُّ الوحيدُ لتغييرِ الحالةِ هو العمليّةُ التي تعبرُ الحدَّ."""
@@ -766,9 +765,9 @@ class TestDepartmentCreationCrossesTheBoundary:
         assert row is not None and row.status == "active", "لم يقعِ الأثرُ في القاعدة."
         assert len(authorizer.results) == 1, "لم تعبرِ العمليّةُ الحدَّ مرّةً واحدةً بيّنة."
         outcome = authorizer.results[0].outcome
-        assert _mandatory_stages() <= set(outcome.stages), (
-            f"مراحلُ الحدِّ الإلزاميّةُ لم تمرَّ كلُّها: {_mandatory_stages() - set(outcome.stages)}"
-        )
+        assert _mandatory_stages() <= set(
+            outcome.stages
+        ), f"مراحلُ الحدِّ الإلزاميّةُ لم تمرَّ كلُّها: {_mandatory_stages() - set(outcome.stages)}"
         assert outcome.contract.action == ACTION_DEPARTMENT_CREATE
         assert outcome.permit_id, "لا إذنَ في الحصيلة — فالعبورُ غيرُ مُثبَت."
 
@@ -792,9 +791,9 @@ class TestDepartmentCreationCrossesTheBoundary:
             f"institutions/{DEFAULT_TENANT}/{institution}/departments/{dept_code}"
         ), f"هدفٌ غيرُ متوقَّع: {target}"
         for effect in outcome.contract.declared_effects:
-            assert effect.resource == target or effect.resource.startswith(target + "/"), (
-                f"أثرٌ خارجَ نطاقِ الهدف: {effect.signature}"
-            )
+            assert effect.resource == target or effect.resource.startswith(
+                target + "/"
+            ), f"أثرٌ خارجَ نطاقِ الهدف: {effect.signature}"
 
 
 class TestDepartmentUnauthorizedCreatesNothing:
@@ -842,9 +841,9 @@ class TestDepartmentUnauthorizedCreatesNothing:
                 code=dept_code,
                 name="إدارةٌ مرفوضة",
             )
-        assert _department_row(institution, dept_code) is None, (
-            "وقعَ أثرٌ رغمَ رفضِ البوّابةِ — والحدُّ إذنْ لم يحرسْ شيئًا."
-        )
+        assert (
+            _department_row(institution, dept_code) is None
+        ), "وقعَ أثرٌ رغمَ رفضِ البوّابةِ — والحدُّ إذنْ لم يحرسْ شيئًا."
 
 
 class TestDepartmentCompensationIsReal:
@@ -867,15 +866,15 @@ class TestDepartmentCompensationIsReal:
         plan = outcome.compensation_plan
         assert plan is not None, "لم تُبنَ خطّةُ تعويض."
         applied = set(outcome.applied_signatures)
-        assert applied and applied <= plan.covered_signatures, (
-            f"أثرٌ واقعٌ بلا معوّضٍ مربوط: {applied - plan.covered_signatures}"
-        )
+        assert (
+            applied and applied <= plan.covered_signatures
+        ), f"أثرٌ واقعٌ بلا معوّضٍ مربوط: {applied - plan.covered_signatures}"
         assert _department_row(institution, dept_code) is not None
         entry = plan.compensator_for(next(iter(applied)))
         assert entry.apply() is True, "المعوّضُ لم يفعلْ شيئًا."
-        assert _department_row(institution, dept_code) is None, (
-            "المعوّضُ المربوطُ لم يحذفِ الصفَّ — فهو وعدٌ لا عكس."
-        )
+        assert (
+            _department_row(institution, dept_code) is None
+        ), "المعوّضُ المربوطُ لم يحذفِ الصفَّ — فهو وعدٌ لا عكس."
 
 
 class TestDepartmentFailureIsFailClosed:
@@ -963,6 +962,7 @@ class TestDepartmentNoBypassPathRemains:
 
         source = Path(registry_module.__file__).read_text(encoding="utf-8")
         tree = ast.parse(source)
+
         def _own_body(node: ast.FunctionDef) -> str:
             """جسدُ الدالّةِ بعدَ طرحِ ما في دوالِّها الداخليّة.
 
@@ -995,9 +995,9 @@ class TestDepartmentNoBypassPathRemains:
         )
 
         names = set(inspect.signature(StateRegistry.create_department).parameters)
-        assert not (names & FORBIDDEN_BYPASS_PARAMS), (
-            f"معامَلُ تجاوزٍ في عمليّةٍ مُهاجَرة: {names & FORBIDDEN_BYPASS_PARAMS}"
-        )
+        assert not (
+            names & FORBIDDEN_BYPASS_PARAMS
+        ), f"معامَلُ تجاوزٍ في عمليّةٍ مُهاجَرة: {names & FORBIDDEN_BYPASS_PARAMS}"
 
 
 class TestDepartmentPreMigrationRulesStillHold:
@@ -1079,9 +1079,9 @@ class TestAppointmentCrossesTheBoundary:
         assert len(rows) == 1 and rows[0].status == "appointed", "لم يقعِ الأثرُ في القاعدة."
         assert len(authorizer.results) == 1
         outcome = authorizer.results[0].outcome
-        assert _mandatory_stages() <= set(outcome.stages), (
-            f"مراحلُ الحدِّ لم تمرَّ كلُّها: {_mandatory_stages() - set(outcome.stages)}"
-        )
+        assert _mandatory_stages() <= set(
+            outcome.stages
+        ), f"مراحلُ الحدِّ لم تمرَّ كلُّها: {_mandatory_stages() - set(outcome.stages)}"
         assert outcome.contract.action == ACTION_OFFICIAL_APPOINT
         assert outcome.permit_id
 
@@ -1186,9 +1186,9 @@ class TestAppointmentCompensationIsReal:
         applied = set(outcome.applied_signatures)
         assert applied and applied <= plan.covered_signatures
         assert plan.compensator_for(next(iter(applied))).apply() is True
-        assert _official_rows(agent_id) == [], (
-            "المعوّضُ لم يحذفِ الصفَّ — والعكسُ الحقيقيُّ لتقليدٍ لم يتمَّ عقدُه حذفُه."
-        )
+        assert (
+            _official_rows(agent_id) == []
+        ), "المعوّضُ لم يحذفِ الصفَّ — والعكسُ الحقيقيُّ لتقليدٍ لم يتمَّ عقدُه حذفُه."
 
 
 class TestAppointmentFailureIsFailClosed:
@@ -1481,9 +1481,7 @@ class TestRevocationCompensationIsReal:
             is_head=True,
         )
         authorizer.results.clear()
-        service.revoke_official(
-            context=king, official_id=head["id"], reason="عزلُ الرئيس"
-        )
+        service.revoke_official(context=king, official_id=head["id"], reason="عزلُ الرئيس")
         assert _official_row(head["id"]).is_head is False
         outcome = authorizer.results[0].outcome
         plan = outcome.compensation_plan
@@ -1543,9 +1541,7 @@ class TestRevocationReplayAndPriorRules:
         king = _context("king", _KING_PERMISSIONS)
         service.revoke_official(context=king, official_id=appointed, reason="الأوّل")
         assert service._revoke_official_row(appointed, None, is_head=False) is True  # noqa: SLF001
-        replayed = service.revoke_official(
-            context=king, official_id=appointed, reason="إعادة"
-        )
+        replayed = service.revoke_official(context=king, official_id=appointed, reason="إعادة")
         assert replayed["replayed"] is True, "عُدَّت الإعادةُ عزلًا جديدًا."
         assert _official_row(appointed).status == "appointed", "أوقعتِ الإعادةُ أثرًا ثانيًا."
 

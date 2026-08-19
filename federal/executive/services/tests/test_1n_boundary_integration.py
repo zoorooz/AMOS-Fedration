@@ -63,9 +63,7 @@ def _fresh_db() -> None:
 @pytest.fixture
 def authorizer(tmp_path: Path) -> ConstitutionalAuthorizer:
     """مُصرِّحٌ بسجلِّ ذرّيّةٍ معزولٍ على القرص — لا في الذاكرة."""
-    return ConstitutionalAuthorizer(
-        idempotency_ledger_path=tmp_path / "IDEMPOTENCY.json"
-    )
+    return ConstitutionalAuthorizer(idempotency_ledger_path=tmp_path / "IDEMPOTENCY.json")
 
 
 @pytest.fixture
@@ -105,9 +103,7 @@ class TestBridgePassesThroughBoundary:
             applier=lambda _e: state.update({"record/a": "MUTATED"}) or "نجاح",
             operation_key=operation_key("test.1n", "full-pass"),
             compensators=(
-                compensator(
-                    effect.signature, lambda: state.update({"record/a": "ORIGINAL"})
-                ),
+                compensator(effect.signature, lambda: state.update({"record/a": "ORIGINAL"})),
             ),
         )
         assert result.value == "نجاح", "قيمةُ المُنادي لم تُحفَظ عبرَ الحدّ."
@@ -119,9 +115,7 @@ class TestBridgePassesThroughBoundary:
         )
         assert result.evidence.decision == "ALLOW"
 
-    def test_replay_does_not_apply_effect_twice(
-        self, authorizer: ConstitutionalAuthorizer
-    ) -> None:
+    def test_replay_does_not_apply_effect_twice(self, authorizer: ConstitutionalAuthorizer) -> None:
         """ذرّيّةُ 1H دخلت الإنتاجَ في 1N — والقياسُ على عددِ التطبيقات."""
         applied: list[str] = []
         effect = declared_effect("WRITE", "record/b")
@@ -169,9 +163,7 @@ class TestLegacyPathIsClosed:
         from amos_federation.services.executive_core import engine as engine_module
 
         source = Path(engine_module.__file__).read_text(encoding="utf-8")
-        assert "_authorizer.guard(" not in source, (
-            "المحرّكُ عادَ ينادي المسارَ المُغلَق."
-        )
+        assert "_authorizer.guard(" not in source, "المحرّكُ عادَ ينادي المسارَ المُغلَق."
         assert "_authorizer.guard_declared(" in source, "المحرّكُ لا يمرُّ بالحدّ."
 
 
@@ -188,18 +180,18 @@ class TestEngineSemanticsPreserved:
     ) -> None:
         task = core.submit("analysis", "مهمّةُ قياسٍ للهجرة")
         assert task["id"], "لم تُرجَع هويّةُ المهمّة."
-        assert repo.state_of(task["id"]) is TaskState.CREATED, (
-            "لم تُكتَب المهمّةُ في قاعدةِ البياناتِ بحالتِها الأولى."
-        )
+        assert (
+            repo.state_of(task["id"]) is TaskState.CREATED
+        ), "لم تُكتَب المهمّةُ في قاعدةِ البياناتِ بحالتِها الأولى."
 
     def test_legal_transition_really_changes_state(
         self, core: ExecutiveCore, repo: ExecutiveTaskRepository
     ) -> None:
         task = core.submit("analysis", "انتقالٌ مشروع")
         core.advance(task["id"])
-        assert repo.state_of(task["id"]) is not TaskState.CREATED, (
-            "لم يتقدّم الانتقالُ المشروعُ عبرَ الحدّ."
-        )
+        assert (
+            repo.state_of(task["id"]) is not TaskState.CREATED
+        ), "لم يتقدّم الانتقالُ المشروعُ عبرَ الحدّ."
 
     def test_illegal_transition_keeps_its_own_error_and_state(
         self, core: ExecutiveCore, repo: ExecutiveTaskRepository
@@ -208,12 +200,8 @@ class TestEngineSemanticsPreserved:
         task = core.submit("analysis", "انتقالٌ غيرُ مشروع")
         before = repo.state_of(task["id"])
         with pytest.raises(IllegalTransitionError):
-            core._guarded_transition(
-                task["id"], before, TaskState.COMPLETED, "task.illegal"
-            )
-        assert repo.state_of(task["id"]) == before, (
-            "تغيّرت الحالةُ بانتقالٍ غيرِ مشروع."
-        )
+            core._guarded_transition(task["id"], before, TaskState.COMPLETED, "task.illegal")
+        assert repo.state_of(task["id"]) == before, "تغيّرت الحالةُ بانتقالٍ غيرِ مشروع."
 
     def test_cancel_succeeds_then_repeat_is_refused_without_state_change(
         self, core: ExecutiveCore, repo: ExecutiveTaskRepository
@@ -224,9 +212,7 @@ class TestEngineSemanticsPreserved:
         assert repo.state_of(task["id"]) is TaskState.CANCELLED
         with pytest.raises((ExecutionRefusedError, IllegalTransitionError)):
             core.cancel(task["id"], "قياسُ الهجرة")
-        assert repo.state_of(task["id"]) is TaskState.CANCELLED, (
-            "تغيّرت الحالةُ بإلغاءٍ مُكرَّر."
-        )
+        assert repo.state_of(task["id"]) is TaskState.CANCELLED, "تغيّرت الحالةُ بإلغاءٍ مُكرَّر."
 
 
 # ═══════════════════════════════════════════════════════════════════════════

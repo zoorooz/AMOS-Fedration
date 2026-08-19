@@ -241,9 +241,7 @@ class ExecutiveCore:
         def _revert() -> None:
             self._repo.compare_and_set(task_id, target, expected)
 
-        effect = declared_effect(
-            "WRITE", resource, f"{expected.value} → {target.value}"
-        )
+        effect = declared_effect("WRITE", resource, f"{expected.value} → {target.value}")
         guarded: GuardedResult = self._authorizer.guard_declared(
             action,
             resource,
@@ -311,9 +309,7 @@ class ExecutiveCore:
             declared_effects=(effect,),
             applier=_create,
             operation_key=operation_key(SUBMIT_KEY_SCOPE, new_id),
-            compensators=(
-                compensator(effect.signature, _erase, f"محو المهمّة {new_id}"),
-            ),
+            compensators=(compensator(effect.signature, _erase, f"محو المهمّة {new_id}"),),
             metadata={"type": task_type, "priority": priority, "domain": domain},
         )
         if guarded.is_replay:

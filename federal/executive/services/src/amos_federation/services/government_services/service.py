@@ -676,9 +676,7 @@ class GovernmentServices:
             self._set_service_status_row(service_id, status)
             read_session = self._session()
             try:
-                row = (
-                    read_session.query(ServiceModel).filter(ServiceModel.id == service_id).first()
-                )
+                row = read_session.query(ServiceModel).filter(ServiceModel.id == service_id).first()
                 entity = self._service_dict(row)
             finally:
                 read_session.close()
@@ -1012,15 +1010,11 @@ class GovernmentServices:
             target,
             declared_effects=(effect,),
             applier=_apply,
-            operation_key=operation_key(
-                CASE_ASSIGN_SCOPE, f"{tenant}:{reference}:{official_id}"
-            ),
+            operation_key=operation_key(CASE_ASSIGN_SCOPE, f"{tenant}:{reference}:{official_id}"),
             compensators=(
                 compensator(
                     effect.signature,
-                    lambda: self._assign_case_row(
-                        case_id, previous_official_id, previous_status
-                    ),
+                    lambda: self._assign_case_row(case_id, previous_official_id, previous_status),
                     f"إعادةُ إسنادِ القضيّةِ إلى '{previous_official_id}' وحالتِها "
                     f"'{previous_status}'",
                 ),
@@ -1215,18 +1209,14 @@ class GovernmentServices:
                 return _write_decision()
             if effect.signature == status_effect.signature:
                 return _write_status()
-            raise GovernmentServiceError(
-                f"أثرٌ غيرُ مُعلَنٍ وصلَ إلى مُطبِّقِ القرار: '{effect.signature}'"
-            )
+            raise GovernmentServiceError(f"أثرٌ غيرُ مُعلَنٍ وصلَ إلى مُطبِّقِ القرار: '{effect.signature}'")
 
         def _write_decision() -> None:
             """صفُّ القرارِ وإسنادُه في معاملةٍ واحدة — لا قرارَ بلا إسنادٍ مقروء."""
             write_session = self._session()
             try:
                 case_row = self._case_row(write_session, context, reference)
-                official_row = self._official_row(
-                    write_session, context, official_id_resolved
-                )
+                official_row = self._official_row(write_session, context, official_id_resolved)
                 decision = DecisionModel(
                     id=decision_id,
                     case_id=case_id,
@@ -1259,9 +1249,7 @@ class GovernmentServices:
                 )
             read_session = self._session()
             try:
-                case_entity = self._case_dict(
-                    self._case_row(read_session, context, reference)
-                )
+                case_entity = self._case_dict(self._case_row(read_session, context, reference))
             finally:
                 read_session.close()
 
@@ -1291,9 +1279,7 @@ class GovernmentServices:
             target,
             declared_effects=(decision_effect, status_effect),
             applier=_apply,
-            operation_key=operation_key(
-                CASE_DECIDE_SCOPE, f"{tenant}:{reference}:{outcome}"
-            ),
+            operation_key=operation_key(CASE_DECIDE_SCOPE, f"{tenant}:{reference}:{outcome}"),
             compensators=(
                 compensator(
                     decision_effect.signature,
@@ -1405,13 +1391,9 @@ class GovernmentServices:
             case = self._case_row(session, context, reference)
             if case.status == "closed":
                 raise CaseStateError(f"القضية '{reference}' مغلقة بالفعل")
-            decision = (
-                session.query(DecisionModel).filter(DecisionModel.case_id == case.id).first()
-            )
+            decision = session.query(DecisionModel).filter(DecisionModel.case_id == case.id).first()
             if decision is None:
-                raise CaseStateError(
-                    f"القضية '{reference}' بلا قرار — لا تُغلق قضية بلا قرار فيها"
-                )
+                raise CaseStateError(f"القضية '{reference}' بلا قرار — لا تُغلق قضية بلا قرار فيها")
             case_id = case.id
             decision_id = decision.id
             previous_status = case.status
@@ -1425,9 +1407,7 @@ class GovernmentServices:
         )
 
         target = f"cases/{tenant}/{reference}"
-        effect = declared_effect(
-            "WRITE", f"{target}/closure", f"إغلاقُ القضيّةِ '{reference}'"
-        )
+        effect = declared_effect("WRITE", f"{target}/closure", f"إغلاقُ القضيّةِ '{reference}'")
 
         def _apply(_effect: Any) -> dict[str, Any]:
             if not self._set_case_status_row(case_id, "closed"):

@@ -134,9 +134,7 @@ FACTORIES = {
 class Factory:
     """13.1-13.4: مصنع إنتاج حقيقي بخط أنابيب."""
 
-    def __init__(
-        self, factory_id: str, authorizer: ConstitutionalAuthorizer | None = None
-    ) -> None:
+    def __init__(self, factory_id: str, authorizer: ConstitutionalAuthorizer | None = None) -> None:
         self._engine = create_engine(
             get_database_url(),
             connect_args={"check_same_thread": False}
@@ -174,9 +172,7 @@ class Factory:
             "الخطواتَ والحالةَ إلى قيمتِهما السابقةِ حقيقةً."
         )
 
-    def _write_product_row(
-        self, product_id: str, title: str, producer_agent_id: str
-    ) -> None:
+    def _write_product_row(self, product_id: str, title: str, producer_agent_id: str) -> None:
         """كتابةُ صفِّ منتجٍ — تُستعملُ للأثرِ وحدَه."""
         session = self._Session()
         try:
@@ -276,9 +272,9 @@ class Factory:
         # المُعرِّفُ مُشتقٌّ من (المصنعِ + المرجعِ) لا من عشوائيّةٍ جديدةٍ في كلِّ نداء:
         # قِيسَ أنَّ بصمةَ الذرّيّةِ تشملُ الهدفَ، فمُعرِّفٌ عشوائيٌّ يجعلُ الإعادةَ
         # «عمليّةً أخرى ببصمةٍ مختلفة» ويُسقِطُ الذرّيّةَ من أصلِها.
-        product_id = "prod-" + hashlib.sha256(
-            f"{self.factory_id}:{reference}".encode("utf-8")
-        ).hexdigest()[:10]
+        product_id = (
+            "prod-" + hashlib.sha256(f"{self.factory_id}:{reference}".encode()).hexdigest()[:10]
+        )
         target = f"factory/{self.factory_id}/product/{product_id}"
         effect = declared_effect(
             "CREATE", target, f"منتجٌ جديدٌ «{title}» في المصنعِ «{self.factory_id}»"
@@ -333,8 +329,10 @@ class Factory:
                 "evidence": guarded.evidence.as_dict(),
             }
         value = guarded.value
-        result = value if isinstance(value, dict) else next(
-            item for item in value if isinstance(item, dict)
+        result = (
+            value
+            if isinstance(value, dict)
+            else next(item for item in value if isinstance(item, dict))
         )
         return {**result, "evidence": guarded.evidence.as_dict(), "replay": False}
 
@@ -352,9 +350,7 @@ class Factory:
                 .first()
             )
             if row is None:
-                raise ProductNotFoundError(
-                    f"المنتجُ «{product_id}» غيرُ موجودٍ — لا خطوةَ تُزعَمُ عليه"
-                )
+                raise ProductNotFoundError(f"المنتجُ «{product_id}» غيرُ موجودٍ — لا خطوةَ تُزعَمُ عليه")
             previous_steps = row.pipeline_steps or "[]"
             previous_status = row.status
             previous_published_at = row.published_at
@@ -399,8 +395,10 @@ class Factory:
                 "evidence": guarded.evidence.as_dict(),
             }
         value = guarded.value
-        result = value if isinstance(value, dict) else next(
-            item for item in value if isinstance(item, dict)
+        result = (
+            value
+            if isinstance(value, dict)
+            else next(item for item in value if isinstance(item, dict))
         )
         return {**result, "evidence": guarded.evidence.as_dict(), "replay": False}
 
@@ -606,9 +604,7 @@ class FactoryRegistry:
                 session.query(FactoryModel).filter(FactoryModel.factory_id == factory_id).first()
             )
             if factory is None:
-                raise FactoryNotFoundError(
-                    f"المصنعُ «{factory_id}» غيرُ موجودٍ — لا تعيينَ يُزعَمُ عليه"
-                )
+                raise FactoryNotFoundError(f"المصنعُ «{factory_id}» غيرُ موجودٍ — لا تعيينَ يُزعَمُ عليه")
             previous_manager = factory.manager_agent_id
         finally:
             session.close()
@@ -616,9 +612,7 @@ class FactoryRegistry:
         # الهدفُ يُسمّي التعيينَ المقصودَ لا المصنعَ وحدَه، للسببِ المقيسِ نفسِه:
         # تعيينانِ مختلفانِ في ثانيةٍ واحدةٍ على هدفٍ خشِنٍ إذنٌ واحدٌ لا إذنان.
         target = f"factory/{factory_id}/manager/{agent_id}"
-        effect = declared_effect(
-            "WRITE", target, f"تعيينُ «{agent_id}» مديرًا للمصنعِ «{factory_id}»"
-        )
+        effect = declared_effect("WRITE", target, f"تعيينُ «{agent_id}» مديرًا للمصنعِ «{factory_id}»")
 
         def _apply(_effect: Any) -> dict[str, Any]:
             if not self._set_manager_row(factory_id, agent_id):
@@ -667,8 +661,10 @@ class FactoryRegistry:
                 "evidence": guarded.evidence.as_dict(),
             }
         value = guarded.value
-        result = value if isinstance(value, dict) else next(
-            item for item in value if isinstance(item, dict)
+        result = (
+            value
+            if isinstance(value, dict)
+            else next(item for item in value if isinstance(item, dict))
         )
         return {**result, "evidence": guarded.evidence.as_dict(), "replay": False}
 

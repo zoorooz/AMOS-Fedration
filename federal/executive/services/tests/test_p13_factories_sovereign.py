@@ -252,9 +252,7 @@ class TestF7Idempotency:
         assert len(rows) == 1, "صفّانِ لعمليّةٍ واحدة."
         assert first["product_id"] == rows[0]["product_id"]
 
-    def test_same_step_key_writes_once(
-        self, factory: tuple[Factory, RecordingAuthorizer]
-    ) -> None:
+    def test_same_step_key_writes_once(self, factory: tuple[Factory, RecordingAuthorizer]) -> None:
         fac, _ = factory
         created = fac.start_production("منتجٌ لخطوةٍ مُعادة", "agent-5", operation_ref="ref-f7b")
         pid = created["product_id"]
@@ -375,9 +373,9 @@ class TestF10NoNewPrimitiveNoBypass:
         reg, reg_auth = registry
         assert isinstance(fac.authorizer, ConstitutionalAuthorizer)
         assert isinstance(reg.authorizer, ConstitutionalAuthorizer)
-        assert type(fac_auth.boundary) is type(reg_auth.boundary), (
-            "حدَّانِ مختلفانِ لعمليّتين — أي مسارانِ سياديّانِ لا مسارٌ واحد."
-        )
+        assert type(fac_auth.boundary) is type(
+            reg_auth.boundary
+        ), "حدَّانِ مختلفانِ لعمليّتين — أي مسارانِ سياديّانِ لا مسارٌ واحد."
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -441,6 +439,6 @@ class TestF12DeclaredResidualConstraint:
         third = reg.assign_manager(FACTORY_ID, "agent-one")
         assert third["replay"] is True
         assert third["assigned"] is False
-        assert _manager_of(reg, FACTORY_ID) == "agent-two", (
-            "القيدُ المُعلَنُ تغيّرَ — يُعادُ قياسُه وتُحدَّثُ الوثيقةُ لا يُمحَى الاختبار."
-        )
+        assert (
+            _manager_of(reg, FACTORY_ID) == "agent-two"
+        ), "القيدُ المُعلَنُ تغيّرَ — يُعادُ قياسُه وتُحدَّثُ الوثيقةُ لا يُمحَى الاختبار."

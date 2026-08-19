@@ -34,7 +34,11 @@ from amos_federation.services.executive_core.sovereignty_bridge import (
 )
 from amos_federation.services.governance.security import DEFAULT_ROLES
 from amos_federation.services.government_services.authorization import RegistryAuthorizationError
-from amos_federation.services.government_services.models import CaseModel, DecisionModel, ServiceModel
+from amos_federation.services.government_services.models import (
+    CaseModel,
+    DecisionModel,
+    ServiceModel,
+)
 from amos_federation.services.government_services.service import (
     ACTION_CASE_ASSIGN,
     ACTION_CASE_CLOSE,
@@ -42,9 +46,9 @@ from amos_federation.services.government_services.service import (
     ACTION_CASE_OPEN,
     ACTION_SERVICE_PUBLISH,
     ACTION_SERVICE_STATUS,
+    CASE_TASK_TYPE,
     SERVICE_PUBLISH_SCOPE,
     SERVICE_STATUS_SCOPE,
-    CASE_TASK_TYPE,
     CaseStateError,
     DecisionExistsError,
     DuplicateServiceCodeError,
@@ -435,6 +439,7 @@ def test_13_the_legacy_guard_helper_still_refuses_undeclared_execution() -> None
     with pytest.raises(UndeclaredExecutionError):
         authorizer.guard("gov.service.status", "services/probe", lambda: None)
 
+
 # ── 7. إعلانُ الخدمة (P5ب) ────────────────────────────────────────────────
 
 
@@ -590,6 +595,7 @@ def test_21_publishing_writes_no_row_outside_the_boundary(gov: GovernmentService
     for parameter in FORBIDDEN_BYPASS_PARAMS:
         assert parameter not in body
 
+
 # ── 8. فتحُ القضيّة: أثرانِ لا أثرٌ واحد (P5ج) ──────────────────────────────
 
 
@@ -635,9 +641,7 @@ def test_22_opening_a_case_declares_two_effects_not_one(
     authorizer: RecordingAuthorizer,
 ) -> None:
     """المهمّةُ والصفُّ أثرانِ مُعلَنانِ — ودمجُهما في واحدٍ يُخفي أخطرَ ما يجري."""
-    case = _open(
-        gov, crown, published["institution_code"], published["service"]["code"], applicant
-    )
+    case = _open(gov, crown, published["institution_code"], published["service"]["code"], applicant)
     outcome = authorizer.results[-1].outcome  # type: ignore[union-attr]
     target = (
         f"services/{DEFAULT_TENANT}/{published['institution_code']}"
@@ -653,9 +657,7 @@ def test_23_the_task_effect_is_a_real_row_in_tasks(
     gov: GovernmentServices, crown: AuthorizationContext, published: dict, applicant: str
 ) -> None:
     """أثرُ المهمّةِ صفٌّ حقيقيٌّ في `tasks` — لا «عمليّةٌ» بلا أثر."""
-    case = _open(
-        gov, crown, published["institution_code"], published["service"]["code"], applicant
-    )
+    case = _open(gov, crown, published["institution_code"], published["service"]["code"], applicant)
     row = _task_row(case["task_id"])
     assert row is not None
     assert row.type == CASE_TASK_TYPE
@@ -673,17 +675,13 @@ def test_24_both_compensators_are_planned_and_both_really_reverse(
     وإلغاءُ المهمّةِ يمرُّ بـ`ExecutiveCore.cancel` لا بكتابةٍ في `tasks`: تغييرُ صفٍّ
     بيدِنا لا يوقفُ عملًا جاريًا، وآلةُ الحالاتِ هي التي تعرفُ ما يُلغى وما لا يُلغى.
     """
-    case = _open(
-        gov, crown, published["institution_code"], published["service"]["code"], applicant
-    )
+    case = _open(gov, crown, published["institution_code"], published["service"]["code"], applicant)
     outcome = authorizer.results[-1].outcome  # type: ignore[union-attr]
     plan = outcome.compensation_plan
     for effect in outcome.applied_effects:
         assert plan.covers(effect.signature)
 
-    task_signature, case_signature = (
-        effect.signature for effect in outcome.applied_effects
-    )
+    task_signature, case_signature = (effect.signature for effect in outcome.applied_effects)
     plan.compensator_for(case_signature).apply()
     session = get_session_factory()()
     try:
@@ -740,9 +738,7 @@ def test_27_the_applier_writes_one_effect_per_call(
     يفعلُ كلَّ شيءٍ في نداءٍ واحدٍ كانَ يُدخِلُ الصفَّ مرّتين. وقد قِيسَ ذلك خطأً
     حقيقيًّا قبلَ التصحيح، فبقيَ الاختبارُ حرسًا عليه.
     """
-    case = _open(
-        gov, crown, published["institution_code"], published["service"]["code"], applicant
-    )
+    case = _open(gov, crown, published["institution_code"], published["service"]["code"], applicant)
     session = get_session_factory()()
     try:
         assert (
@@ -757,7 +753,9 @@ def test_27_the_applier_writes_one_effect_per_call(
 
 
 @pytest.fixture
-def assignable(gov: GovernmentServices, crown: AuthorizationContext, published: dict, applicant: str) -> dict:
+def assignable(
+    gov: GovernmentServices, crown: AuthorizationContext, published: dict, applicant: str
+) -> dict:
     """قضيّةٌ مفتوحةٌ ومنصبٌ قائمٌ في مؤسستِها — الشرطانِ اللذانِ يفرضُهما النطاق."""
     registry = StateRegistry()
     official = registry.appoint_official(
@@ -766,9 +764,7 @@ def assignable(gov: GovernmentServices, crown: AuthorizationContext, published: 
         institution_code=published["institution_code"],
         title="مدير الخدمة",
     )
-    case = _open(
-        gov, crown, published["institution_code"], published["service"]["code"], applicant
-    )
+    case = _open(gov, crown, published["institution_code"], published["service"]["code"], applicant)
     return {"case": case, "official_id": official["id"]}
 
 
@@ -806,9 +802,7 @@ def test_29_the_assignment_compensator_restores_the_previous_state(
     يتركُ أثرًا نصفَ قائمٍ ويُبلِّغُ نجاحًا — وهو ما تمنعُه هذه الدعوى.
     """
     reference = assignable["case"]["reference"]
-    gov.assign_case(
-        context=crown, reference=reference, official_id=assignable["official_id"]
-    )
+    gov.assign_case(context=crown, reference=reference, official_id=assignable["official_id"])
     outcome = authorizer.results[-1].outcome  # type: ignore[union-attr]
     signature = outcome.applied_effects[0].signature
     outcome.compensation_plan.compensator_for(signature).apply()
@@ -889,9 +883,7 @@ def test_32_closing_a_case_passes_the_gateway(
     assert (ACTION_CASE_CLOSE, target) in authorizer.decisions
     outcome = authorizer.results[-1].outcome  # type: ignore[union-attr]
     assert _mandatory_stages() <= set(outcome.stages)
-    assert [effect.signature for effect in outcome.applied_effects] == [
-        f"WRITE:{target}/closure"
-    ]
+    assert [effect.signature for effect in outcome.applied_effects] == [f"WRITE:{target}/closure"]
     assert result["status"] == "closed"
 
 
@@ -996,17 +988,13 @@ def test_37_both_decision_compensators_really_reverse(
     result = _decide(gov, crown, reviewed)
     outcome = authorizer.results[-1].outcome  # type: ignore[union-attr]
     plan = outcome.compensation_plan
-    decision_signature, status_signature = (
-        effect.signature for effect in outcome.applied_effects
-    )
+    decision_signature, status_signature = (effect.signature for effect in outcome.applied_effects)
     plan.compensator_for(status_signature).apply()
     plan.compensator_for(decision_signature).apply()
 
     session = get_session_factory()()
     try:
-        assert (
-            session.query(DecisionModel).filter(DecisionModel.id == result["id"]).first() is None
-        )
+        assert session.query(DecisionModel).filter(DecisionModel.id == result["id"]).first() is None
         assert (
             session.query(DecisionProvenanceModel)
             .filter(DecisionProvenanceModel.decision_id == result["id"])

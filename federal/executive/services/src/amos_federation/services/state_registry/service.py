@@ -226,11 +226,7 @@ class StateRegistry:
         """
         session = self._session()
         try:
-            row = (
-                session.query(DepartmentModel)
-                .filter(DepartmentModel.id == department_id)
-                .first()
-            )
+            row = session.query(DepartmentModel).filter(DepartmentModel.id == department_id).first()
             if row is None:
                 return False
             session.delete(row)
@@ -239,9 +235,7 @@ class StateRegistry:
         finally:
             session.close()
 
-    def _revoke_official_row(
-        self, official_id: str, reason: str, *, is_head: bool
-    ) -> bool:
+    def _revoke_official_row(self, official_id: str, reason: str, *, is_head: bool) -> bool:
         """كتابةُ العزلِ ورجعتُه في دالّةٍ واحدة — لأنَّ العزلَ إسنادُ حالةٍ نهائيّة.
 
         `is_head=False` يعزل، و`is_head` الأصليُّ مع `reason=None` يُرجِعُ الصفَّ إلى
@@ -832,9 +826,7 @@ class StateRegistry:
         الإنشاءِ طبيعيّةٌ ومُقيَّدةٌ أصلًا بمنعِ تكرارِ الرمز (المستأجر · رمزُ
         المؤسسة · رمزُ الإدارة)، فتكرارُ النداءِ نفسِه إعادةٌ لا إنشاءٌ ثانٍ.
         """
-        require_domain_permission(
-            context, ACTION_DEPARTMENT_CREATE, PERMISSIONS_DEPARTMENT_WRITE
-        )
+        require_domain_permission(context, ACTION_DEPARTMENT_CREATE, PERMISSIONS_DEPARTMENT_WRITE)
         tenant = self._tenant_of(context)
         session = self._session()
         try:
@@ -1148,9 +1140,7 @@ class StateRegistry:
             session.close()
 
         target = f"officials/{tenant_id}/{official_id}"
-        effect = declared_effect(
-            "WRITE", target, f"عزلُ التقليدِ '{official_id}' — السببُ: {reason}"
-        )
+        effect = declared_effect("WRITE", target, f"عزلُ التقليدِ '{official_id}' — السببُ: {reason}")
 
         def _apply(_effect: Any) -> dict[str, Any]:
             """التطبيقُ الحقيقيّ — الحالةُ ثمّ التدقيق، بترتيبِ R7 نفسِه."""

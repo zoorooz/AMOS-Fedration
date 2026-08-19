@@ -150,9 +150,9 @@ class TestG1LegacyInstitutionWriteClosed:
         """قياسٌ على المصدر: بابٌ جانبيٌّ جديدٌ يجبُ أن يُفشِلَ هذا الاختبار."""
         source = Path(registry_module.__file__).read_text(encoding="utf-8")
         assert "guard_declared(" in source, "التأسيسُ لا يمرُّ بالحدّ."
-        assert source.count("InstitutionModel(") == 1, (
-            "أكثرُ من موضعِ إنشاءٍ لصفِّ مؤسسةٍ — أي مسارُ كتابةٍ ثانٍ محتمل."
-        )
+        assert (
+            source.count("InstitutionModel(") == 1
+        ), "أكثرُ من موضعِ إنشاءٍ لصفِّ مؤسسةٍ — أي مسارُ كتابةٍ ثانٍ محتمل."
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -204,9 +204,9 @@ class TestG3LegacyBudgetPathClosed:
     def test_source_mutates_budget_from_one_place_only(self) -> None:
         source = Path(runtime_module.__file__).read_text(encoding="utf-8")
         assert "guard_declared(" in source, "التوزيعُ لا يمرُّ بالحدّ."
-        assert source.count("state.budget = str(") == 1, (
-            "أكثرُ من موضعٍ يكتبُ الميزانيةَ — أي مسارُ تغييرٍ ثانٍ محتمل."
-        )
+        assert (
+            source.count("state.budget = str(") == 1
+        ), "أكثرُ من موضعٍ يكتبُ الميزانيةَ — أي مسارُ تغييرٍ ثانٍ محتمل."
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -258,7 +258,6 @@ class TestG5UnauthorizedChangesNothing:
         from amos_federation.services.state_registry.authorization import (
             RegistryAuthorizationError,
         )
-
 
         with pytest.raises(RegistryAuthorizationError):
             service.register_institution(
@@ -347,18 +346,14 @@ class TestG7FailureAfterEffectPreservesExistingBehavior:
 
         assert "نجَح" not in str(failure.value), "ادُّعيَ نجاحٌ في نصِّ الفشل."
         after_failure = _budget_of(rt, "science")
-        assert after_failure == before + 400, (
-            "الأثرُ لم يقعْ قبلَ الفشلِ — فالقياسُ التالي لا معنى له."
-        )
+        assert after_failure == before + 400, "الأثرُ لم يقعْ قبلَ الفشلِ — فالقياسُ التالي لا معنى له."
 
         # العكسُ متاحٌ وحقيقيٌّ: الميزانيةُ تعودُ إلى قيمتِها لا إلى قيمةٍ مظنونة.
         assert rt._add_to_budget("science", -400) == before  # noqa: SLF001
         assert _budget_of(rt, "science") == before
 
         # والعمليّةُ لم تُثبَّت ناجحةً: لم تُرجَعْ حصيلةٌ ناجحةٌ من نداءٍ فاشل.
-        assert len(authorizer.results) == 0, (
-            "أُرجِعت حصيلةُ نجاحٍ من نداءٍ فاشل."
-        )
+        assert len(authorizer.results) == 0, "أُرجِعت حصيلةُ نجاحٍ من نداءٍ فاشل."
 
         # ── تصحيحُ ادّعاءٍ سابق (P1أ من برنامجِ الهجرة) ────────────────────
         #
@@ -379,17 +374,15 @@ class TestG7FailureAfterEffectPreservesExistingBehavior:
             rt.allocate_budget("science", "400", "فشلٌ بعدَ الأثر", allocation_id="g7")
         except IdempotencyError:
             # الفرعُ الأوّل: إعادةٌ في الثانيةِ نفسِها — الإذنُ مُستهلَكٌ فتُرفَض.
-            assert _budget_of(rt, "science") == after_failure, (
-                "أُنتِجَ أثرٌ ثانٍ رغمَ رفضِ الإذن."
-            )
+            assert _budget_of(rt, "science") == after_failure, "أُنتِجَ أثرٌ ثانٍ رغمَ رفضِ الإذن."
         else:
             # الفرعُ الثاني: إعادةٌ في ثانيةٍ جديدةٍ — تُنفَّذُ ويقعُ أثرٌ ثانٍ.
             # هذا **خللٌ مُعلَنٌ** لا سلوكٌ مقبولٌ يُوثَّقُ ويُنسى: مفتاحُ الذرّيّةِ
             # لم يمنعْ إعادةَ عمليّةٍ فاشلةٍ، فالحمايةُ من الأثرِ المزدوجِ محدودةٌ
             # بثانيةٍ واحدةٍ لا بمفتاحِ العمليّة.
-            assert _budget_of(rt, "science") == after_failure + 400, (
-                "نجحت الإعادةُ بلا أثرٍ — فوصفُ الخللِ أعلاه صارَ غيرَ صحيح."
-            )
+            assert (
+                _budget_of(rt, "science") == after_failure + 400
+            ), "نجحت الإعادةُ بلا أثرٍ — فوصفُ الخللِ أعلاه صارَ غيرَ صحيح."
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -407,9 +400,9 @@ class TestG8OneSovereignPathNoNewPrimitive:
         rt, run_auth = runtime
         assert isinstance(service.authorizer, ConstitutionalAuthorizer)
         assert isinstance(rt.authorizer, ConstitutionalAuthorizer)
-        assert type(reg_auth.boundary) is type(run_auth.boundary), (
-            "حدَّانِ مختلفانِ لعمليّتين — أي مسارانِ سياديّانِ لا مسارٌ واحد."
-        )
+        assert type(reg_auth.boundary) is type(
+            run_auth.boundary
+        ), "حدَّانِ مختلفانِ لعمليّتين — أي مسارانِ سياديّانِ لا مسارٌ واحد."
 
     def test_neither_module_defines_a_new_sovereignty_primitive(self) -> None:
         import re
@@ -423,6 +416,6 @@ class TestG8OneSovereignPathNoNewPrimitive:
                     name,
                 ), f"بدائيّةٌ سياديّةٌ جديدةٌ في {module.__name__}: {name}"
             for forbidden in ("force", "bypass", "skip_check", "unchecked", "override"):
-                assert f"{forbidden}=" not in source, (
-                    f"معامَلُ تجاوزٍ محتمَلٌ في {module.__name__}: {forbidden}"
-                )
+                assert (
+                    f"{forbidden}=" not in source
+                ), f"معامَلُ تجاوزٍ محتمَلٌ في {module.__name__}: {forbidden}"
