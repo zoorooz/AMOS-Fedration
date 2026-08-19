@@ -63,14 +63,14 @@
 |---|---:|---:|---:|---:|---:|---:|---|
 | `core/` | 67 | 41 | 0 | 14654 | 14 | 2 | unspecified=14 |
 | `royal/` | 51 | 2 | 1 | 92 | 14 | 3 | unspecified=14 |
-| `federal/` | 60 | 209 | 3 | 56816 | 7 | 2 | unspecified=7 |
+| `federal/` | 60 | 213 | 3 | 60946 | 7 | 2 | unspecified=7 |
 | `states/` | 47 | 2 | 0 | 32 | 7 | 2 | unspecified=7 |
 | `institutions/` | 19 | 2 | 0 | 89 | 6 | 2 | unspecified=6 |
 | `agents/` | 601 | 4 | 283 | 549 | 11 | 3 | unspecified=11 |
-| `tools/` | 39 | 17 | 2 | 5092 | 12 | 3 | unspecified=12 |
+| `tools/` | 40 | 22 | 2 | 5907 | 12 | 3 | unspecified=12 |
 | `interfaces/` | 14 | 2 | 0 | 30 | 4 | 2 | unspecified=4 |
 | `runtime/` | 20 | 2 | 0 | 71 | 7 | 2 | unspecified=7 |
-| `docs/` | 70 | 2 | 0 | 47 | 7 | 2 | unspecified=7 |
+| `docs/` | 87 | 2 | 0 | 47 | 7 | 2 | unspecified=7 |
 | `ops/` | 38 | 2 | 0 | 93 | 12 | 1 | unspecified=12 |
 | `tests/` | 14 | 39 | 0 | 14518 | 5 | 1 | unspecified=5 |
 
@@ -166,9 +166,6 @@
 
 | الموقع | النوع | الخطورة | التفصيل |
 |---|---|---|---|
-| `federal/executive/services/src/amos_federation/common/event_schemas.py:53` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
-| `federal/executive/services/src/amos_federation/common/event_schemas.py:57` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
-| `federal/executive/services/src/amos_federation/common/event_schemas.py:61` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
 | `federal/executive/services/src/amos_federation/common/events.py:64` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
 | `federal/executive/services/src/amos_federation/common/events.py:79` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
 | `federal/executive/services/src/amos_federation/common/persistent.py:66` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
@@ -186,6 +183,9 @@
 | `federal/executive/services/src/amos_federation/services/governance/policy_engine.py:56` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
 | `federal/executive/services/src/amos_federation/services/governance/policy_engine.py:61` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
 | `federal/executive/services/src/amos_federation/services/tool_registry/store.py:58` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
+| `federal/executive/services/tests/test_2a_sovereign_runtime_integration.py:375` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
+| `federal/executive/services/tests/test_2b_state_registry_sovereign.py:401` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
+| `tools/audit/sovereign_write_inventory.py:304` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
 | `tools/governance/truth_audit.py:329` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
 | `tools/governance/truth_audit.py:357` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |
 | `tools/governance/truth_audit.py:531` | SILENT_FALLBACK | MEDIUM | استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة |

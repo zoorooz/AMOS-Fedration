@@ -19,7 +19,7 @@
       "secret_hits": 0,
       "observed_hits": 3,
       "api_routes": 0,
-      "test_refs": 409,
+      "test_refs": 428,
       "identity_violations": 2,
       "test_evidence": "PASS",
       "coverage_evidence": "PASS",
@@ -40,7 +40,7 @@
           "COVERAGE": "PASS",
           "DEPLOYMENT": "ABSENT"
         },
-        "TEST_NAME_MENTIONS": 409
+        "TEST_NAME_MENTIONS": 428
       },
       "maturity": "UNIT_TESTED",
       "findings_count": 2
@@ -91,21 +91,21 @@
     "federal": {
       "domain": "federal",
       "md_files": 60,
-      "py_files": 209,
+      "py_files": 213,
       "yaml_files": 3,
-      "code_lines": 56816,
+      "code_lines": 60946,
       "nucleus_count": 7,
       "nucleus_status": {
         "unspecified": 7
       },
       "has_readme": true,
-      "real_source_hits": 198,
+      "real_source_hits": 209,
       "fake_hits": 1,
       "in_memory_hits": 60,
       "secret_hits": 0,
-      "observed_hits": 124,
+      "observed_hits": 125,
       "api_routes": 178,
-      "test_refs": 146,
+      "test_refs": 150,
       "identity_violations": 2,
       "test_evidence": "PASS",
       "coverage_evidence": "PASS",
@@ -126,10 +126,10 @@
           "COVERAGE": "PASS",
           "DEPLOYMENT": "ABSENT"
         },
-        "TEST_NAME_MENTIONS": 146
+        "TEST_NAME_MENTIONS": 150
       },
       "maturity": "UNIT_TESTED",
-      "findings_count": 84
+      "findings_count": 83
     },
     "states": {
       "domain": "states",
@@ -191,7 +191,7 @@
       "secret_hits": 0,
       "observed_hits": 0,
       "api_routes": 0,
-      "test_refs": 5,
+      "test_refs": 9,
       "identity_violations": 2,
       "test_evidence": "ABSENT",
       "coverage_evidence": "ABSENT",
@@ -212,7 +212,7 @@
           "COVERAGE": "ABSENT",
           "DEPLOYMENT": "ABSENT"
         },
-        "TEST_NAME_MENTIONS": 5
+        "TEST_NAME_MENTIONS": 9
       },
       "maturity": "IMPLEMENTED",
       "findings_count": 1
@@ -234,7 +234,7 @@
       "secret_hits": 0,
       "observed_hits": 0,
       "api_routes": 0,
-      "test_refs": 142,
+      "test_refs": 144,
       "identity_violations": 3,
       "test_evidence": "ABSENT",
       "coverage_evidence": "ABSENT",
@@ -255,28 +255,28 @@
           "COVERAGE": "ABSENT",
           "DEPLOYMENT": "ABSENT"
         },
-        "TEST_NAME_MENTIONS": 142
+        "TEST_NAME_MENTIONS": 144
       },
       "maturity": "IMPLEMENTED",
       "findings_count": 3
     },
     "tools": {
       "domain": "tools",
-      "md_files": 39,
-      "py_files": 17,
+      "md_files": 40,
+      "py_files": 22,
       "yaml_files": 2,
-      "code_lines": 5092,
+      "code_lines": 5907,
       "nucleus_count": 12,
       "nucleus_status": {
         "unspecified": 12
       },
       "has_readme": true,
-      "real_source_hits": 18,
+      "real_source_hits": 22,
       "fake_hits": 1,
       "in_memory_hits": 0,
       "secret_hits": 0,
       "observed_hits": 7,
-      "api_routes": 0,
+      "api_routes": 1,
       "test_refs": 60,
       "identity_violations": 3,
       "test_evidence": "PASS",
@@ -301,7 +301,7 @@
         "TEST_NAME_MENTIONS": 60
       },
       "maturity": "UNIT_TESTED",
-      "findings_count": 5
+      "findings_count": 6
     },
     "interfaces": {
       "domain": "interfaces",
@@ -363,7 +363,7 @@
       "secret_hits": 0,
       "observed_hits": 0,
       "api_routes": 0,
-      "test_refs": 51,
+      "test_refs": 64,
       "identity_violations": 2,
       "test_evidence": "ABSENT",
       "coverage_evidence": "ABSENT",
@@ -384,14 +384,14 @@
           "COVERAGE": "ABSENT",
           "DEPLOYMENT": "ABSENT"
         },
-        "TEST_NAME_MENTIONS": 51
+        "TEST_NAME_MENTIONS": 64
       },
       "maturity": "IMPLEMENTED",
       "findings_count": 2
     },
     "docs": {
       "domain": "docs",
-      "md_files": 70,
+      "md_files": 87,
       "py_files": 2,
       "yaml_files": 0,
       "code_lines": 47,
@@ -406,7 +406,7 @@
       "secret_hits": 0,
       "observed_hits": 0,
       "api_routes": 0,
-      "test_refs": 10,
+      "test_refs": 12,
       "identity_violations": 2,
       "test_evidence": "ABSENT",
       "coverage_evidence": "ABSENT",
@@ -427,7 +427,7 @@
           "COVERAGE": "ABSENT",
           "DEPLOYMENT": "ABSENT"
         },
-        "TEST_NAME_MENTIONS": 10
+        "TEST_NAME_MENTIONS": 12
       },
       "maturity": "SPECIFIED",
       "findings_count": 0
@@ -492,7 +492,7 @@
       "secret_hits": 0,
       "observed_hits": 0,
       "api_routes": 0,
-      "test_refs": 127,
+      "test_refs": 128,
       "identity_violations": 1,
       "test_evidence": "PASS",
       "coverage_evidence": "ABSENT",
@@ -513,7 +513,7 @@
           "COVERAGE": "ABSENT",
           "DEPLOYMENT": "ABSENT"
         },
-        "TEST_NAME_MENTIONS": 127
+        "TEST_NAME_MENTIONS": 128
       },
       "maturity": "INTEGRATED",
       "findings_count": 0
@@ -554,27 +554,6 @@
       "line": 34,
       "detail": "`EXPERIENCES` بيانات ثابتة بديلة عن قاعدة البيانات",
       "severity": "CRITICAL"
-    },
-    {
-      "kind": "SILENT_FALLBACK",
-      "path": "federal/executive/services/src/amos_federation/common/event_schemas.py",
-      "line": 53,
-      "detail": "استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة",
-      "severity": "MEDIUM"
-    },
-    {
-      "kind": "SILENT_FALLBACK",
-      "path": "federal/executive/services/src/amos_federation/common/event_schemas.py",
-      "line": 57,
-      "detail": "استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة",
-      "severity": "MEDIUM"
-    },
-    {
-      "kind": "SILENT_FALLBACK",
-      "path": "federal/executive/services/src/amos_federation/common/event_schemas.py",
-      "line": 61,
-      "detail": "استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة",
-      "severity": "MEDIUM"
     },
     {
       "kind": "SILENT_FALLBACK",
@@ -834,6 +813,20 @@
       "line": 30,
       "detail": "مخزن ذاكرة `InMemoryModelRegistry` يُستخدم كمصدر حقيقة",
       "severity": "HIGH"
+    },
+    {
+      "kind": "SILENT_FALLBACK",
+      "path": "federal/executive/services/tests/test_2a_sovereign_runtime_integration.py",
+      "line": 375,
+      "detail": "استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة",
+      "severity": "MEDIUM"
+    },
+    {
+      "kind": "SILENT_FALLBACK",
+      "path": "federal/executive/services/tests/test_2b_state_registry_sovereign.py",
+      "line": 401,
+      "detail": "استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة",
+      "severity": "MEDIUM"
     },
     {
       "kind": "IN_MEMORY_STORE",
@@ -1166,6 +1159,13 @@
     },
     {
       "kind": "SILENT_FALLBACK",
+      "path": "tools/audit/sovereign_write_inventory.py",
+      "line": 304,
+      "detail": "استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة",
+      "severity": "MEDIUM"
+    },
+    {
+      "kind": "SILENT_FALLBACK",
       "path": "tools/governance/truth_audit.py",
       "line": 329,
       "detail": "استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة",
@@ -1244,8 +1244,8 @@
     "identity_violations": 25,
     "by_severity": {
       "CRITICAL": 11,
-      "MEDIUM": 23,
-      "HIGH": 63
+      "HIGH": 63,
+      "MEDIUM": 23
     },
     "by_kind": {
       "HARDCODED_TRUTH": 10,

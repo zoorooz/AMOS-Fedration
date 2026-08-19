@@ -7,8 +7,11 @@ AMOS-Federation Event Schema Validation
 """
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
+
+_logger = logging.getLogger(__name__)
 
 
 def _schema_directory() -> Path:
@@ -50,14 +53,28 @@ def validate_event(event_type: str, payload: dict[str, Any]) -> bool:
     """التحقق من حدث؛ يستخدم jsonschema عند توفره ثم فحصًا خفيفًا آمنًا خلاف ذلك."""
     try:
         schema = load_event_schema(event_type)
-    except (FileNotFoundError, json.JSONDecodeError):
+    except (FileNotFoundError, json.JSONDecodeError) as exc:
+        # فقدُ المخطَّطِ أو تلفُه فشلُ مصدرِ حقيقةٍ لا رفضُ حِمْلٍ: السجلُّ لا يملكُ
+        # ما يُحكَمُ به، فيُعلَنُ تحذيرًا ولا يُبتلَعُ. والمُرجَعُ لم يتغيرْ.
+        _logger.warning("تعذّر تحميل مخطط الحدث %s فتعذّر التحقق: %s", event_type, exc)
         return False
     try:
         import jsonschema
-    except ImportError:
+    except ImportError as exc:
+        # هذا المسارُ غيرُ مسلوكٍ تحتَ القفلِ: `jsonschema` مُقفولةٌ في
+        # `requirements.lock`. ومتى سُلِكَ يومًا فذلكَ تراجعٌ في قوّةِ التحقّقِ
+        # لا تفصيلٌ تشغيليّ، فيُعلَنُ تحذيرًا ولا يُبتلَعُ.
+        _logger.warning(
+            "jsonschema غير متاحة (%s) فالتحقق يجري بفحص الحقول المطلوبة وحده، "
+            "وهو أضعف من التحقق بالمخطط الكامل.",
+            exc,
+        )
         return _has_required_fields(schema, payload)
-    try:  # pragma: no cover - jsonschema is an optional dependency (not in test env)
+    try:
         jsonschema.validate(instance=payload, schema=schema)
-    except jsonschema.ValidationError:
+    except jsonschema.ValidationError as exc:
+        # رفضُ حِمْلٍ مخالفٍ هو جوابُ الدالّةِ لا فشلٌ في النظامِ، فلا يُرفَعُ إلى
+        # تحذيرٍ. وعلّةُ الرفضِ لا تُبتلَعُ: تُنقَلُ إلى السجلِّ، والمُرجَعُ يُبلِغُها.
+        _logger.debug("رُفض حمل الحدث %s بمخالفة المخطط: %s", event_type, exc)
         return False
     return True
