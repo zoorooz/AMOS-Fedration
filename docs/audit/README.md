@@ -27,6 +27,8 @@ royal/ — المجلس التأسيسي، بتفويض التنفيذ إلى `t
 | [`TRUTH_MATRIX.md`](TRUTH_MATRIX.md) | مصفوفة الحقيقة بالأدلة | **آلي — لا تحرره** |
 | `truth_matrix.json` | المصفوفة الآلية لبوابات CI | **آلي — لا تحرره** |
 | [`COMPLETION_LEDGER.md`](COMPLETION_LEDGER.md) | سجلُّ الإكمال — خريطةُ الطريقِ إلى 100٪، والقاعدةُ الملزمةُ (التوثيقُ قبلَ الدفع)، وسجلُّ ما نُفِّذ | يدوي — **مُلزِمٌ لكلِّ عامل** |
+| [`SOVEREIGN_DECISION_REGISTER.md`](SOVEREIGN_DECISION_REGISTER.md) | سجلُّ القراراتِ السياديّةِ المعلَّقة — Q-1…Q-27 | يدوي |
+| [`Q5_TREASURY_DECISION_BRIEF.md`](Q5_TREASURY_DECISION_BRIEF.md) | مذكّرةُ حسمِ Q-5: مرجعُ المالِ وأفعالُه — Q-17…Q-20 خيارًا خيارًا | يدوي |
 
 ## إعادة توليد المصفوفة
 
