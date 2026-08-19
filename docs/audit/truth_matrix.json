@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "repo": "amos",
+  "repo": "AMOS-Fedration",
   "domains": {
     "core": {
       "domain": "core",
@@ -265,7 +265,7 @@
       "md_files": 40,
       "py_files": 23,
       "yaml_files": 2,
-      "code_lines": 6124,
+      "code_lines": 6141,
       "nucleus_count": 12,
       "nucleus_status": {
         "unspecified": 12
@@ -277,7 +277,7 @@
       "secret_hits": 0,
       "observed_hits": 7,
       "api_routes": 1,
-      "test_refs": 63,
+      "test_refs": 65,
       "identity_violations": 3,
       "test_evidence": "PASS",
       "coverage_evidence": "ABSENT",
@@ -298,7 +298,7 @@
           "COVERAGE": "ABSENT",
           "DEPLOYMENT": "ABSENT"
         },
-        "TEST_NAME_MENTIONS": 63
+        "TEST_NAME_MENTIONS": 65
       },
       "maturity": "UNIT_TESTED",
       "findings_count": 6
@@ -406,7 +406,7 @@
       "secret_hits": 0,
       "observed_hits": 0,
       "api_routes": 0,
-      "test_refs": 18,
+      "test_refs": 19,
       "identity_violations": 3,
       "test_evidence": "ABSENT",
       "coverage_evidence": "ABSENT",
@@ -427,7 +427,7 @@
           "COVERAGE": "ABSENT",
           "DEPLOYMENT": "ABSENT"
         },
-        "TEST_NAME_MENTIONS": 18
+        "TEST_NAME_MENTIONS": 19
       },
       "maturity": "SPECIFIED",
       "findings_count": 0
@@ -478,9 +478,9 @@
     "tests": {
       "domain": "tests",
       "md_files": 14,
-      "py_files": 40,
+      "py_files": 41,
       "yaml_files": 0,
-      "code_lines": 14718,
+      "code_lines": 14774,
       "nucleus_count": 5,
       "nucleus_status": {
         "unspecified": 5
@@ -492,7 +492,7 @@
       "secret_hits": 0,
       "observed_hits": 0,
       "api_routes": 0,
-      "test_refs": 129,
+      "test_refs": 130,
       "identity_violations": 1,
       "test_evidence": "PASS",
       "coverage_evidence": "ABSENT",
@@ -513,7 +513,7 @@
           "COVERAGE": "ABSENT",
           "DEPLOYMENT": "ABSENT"
         },
-        "TEST_NAME_MENTIONS": 129
+        "TEST_NAME_MENTIONS": 130
       },
       "maturity": "INTEGRATED",
       "findings_count": 0
@@ -1167,21 +1167,21 @@
     {
       "kind": "SILENT_FALLBACK",
       "path": "tools/governance/truth_audit.py",
-      "line": 329,
+      "line": 349,
       "detail": "استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة",
       "severity": "MEDIUM"
     },
     {
       "kind": "SILENT_FALLBACK",
       "path": "tools/governance/truth_audit.py",
-      "line": 357,
+      "line": 377,
       "detail": "استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة",
       "severity": "MEDIUM"
     },
     {
       "kind": "SILENT_FALLBACK",
       "path": "tools/governance/truth_audit.py",
-      "line": 531,
+      "line": 551,
       "detail": "استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة",
       "severity": "MEDIUM"
     },

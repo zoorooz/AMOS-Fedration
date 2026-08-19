@@ -298,6 +298,26 @@ class DomainReport:
 # المحرك
 # ---------------------------------------------------------------------------
 
+def _repo_identity(root: Path) -> str:
+    """هُويّةُ المستودعِ من بُعدِه لا من اسمِ مجلَّده.
+
+    اسمُ المجلَّدِ ليس هُويّةً: يتغيّرُ باستنساخٍ إلى مسارٍ آخرَ، فتُخالِفُ المصفوفةُ
+    المولَّدةُ محلّيًّا المدفوعةَ بلا فرقٍ حقيقيٍّ في المضمون، وتسقطُ بوّابةُ
+    الترباس بسببِ مسارٍ لا بسببِ حقيقة. فتُقرأُ الهُويّةُ من `origin` وحده،
+    ولا يُرجَعُ إلى اسمِ المجلَّدِ إلّا حينَ لا بُعدَ للمستودعِ أصلًا.
+    """
+    probe = subprocess.run(
+        ["git", "-C", str(root), "remote", "get-url", "origin"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    url = probe.stdout.strip()
+    if probe.returncode != 0 or not url:
+        return str(root.name)
+    return url.rstrip("/").removesuffix(".git").rsplit("/", 1)[-1].rsplit(":", 1)[-1]
+
+
 class TruthAudit:
     def __init__(self, root: Path):
         self.root = root
@@ -714,7 +734,7 @@ class TruthAudit:
         # حتى تستطيع بوابة CI مقارنة المصفوفة المدفوعة بالمولَّدة.
         return {
             "schema_version": 1,
-            "repo": str(self.root.name),
+            "repo": _repo_identity(self.root),
             "domains": {
                 d: {
                     **{k: v for k, v in asdict(r).items() if k != "findings"},
