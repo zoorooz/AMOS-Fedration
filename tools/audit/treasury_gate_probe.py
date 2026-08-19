@@ -1,4 +1,4 @@
-"""P6-A — قياسُ أحكامِ البوابةِ على أفعالِ المالِ المرشَّحة. قياسٌ لا تقدير."""
+"""الهدف: P6-A — قياسُ أحكامِ البوابةِ على أفعالِ المالِ المرشَّحة. قياسٌ لا تقدير."""
 
 import json
 import sys
@@ -80,8 +80,16 @@ for action in CANDIDATES:
             )
 
 OUT = ROOT / "docs/audit/measurements/treasury_gate_matrix.json"
+# المادةُ التاسعةُ · 2: المُخرَجُ يُعلِنُ هدفَه في ترويستِه. وُضِعَ الصَّفُّ تحتَ
+# مفتاحِ rows لأنَّ قائمةً عليا لا تحمِلُ ترويسةً؛ والقيمُ لم تُمَسّ.
 with open(OUT, "w", encoding="utf-8") as fh:
-    json.dump(rows, fh, ensure_ascii=False, indent=1)
+    json.dump({
+        "$comment": (
+            "الهدف: حكمُ البوابةِ الدستوريّةِ على أفعالِ المالِ المُرشَّحةِ × الفاعلين — "
+            "مُخرَجُ tools/audit/treasury_gate_probe.py (P6-A). قياسٌ لا تقدير، "
+            "وليسَ دليلًا سياديًّا ولا نصَّ قرار. المادةُ التاسعةُ · 2."),
+        "rows": rows,
+    }, fh, ensure_ascii=False, indent=1)
 
 for row in rows:
     mark = "ALLOW " if "allow" in row["decision"].lower() else "*DENY*"

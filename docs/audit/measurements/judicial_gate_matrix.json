@@ -1,946 +1,949 @@
-[
- {
-  "action": "adjudicate",
-  "actor": "EXECUTIVE",
-  "decision": "DENY",
-  "human_gated": false,
-  "rules": [
-   "R-003-1"
-  ]
- },
- {
-  "action": "adjudicate",
-  "actor": "JUDICIAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "adjudicate",
-  "actor": "LEGISLATIVE",
-  "decision": "DENY",
-  "human_gated": false,
-  "rules": [
-   "R-003-1"
-  ]
- },
- {
-  "action": "adjudicate",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "issue_ruling",
-  "actor": "EXECUTIVE",
-  "decision": "DENY",
-  "human_gated": false,
-  "rules": [
-   "R-003-1"
-  ]
- },
- {
-  "action": "issue_ruling",
-  "actor": "JUDICIAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "issue_ruling",
-  "actor": "LEGISLATIVE",
-  "decision": "DENY",
-  "human_gated": false,
-  "rules": [
-   "R-003-1"
-  ]
- },
- {
-  "action": "issue_ruling",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "vacate_ruling",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "vacate_ruling",
-  "actor": "JUDICIAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "vacate_ruling",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "vacate_ruling",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "admit_evidence",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "admit_evidence",
-  "actor": "JUDICIAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "admit_evidence",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "admit_evidence",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "register_judgment",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "register_judgment",
-  "actor": "JUDICIAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "register_judgment",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "register_judgment",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "refer_case",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "refer_case",
-  "actor": "JUDICIAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "refer_case",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "refer_case",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "admit_case",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "admit_case",
-  "actor": "JUDICIAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "admit_case",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "admit_case",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "recuse_judge",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "recuse_judge",
-  "actor": "JUDICIAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "recuse_judge",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "recuse_judge",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "create_court",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "create_court",
-  "actor": "JUDICIAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "create_court",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "create_court",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "appoint_judge",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "appoint_judge",
-  "actor": "JUDICIAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "appoint_judge",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "appoint_judge",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "register_court",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "register_court",
-  "actor": "JUDICIAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "register_court",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "register_court",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "set_court_status",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "set_court_status",
-  "actor": "JUDICIAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "set_court_status",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "set_court_status",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "set_judge_status",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "set_judge_status",
-  "actor": "JUDICIAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "set_judge_status",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "set_judge_status",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "file_case",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "file_case",
-  "actor": "JUDICIAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "file_case",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "file_case",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "assign_case",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "assign_case",
-  "actor": "JUDICIAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "assign_case",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "assign_case",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "open_hearing",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "open_hearing",
-  "actor": "JUDICIAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "open_hearing",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "open_hearing",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "close_case",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "close_case",
-  "actor": "JUDICIAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "close_case",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "close_case",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "add_party",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "add_party",
-  "actor": "JUDICIAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "add_party",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "add_party",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "add_claim",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "add_claim",
-  "actor": "JUDICIAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "add_claim",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "add_claim",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "submit_evidence",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "submit_evidence",
-  "actor": "JUDICIAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "submit_evidence",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "submit_evidence",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "set_evidence_status",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "set_evidence_status",
-  "actor": "JUDICIAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "set_evidence_status",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "set_evidence_status",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "record_proceeding",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "record_proceeding",
-  "actor": "JUDICIAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "record_proceeding",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "record_proceeding",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "record_enforcement",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "record_enforcement",
-  "actor": "JUDICIAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "record_enforcement",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "record_enforcement",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "enforce_ruling",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "enforce_ruling",
-  "actor": "JUDICIAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "enforce_ruling",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "enforce_ruling",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "pardon",
-  "actor": "EXECUTIVE",
-  "decision": "DENY",
-  "human_gated": false,
-  "rules": [
-   "R-010-1",
-   "R-010-5"
-  ]
- },
- {
-  "action": "pardon",
-  "actor": "JUDICIAL",
-  "decision": "DENY",
-  "human_gated": false,
-  "rules": [
-   "R-010-1",
-   "R-010-5"
-  ]
- },
- {
-  "action": "pardon",
-  "actor": "LEGISLATIVE",
-  "decision": "DENY",
-  "human_gated": false,
-  "rules": [
-   "R-010-1",
-   "R-010-5"
-  ]
- },
- {
-  "action": "pardon",
-  "actor": "ROYAL",
-  "decision": "DENY",
-  "human_gated": false,
-  "rules": [
-   "R-010-3",
-   "R-010-5"
-  ]
- },
- {
-  "action": "overturn_judicial_ruling",
-  "actor": "EXECUTIVE",
-  "decision": "DENY",
-  "human_gated": false,
-  "rules": [
-   "R-010-1",
-   "R-010-5"
-  ]
- },
- {
-  "action": "overturn_judicial_ruling",
-  "actor": "JUDICIAL",
-  "decision": "DENY",
-  "human_gated": false,
-  "rules": [
-   "R-010-1",
-   "R-010-5"
-  ]
- },
- {
-  "action": "overturn_judicial_ruling",
-  "actor": "LEGISLATIVE",
-  "decision": "DENY",
-  "human_gated": false,
-  "rules": [
-   "R-010-1",
-   "R-010-5"
-  ]
- },
- {
-  "action": "overturn_judicial_ruling",
-  "actor": "ROYAL",
-  "decision": "DENY",
-  "human_gated": false,
-  "rules": [
-   "R-010-3",
-   "R-010-5"
-  ]
- },
- {
-  "action": "legislate",
-  "actor": "EXECUTIVE",
-  "decision": "DENY",
-  "human_gated": false,
-  "rules": [
-   "R-003-1"
-  ]
- },
- {
-  "action": "legislate",
-  "actor": "JUDICIAL",
-  "decision": "DENY",
-  "human_gated": false,
-  "rules": [
-   "R-003-1"
-  ]
- },
- {
-  "action": "legislate",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "legislate",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "enact_policy",
-  "actor": "EXECUTIVE",
-  "decision": "DENY",
-  "human_gated": false,
-  "rules": [
-   "R-003-1"
-  ]
- },
- {
-  "action": "enact_policy",
-  "actor": "JUDICIAL",
-  "decision": "DENY",
-  "human_gated": false,
-  "rules": [
-   "R-003-1"
-  ]
- },
- {
-  "action": "enact_policy",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "enact_policy",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "amend_policy",
-  "actor": "EXECUTIVE",
-  "decision": "DENY",
-  "human_gated": false,
-  "rules": [
-   "R-003-1"
-  ]
- },
- {
-  "action": "amend_policy",
-  "actor": "JUDICIAL",
-  "decision": "DENY",
-  "human_gated": false,
-  "rules": [
-   "R-003-1"
-  ]
- },
- {
-  "action": "amend_policy",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "amend_policy",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "repeal_policy",
-  "actor": "EXECUTIVE",
-  "decision": "DENY",
-  "human_gated": false,
-  "rules": [
-   "R-003-1"
-  ]
- },
- {
-  "action": "repeal_policy",
-  "actor": "JUDICIAL",
-  "decision": "DENY",
-  "human_gated": false,
-  "rules": [
-   "R-003-1"
-  ]
- },
- {
-  "action": "repeal_policy",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "repeal_policy",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "suspend_policy",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "suspend_policy",
-  "actor": "JUDICIAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "suspend_policy",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "suspend_policy",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "vote",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "vote",
-  "actor": "JUDICIAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "vote",
-  "actor": "LEGISLATIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "vote",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- }
-]
+{
+ "$comment": "الهدف: حكمُ البوابةِ الدستوريّةِ على الأفعالِ القضائيّةِ والتشريعيّةِ × الفاعلين — مُخرَجُ tools/audit/judicial_gate_probe.py (P7). قياسٌ لا تقدير، وليسَ دليلًا سياديًّا ولا نصَّ قرار. المادةُ التاسعةُ · 2.",
+ "rows": [
+  {
+   "action": "adjudicate",
+   "actor": "EXECUTIVE",
+   "decision": "DENY",
+   "human_gated": false,
+   "rules": [
+    "R-003-1"
+   ]
+  },
+  {
+   "action": "adjudicate",
+   "actor": "JUDICIAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "adjudicate",
+   "actor": "LEGISLATIVE",
+   "decision": "DENY",
+   "human_gated": false,
+   "rules": [
+    "R-003-1"
+   ]
+  },
+  {
+   "action": "adjudicate",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "issue_ruling",
+   "actor": "EXECUTIVE",
+   "decision": "DENY",
+   "human_gated": false,
+   "rules": [
+    "R-003-1"
+   ]
+  },
+  {
+   "action": "issue_ruling",
+   "actor": "JUDICIAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "issue_ruling",
+   "actor": "LEGISLATIVE",
+   "decision": "DENY",
+   "human_gated": false,
+   "rules": [
+    "R-003-1"
+   ]
+  },
+  {
+   "action": "issue_ruling",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "vacate_ruling",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "vacate_ruling",
+   "actor": "JUDICIAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "vacate_ruling",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "vacate_ruling",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "admit_evidence",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "admit_evidence",
+   "actor": "JUDICIAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "admit_evidence",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "admit_evidence",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "register_judgment",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "register_judgment",
+   "actor": "JUDICIAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "register_judgment",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "register_judgment",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "refer_case",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "refer_case",
+   "actor": "JUDICIAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "refer_case",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "refer_case",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "admit_case",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "admit_case",
+   "actor": "JUDICIAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "admit_case",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "admit_case",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "recuse_judge",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "recuse_judge",
+   "actor": "JUDICIAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "recuse_judge",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "recuse_judge",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "create_court",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "create_court",
+   "actor": "JUDICIAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "create_court",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "create_court",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "appoint_judge",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "appoint_judge",
+   "actor": "JUDICIAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "appoint_judge",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "appoint_judge",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "register_court",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "register_court",
+   "actor": "JUDICIAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "register_court",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "register_court",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "set_court_status",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "set_court_status",
+   "actor": "JUDICIAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "set_court_status",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "set_court_status",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "set_judge_status",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "set_judge_status",
+   "actor": "JUDICIAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "set_judge_status",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "set_judge_status",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "file_case",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "file_case",
+   "actor": "JUDICIAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "file_case",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "file_case",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "assign_case",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "assign_case",
+   "actor": "JUDICIAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "assign_case",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "assign_case",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "open_hearing",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "open_hearing",
+   "actor": "JUDICIAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "open_hearing",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "open_hearing",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "close_case",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "close_case",
+   "actor": "JUDICIAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "close_case",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "close_case",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "add_party",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "add_party",
+   "actor": "JUDICIAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "add_party",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "add_party",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "add_claim",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "add_claim",
+   "actor": "JUDICIAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "add_claim",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "add_claim",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "submit_evidence",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "submit_evidence",
+   "actor": "JUDICIAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "submit_evidence",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "submit_evidence",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "set_evidence_status",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "set_evidence_status",
+   "actor": "JUDICIAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "set_evidence_status",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "set_evidence_status",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "record_proceeding",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "record_proceeding",
+   "actor": "JUDICIAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "record_proceeding",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "record_proceeding",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "record_enforcement",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "record_enforcement",
+   "actor": "JUDICIAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "record_enforcement",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "record_enforcement",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "enforce_ruling",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "enforce_ruling",
+   "actor": "JUDICIAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "enforce_ruling",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "enforce_ruling",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "pardon",
+   "actor": "EXECUTIVE",
+   "decision": "DENY",
+   "human_gated": false,
+   "rules": [
+    "R-010-1",
+    "R-010-5"
+   ]
+  },
+  {
+   "action": "pardon",
+   "actor": "JUDICIAL",
+   "decision": "DENY",
+   "human_gated": false,
+   "rules": [
+    "R-010-1",
+    "R-010-5"
+   ]
+  },
+  {
+   "action": "pardon",
+   "actor": "LEGISLATIVE",
+   "decision": "DENY",
+   "human_gated": false,
+   "rules": [
+    "R-010-1",
+    "R-010-5"
+   ]
+  },
+  {
+   "action": "pardon",
+   "actor": "ROYAL",
+   "decision": "DENY",
+   "human_gated": false,
+   "rules": [
+    "R-010-3",
+    "R-010-5"
+   ]
+  },
+  {
+   "action": "overturn_judicial_ruling",
+   "actor": "EXECUTIVE",
+   "decision": "DENY",
+   "human_gated": false,
+   "rules": [
+    "R-010-1",
+    "R-010-5"
+   ]
+  },
+  {
+   "action": "overturn_judicial_ruling",
+   "actor": "JUDICIAL",
+   "decision": "DENY",
+   "human_gated": false,
+   "rules": [
+    "R-010-1",
+    "R-010-5"
+   ]
+  },
+  {
+   "action": "overturn_judicial_ruling",
+   "actor": "LEGISLATIVE",
+   "decision": "DENY",
+   "human_gated": false,
+   "rules": [
+    "R-010-1",
+    "R-010-5"
+   ]
+  },
+  {
+   "action": "overturn_judicial_ruling",
+   "actor": "ROYAL",
+   "decision": "DENY",
+   "human_gated": false,
+   "rules": [
+    "R-010-3",
+    "R-010-5"
+   ]
+  },
+  {
+   "action": "legislate",
+   "actor": "EXECUTIVE",
+   "decision": "DENY",
+   "human_gated": false,
+   "rules": [
+    "R-003-1"
+   ]
+  },
+  {
+   "action": "legislate",
+   "actor": "JUDICIAL",
+   "decision": "DENY",
+   "human_gated": false,
+   "rules": [
+    "R-003-1"
+   ]
+  },
+  {
+   "action": "legislate",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "legislate",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "enact_policy",
+   "actor": "EXECUTIVE",
+   "decision": "DENY",
+   "human_gated": false,
+   "rules": [
+    "R-003-1"
+   ]
+  },
+  {
+   "action": "enact_policy",
+   "actor": "JUDICIAL",
+   "decision": "DENY",
+   "human_gated": false,
+   "rules": [
+    "R-003-1"
+   ]
+  },
+  {
+   "action": "enact_policy",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "enact_policy",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "amend_policy",
+   "actor": "EXECUTIVE",
+   "decision": "DENY",
+   "human_gated": false,
+   "rules": [
+    "R-003-1"
+   ]
+  },
+  {
+   "action": "amend_policy",
+   "actor": "JUDICIAL",
+   "decision": "DENY",
+   "human_gated": false,
+   "rules": [
+    "R-003-1"
+   ]
+  },
+  {
+   "action": "amend_policy",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "amend_policy",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "repeal_policy",
+   "actor": "EXECUTIVE",
+   "decision": "DENY",
+   "human_gated": false,
+   "rules": [
+    "R-003-1"
+   ]
+  },
+  {
+   "action": "repeal_policy",
+   "actor": "JUDICIAL",
+   "decision": "DENY",
+   "human_gated": false,
+   "rules": [
+    "R-003-1"
+   ]
+  },
+  {
+   "action": "repeal_policy",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "repeal_policy",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "suspend_policy",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "suspend_policy",
+   "actor": "JUDICIAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "suspend_policy",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "suspend_policy",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "vote",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "vote",
+   "actor": "JUDICIAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "vote",
+   "actor": "LEGISLATIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "vote",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  }
+ ]
+}

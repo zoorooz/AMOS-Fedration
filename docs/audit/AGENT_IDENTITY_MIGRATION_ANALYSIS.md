@@ -1,5 +1,12 @@
 # تحليلُ هجرةِ هويّةِ الوكيلِ والسكّان — P4
 
+<!--
+الهدف: تحليلُ هجرةِ هويّةِ الوكيلِ والسكّانِ في P4 وبيانُ مانعِ وقفِها
+النطاق: `executive_core/agent_identity.py` و`agent_runtime/population.py` — 6 مواضعَ · ANALYZED · BLOCKED بـQ-15
+المالك: docs/audit/ — ديوانُ التدقيق
+تاريخ الإنشاء: 2026-08-18
+-->
+
 **الحالة:** ANALYZED · الهجرةُ موقوفةٌ (BLOCKED · Q-15) · الدَّينُ لم يتحرّك: 177.
 **الوحدتان:** `executive_core/agent_identity.py` (3 مواضع) · `agent_runtime/population.py` (3 مواضع)
 

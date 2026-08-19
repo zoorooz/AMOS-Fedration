@@ -1,430 +1,433 @@
-[
- {
-  "action": "allocate_budget",
-  "actor": "EXECUTIVE",
-  "decision": "DENY",
-  "human_gated": false,
-  "rules": [
-   "R-003-1"
-  ]
- },
- {
-  "action": "allocate_budget",
-  "actor": "TREASURY",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "allocate_budget",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "issue_tokens",
-  "actor": "EXECUTIVE",
-  "decision": "DENY",
-  "human_gated": false,
-  "rules": [
-   "R-003-1"
-  ]
- },
- {
-  "action": "issue_tokens",
-  "actor": "TREASURY",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "issue_tokens",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "allocate_resources",
-  "actor": "EXECUTIVE",
-  "decision": "DENY",
-  "human_gated": false,
-  "rules": [
-   "R-003-1"
-  ]
- },
- {
-  "action": "allocate_resources",
-  "actor": "TREASURY",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "allocate_resources",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "book_expense",
-  "actor": "EXECUTIVE",
-  "decision": "DENY",
-  "human_gated": false,
-  "rules": [
-   "R-003-1"
-  ]
- },
- {
-  "action": "book_expense",
-  "actor": "TREASURY",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "book_expense",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "disburse_funds",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "disburse_funds",
-  "actor": "TREASURY",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "disburse_funds",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "transfer_treasury",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "transfer_treasury",
-  "actor": "TREASURY",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "transfer_treasury",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "treasury.establish",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "treasury.establish",
-  "actor": "TREASURY",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "treasury.establish",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "treasury.account.open",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "treasury.account.open",
-  "actor": "TREASURY",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "treasury.account.open",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "treasury.budget.create",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "treasury.budget.create",
-  "actor": "TREASURY",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "treasury.budget.create",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "treasury.allocate",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "treasury.allocate",
-  "actor": "TREASURY",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "treasury.allocate",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "treasury.funding.post",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "treasury.funding.post",
-  "actor": "TREASURY",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "treasury.funding.post",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "treasury.disburse",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "treasury.disburse",
-  "actor": "TREASURY",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "treasury.disburse",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "treasury.decision.disburse",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "treasury.decision.disburse",
-  "actor": "TREASURY",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "treasury.decision.disburse",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "treasury.transaction.reverse",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "treasury.transaction.reverse",
-  "actor": "TREASURY",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "treasury.transaction.reverse",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "economy.expenditure.authorize",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "economy.expenditure.authorize",
-  "actor": "TREASURY",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "economy.expenditure.authorize",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "economy.transfer.execute",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "economy.transfer.execute",
-  "actor": "TREASURY",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "economy.transfer.execute",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "economy.procurement.award",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "economy.procurement.award",
-  "actor": "TREASURY",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "economy.procurement.award",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "reward_task_completion",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "reward_task_completion",
-  "actor": "TREASURY",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "reward_task_completion",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "charge_model_invoke",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "charge_model_invoke",
-  "actor": "TREASURY",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "charge_model_invoke",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "run_economic_cycle",
-  "actor": "EXECUTIVE",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "run_economic_cycle",
-  "actor": "TREASURY",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- },
- {
-  "action": "run_economic_cycle",
-  "actor": "ROYAL",
-  "decision": "ALLOW",
-  "human_gated": false,
-  "rules": []
- }
-]
+{
+ "$comment": "الهدف: حكمُ البوابةِ الدستوريّةِ على أفعالِ المالِ المُرشَّحةِ × الفاعلين — مُخرَجُ tools/audit/treasury_gate_probe.py (P6-A). قياسٌ لا تقدير، وليسَ دليلًا سياديًّا ولا نصَّ قرار. المادةُ التاسعةُ · 2.",
+ "rows": [
+  {
+   "action": "allocate_budget",
+   "actor": "EXECUTIVE",
+   "decision": "DENY",
+   "human_gated": false,
+   "rules": [
+    "R-003-1"
+   ]
+  },
+  {
+   "action": "allocate_budget",
+   "actor": "TREASURY",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "allocate_budget",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "issue_tokens",
+   "actor": "EXECUTIVE",
+   "decision": "DENY",
+   "human_gated": false,
+   "rules": [
+    "R-003-1"
+   ]
+  },
+  {
+   "action": "issue_tokens",
+   "actor": "TREASURY",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "issue_tokens",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "allocate_resources",
+   "actor": "EXECUTIVE",
+   "decision": "DENY",
+   "human_gated": false,
+   "rules": [
+    "R-003-1"
+   ]
+  },
+  {
+   "action": "allocate_resources",
+   "actor": "TREASURY",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "allocate_resources",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "book_expense",
+   "actor": "EXECUTIVE",
+   "decision": "DENY",
+   "human_gated": false,
+   "rules": [
+    "R-003-1"
+   ]
+  },
+  {
+   "action": "book_expense",
+   "actor": "TREASURY",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "book_expense",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "disburse_funds",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "disburse_funds",
+   "actor": "TREASURY",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "disburse_funds",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "transfer_treasury",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "transfer_treasury",
+   "actor": "TREASURY",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "transfer_treasury",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "treasury.establish",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "treasury.establish",
+   "actor": "TREASURY",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "treasury.establish",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "treasury.account.open",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "treasury.account.open",
+   "actor": "TREASURY",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "treasury.account.open",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "treasury.budget.create",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "treasury.budget.create",
+   "actor": "TREASURY",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "treasury.budget.create",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "treasury.allocate",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "treasury.allocate",
+   "actor": "TREASURY",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "treasury.allocate",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "treasury.funding.post",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "treasury.funding.post",
+   "actor": "TREASURY",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "treasury.funding.post",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "treasury.disburse",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "treasury.disburse",
+   "actor": "TREASURY",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "treasury.disburse",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "treasury.decision.disburse",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "treasury.decision.disburse",
+   "actor": "TREASURY",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "treasury.decision.disburse",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "treasury.transaction.reverse",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "treasury.transaction.reverse",
+   "actor": "TREASURY",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "treasury.transaction.reverse",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "economy.expenditure.authorize",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "economy.expenditure.authorize",
+   "actor": "TREASURY",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "economy.expenditure.authorize",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "economy.transfer.execute",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "economy.transfer.execute",
+   "actor": "TREASURY",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "economy.transfer.execute",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "economy.procurement.award",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "economy.procurement.award",
+   "actor": "TREASURY",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "economy.procurement.award",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "reward_task_completion",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "reward_task_completion",
+   "actor": "TREASURY",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "reward_task_completion",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "charge_model_invoke",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "charge_model_invoke",
+   "actor": "TREASURY",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "charge_model_invoke",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "run_economic_cycle",
+   "actor": "EXECUTIVE",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "run_economic_cycle",
+   "actor": "TREASURY",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  },
+  {
+   "action": "run_economic_cycle",
+   "actor": "ROYAL",
+   "decision": "ALLOW",
+   "human_gated": false,
+   "rules": []
+  }
+ ]
+}

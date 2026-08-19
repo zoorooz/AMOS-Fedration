@@ -1,4 +1,4 @@
-"""P14 — تدقيقٌ نهائيٌّ يُطابِقُ المستودعَ بالوثيقة. يقيسُ ولا يُصلِحُ."""
+"""الهدف: P14 — تدقيقٌ نهائيٌّ يُطابِقُ المستودعَ بالوثيقة. يقيسُ ولا يُصلِحُ."""
 
 import json
 import re
@@ -8,7 +8,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 D = ROOT / "docs/audit"
-out: dict[str, object] = {}
+# المادةُ التاسعةُ · 2: المُخرَجُ يُعلِنُ هدفَه في ترويستِه، والمفتاحُ أوّلُ ما يُكتَب.
+out: dict[str, object] = {
+    "$comment": (
+        "الهدف: 21 قياسَ مطابقةٍ بينَ ما يقولُه المستودعُ وما تقولُه الوثيقةُ — "
+        "مُخرَجُ tools/audit/final_audit.py (P14). يقيسُ ولا يُصلِح، ولا يُقرَأُ "
+        "شهادةَ نجاح. المادةُ التاسعةُ · 2."),
+}
 
 # 1) الدَّينُ المقيسُ الآن
 INV = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "docs/audit/measurements/write_inventory_p13.json"

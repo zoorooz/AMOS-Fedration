@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""بوابةُ إعادةِ الجردِ بينَ موجاتِ القرارِ البشريّ.
+"""الهدف: بوابةُ إعادةِ الجردِ بينَ موجاتِ القرارِ البشريّ.
 
 بوابةُ **إجراءٍ** لا بوابةُ سيادة: لا تُخوِّلُ كتابةً ولا تمنعُها، ولا تُنتِجُ دليلًا
 سياديًّا، ولا تحلُّ محلَّ `docs/audit/evidence/evidence_registry.jsonl`.
@@ -126,6 +126,9 @@ def load_ledger() -> list[dict]:
 
 def save_ledger(snapshots: list[dict]) -> None:
     LEDGER.write_text(json.dumps({
+        "$comment": (
+            "الهدف: دفترُ لقطاتِ قياسٍ عندَ إغلاقِ كلِّ قرارٍ بشريّ — مُخرَجُ "
+            "tools/audit/decision_gate.py --record. المادةُ التاسعةُ · 2."),
         "note": ("مخزنُ قياسٍ لا مصدرُ حقيقةٍ للقرارات. لا نصَّ قرارٍ فيه ولا حالةً. "
                  "مصدرُ الحقيقةِ SOVEREIGN_DECISION_REGISTER.md، وإن خالفَه فالسجلُّ الحاكم."),
         "snapshots": snapshots,
@@ -135,6 +138,9 @@ def save_ledger(snapshots: list[dict]) -> None:
 def cmd_map() -> None:
     m = measure()
     WAVE_MAP.write_text(json.dumps({
+        "$comment": (
+            "الهدف: خريطةُ توزيعِ دَينِ الهجرةِ على موجاتِ القرارِ البشريّ — مُخرَجُ "
+            "tools/audit/decision_gate.py --map. المادةُ التاسعةُ · 2."),
         "note": "تقسيمُ الدَّينِ على موجاتِ القرارِ — مجموعُه الدَّينُ كلُّه بلا تكرار.",
         "debt": m["debt"], "waves": m["waves"], "git_head": m["git_head"],
     }, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")

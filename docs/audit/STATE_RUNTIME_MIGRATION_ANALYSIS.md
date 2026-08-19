@@ -1,5 +1,12 @@
 # تحليلُ هجرةِ State Runtime — P3
 
+<!--
+الهدف: تحليلُ هجرةِ `state_runtime` في P3 وبيانُ نقطةِ القرارِ التي أوقفتْها
+النطاق: `services/governance/state_runtime.py` · ANALYZED · BLOCKED بـ`HUMAN_DECISION_REQUIRED` عندَ `bcdeccc`
+المالك: docs/audit/ — ديوانُ التدقيق
+تاريخ الإنشاء: 2026-08-18
+-->
+
 **الحالة:** ANALYZED · الهجرةُ **موقوفةٌ عندَ نقطةِ قرار** (BLOCKED · HUMAN_DECISION_REQUIRED).
 **الوحدة:** `federal/executive/services/src/amos_federation/services/governance/state_runtime.py`
 **نقطةُ القياس:** `bcdeccc`

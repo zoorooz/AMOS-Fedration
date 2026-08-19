@@ -397,7 +397,16 @@ def main() -> int:
             print(f"    {count:4d}  {path}")
 
     if args.json_out:
-        payload = {"summary": summary, "sites": [asdict(s) for s in sites]}
+        # المادةُ التاسعةُ · 2: المُخرَجُ يُعلِنُ هدفَه في ترويستِه.
+        payload = {
+            "$comment": (
+                "الهدف: جردُ مواضعِ الكتابةِ في المستودعِ وتصنيفُ ما عبرَ الحدَّ "
+                "السّياديَّ وما لم يعبُر— مُخرَجُ "
+                "tools/audit/sovereign_write_inventory.py --json. ومنه يُشتَقُّ رقمُ "
+                "الدَّينِ وحدَه. المادةُ التاسعةُ · 2."),
+            "summary": summary,
+            "sites": [asdict(s) for s in sites],
+        }
         Path(args.json_out).write_text(
             json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8"
         )
