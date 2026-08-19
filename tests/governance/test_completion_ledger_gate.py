@@ -180,3 +180,58 @@ def test_غيابُ_السجلِّ_يُرصَد(tmp_path: Path, monkeypatch: pyt
     (repo / LEDGER_REL).unlink()
     kinds = {v["kind"] for v in gate.run("staged", None, shape_only=False)}
     assert kinds == {"LEDGER_MISSING"}
+
+
+# ── فخُّ الأساسِ البائد (W-007) ────────────────────────────────────────────────
+
+
+def _make_upstream(repo: Path, ledger_body: str) -> None:
+    """يُنشئُ بُعدًا اسمُه `origin` فرعُه `main` يحملُ سجلًّا أحدثَ من المحلّيّ."""
+    bare = repo.parent / "upstream.git"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(bare)], check=True)
+    subprocess.run(["git", "remote", "add", "origin", str(bare)], cwd=repo, check=True)
+    work = repo.parent / "work"
+    subprocess.run(["git", "clone", "-q", str(bare), str(work)], check=True)
+    subprocess.run(["git", "config", "user.email", "t@t.t"], cwd=work, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=work, check=True)
+    (work / LEDGER_REL).parent.mkdir(parents=True, exist_ok=True)
+    (work / LEDGER_REL).write_text(ledger_body, encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], cwd=work, check=True)
+    subprocess.run(["git", "commit", "-qm", "منشور"], cwd=work, check=True)
+    subprocess.run(["git", "push", "-q", "origin", "main"], cwd=work, check=True)
+    subprocess.run(["git", "fetch", "-q", "origin"], cwd=repo, check=True)
+
+
+def test_أساسٌ_بائدٌ_يُرصَد_ولا_يمرُّ(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """قيدٌ مدفوعٌ سابقًا لا يُشترى به مرورٌ لعملٍ جديدٍ غيرِ موثَّق."""
+    (tmp_path / "local").mkdir()
+    repo = _mkrepo(tmp_path / "local", _BODY)
+    monkeypatch.setattr(gate, "REPO_ROOT", repo)
+    _make_upstream(repo, _BODY + "| W-001 | قيدٌ مدفوعٌ أصلًا |\n")
+    _stage(repo, "src/a.py", "x = 2\n")
+    _stage(repo, LEDGER_REL, _BODY + "| W-001 | قيدٌ مدفوعٌ أصلًا |\n")
+    kinds = {v["kind"] for v in gate.run("staged", None, shape_only=False)}
+    assert kinds == {"LEDGER_STALE_BASE"}
+
+
+def test_قيدٌ_جديدٌ_حقًّا_يمرُّ_ولو_تأخَّرَ_الأساس(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """الحرسُ لا يُعاقبُ من أضافَ قيدًا جديدًا فعلًا فوقَ أساسٍ متأخّر."""
+    (tmp_path / "local").mkdir()
+    repo = _mkrepo(tmp_path / "local", _BODY)
+    monkeypatch.setattr(gate, "REPO_ROOT", repo)
+    _make_upstream(repo, _BODY + "| W-001 | قيدٌ مدفوعٌ أصلًا |\n")
+    _stage(repo, "src/a.py", "x = 2\n")
+    _stage(repo, LEDGER_REL, _BODY + "| W-001 | مدفوعٌ |\n| W-002 | جديدٌ حقًّا |\n")
+    assert gate.run("staged", None, shape_only=False) == []
+
+
+def test_غيابُ_البُعدِ_لا_يُعَدُّ_مخالفةً(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """مستودعٌ بلا `origin/main` حالةٌ مشروعة — لا يُخترَعُ لها خرق."""
+    repo = _mkrepo(tmp_path, _BODY)
+    monkeypatch.setattr(gate, "REPO_ROOT", repo)
+    assert gate.upstream_work_ids() is None
+    _stage(repo, "src/a.py", "x = 2\n")
+    _stage(repo, LEDGER_REL, _BODY + "| W-001 | قيدٌ |\n")
+    assert gate.run("staged", None, shape_only=False) == []

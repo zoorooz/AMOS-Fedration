@@ -24,6 +24,7 @@
   LEDGER_MISSING        سجلّ الإكمال غير موجود في المستودع
   LEDGER_NOT_UPDATED    تغيَّر ملفٌّ خاضعٌ للقاعدة ولم يتغيّر السجلّ معه
   LEDGER_NOT_EXTENDED   تغيَّر السجلُّ بلا مدخلِ عملٍ جديدٍ (`| W-…`) مُضاف
+  LEDGER_STALE_BASE     المدخلُ «الجديد» موجودٌ أصلاً في `origin/main` — الأساسُ بائد
   LEDGER_SECTION_MISSING السجلُّ فقدَ قسمًا من أقسامِه الإلزاميّة
   DUPLICATE_WORK_ID     مُعرِّفُ عملٍ (`W-…`) مُكرَّرٌ في السجلّ
 
@@ -113,6 +114,26 @@ def ledger_diff(mode: str, ref: str | None) -> str:
     return _git("show", "--pretty=format:", "--unified=0", str(ref), "--", LEDGER_PATH)
 
 
+def upstream_work_ids(remote_ref: str = "origin/main") -> set[str] | None:
+    """مُعرّفاتُ العملِ الموجودةُ في السجلِّ المنشور، أو `None` إن تَعَذَّرَ قراءتُه.
+
+    لا يُعدُّ غيابُ البُعدِ مخالفةً: مستودعٌ بلا بُعدٍ حالةٌ مشروعة. ولا يُبتلَعُ
+    هنا استثناءٌ: الغيابُ يُستبانُ بسؤالٍ صريحٍ قبلَ القراءة، فأيُّ فشلٍ بعدهُ
+    خللٌ حقيقيٌّ يُرفَعُ ولا يُستَر.
+    """
+    probe = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", f"{remote_ref}:{LEDGER_PATH}"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if probe.returncode != 0:
+        return None
+    text = _git("show", f"{remote_ref}:{LEDGER_PATH}")
+    return {m.group(1) for line in text.splitlines() if (m := WORK_ID_RE.match(line))}
+
+
 def is_governed(path: str) -> bool:
     """هل هذا الملفُّ يُلزِمُ صاحبَه بقيدٍ في السجلّ؟"""
     if path in EXEMPT_EXACT:
@@ -178,6 +199,23 @@ def check_change_set(mode: str, ref: str | None) -> list[dict[str, str]]:
                 "بـ`| W-###`) — لمسُ الملفِّ ليس توثيقًا"
             ),
         })
+        return violations
+
+    # فخُّ الأساسِ البائد: إن كان `HEAD` المحلّيُّ متأخّرًا عن المنشور، ظهرَت
+    # قيودٌ مدفوعةٌ أصلاً «مُضافةً» في الفارق، فتمرُّ البوّابةُ بلا توثيقٍ جديد.
+    if mode == "staged":
+        upstream = upstream_work_ids()
+        if upstream is not None:
+            stale = sorted(set(added) & upstream)
+            if stale and not (set(added) - upstream):
+                violations.append({
+                    "kind": "LEDGER_STALE_BASE",
+                    "detail": (
+                        f"المداخلُ المُعلَنةُ جديدةً ({'، '.join(stale)}) "
+                        "موجودةٌ أصلاً في `origin/main` — أساسُ المقارنةِ بائد. "
+                        "زامِل المنشورَ (`git fetch && git rebase origin/main`) ثمّ أعدِ الفحص"
+                    ),
+                })
     return violations
 
 
