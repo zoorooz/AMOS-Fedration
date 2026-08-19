@@ -581,13 +581,34 @@ def bypass_parameters_of(subject: object) -> frozenset[str]:
 
     تُستعمَلُ في `self_check` وفي الاختبارِ معًا: الإقرارُ والقياسُ من مصدرٍ
     واحدٍ فلا يفترقان.
+
+    **النطاقُ مُعلَنٌ لا مضمرٌ:** في الأصنافِ يُفحَصُ ما تُعلِنُه أصنافُ
+    سلسلةِ الوراثةِ في قواميسِها، **ويُستثنى `object` وحدَه** لأنَّ مبنيّاتِه
+    لا تحملُ معاملَ تجاوزٍ بحالٍ. وما ورِثَ من أصلٍ غيرِه — ولو من مكتبةٍ
+    قياسيّةٍ — **يُفحَصُ**، فقد يُرفَضُ لعدمِ قراءةِ بصمتِه، وهذا مُعلَنٌ لا مستورٌ.
     """
     import inspect
 
     found: set[str] = set()
     members: Iterable[tuple[str, Any]]
     if isinstance(subject, type):
-        members = inspect.getmembers(subject, callable)
+        # يُفحَصُ ما **تُعلِنُه** أصنافُ سلسلةِ الوراثةِ في قواميسِها، ويُستثنى
+        # `object` وحدَه. فمبنيّاتُ المفسِّرِ الموروثةُ عنه لا تحملُ معاملَ
+        # تجاوزٍ بحالٍ، وبعضُها لا يُعلِنُ بصمتَه أصلًا فيُرفَضُ رفضًا كاذبًا.
+        # ولا إعفاءَ بالاسمِ: `__init_subclass__` المُعلَنُ في شيفرةِ المشروعِ
+        # يُفحَصُ كسائرِ الأعضاءِ، وما خرجَ عن `object` من الأصولِ يُفحَصُ كذلك.
+        declared: dict[str, Any] = {}
+        for base in subject.__mro__:
+            if base is object:
+                continue
+            for اسم in vars(base):
+                if اسم in declared:
+                    continue
+                # بلا مُعالِجٍ يبتلِعُ: ما لا يُقرَأُ وصفًا ليسَ دالَّةَ نفاذٍ أصلًا.
+                قيمة = getattr(subject, اسم, None)
+                if callable(قيمة):
+                    declared[اسم] = قيمة
+        members = sorted(declared.items())
     elif callable(subject):
         members = [(getattr(subject, "__name__", "<callable>"), subject)]
     else:

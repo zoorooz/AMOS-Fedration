@@ -743,6 +743,50 @@ class Testلامعامَلَتجاوز:
     def test_الإقرارُوالقياسُمنمصدرٍواحد(self, حدّ: SovereignExecutionBoundary) -> None:
         assert حدّ.self_check()["bypass_parameters"] == []
 
+    # ─── تضييقُ المسحِ لا يُفقِدُ تغطيةً: مطلوبٌ إثباتًا لا دعوى ───
+
+    def test_معامَلُالتجاوزِفي__init_subclass__يُرصَد(self) -> None:
+        """استثناءُ `object` ليسَ إعفاءً بالاسمِ: ما يُعلِنُه المشروعُ يُفحَص."""
+
+        class مُعلِنٌ:
+            def __init_subclass__(cls, bypass: bool = False, **kw: object) -> None:
+                super().__init_subclass__(**kw)  # type: ignore[arg-type]
+
+        assert "bypass" in bypass_parameters_of(مُعلِنٌ)
+
+    def test_معامَلُالتجاوزِالموروثُعنأصلٍفيالمشروعِيُرصَد(self) -> None:
+        """المسحُ يمشي سلسلةَ الوراثةِ كلَّها، فلا يَنجو متجاوزٌ بالتوريثِ."""
+
+        class أصلٌ:
+            def يُنفِّذ(self, force: bool = False) -> None: ...
+
+        class فرعٌ(أصلٌ): ...
+
+        assert "force" in bypass_parameters_of(فرعٌ)
+
+    def test_مالاتُقرَأُبصمتُهُمنأعضاءِالمشروعِيُرفَض(self) -> None:
+        """عقدُ الإغلاقِ عندَ الفشلِ قائمٌ: لا ابتلاعَ صامتًا لما لا تُقرَأُ بصمتُه."""
+
+        class عمياءُ:
+            # قيمةٌ ليستْ بصمةً تجعلُ `inspect.signature` يرفعُ — بلا اعتمادٍ
+            # على إصدارِ المفسِّرِ: الرفعُ `ValueError` في 3.12 و`TypeError` في 3.14.
+            __signature__ = "not-a-signature"
+
+            def __call__(self) -> None: ...
+
+        class حاملٌ:
+            عمياء = عمياءُ()
+
+        with pytest.raises(StaticGuardError):
+            bypass_parameters_of(حاملٌ)
+
+    def test_صنفٌعاديٌلايُرفَضُرفضًاكاذبًا(self) -> None:
+        """مبنيّاتُ `object` لا تحملُ تجاوزًا، وبعضُها بلا بصمةٍ في 3.12."""
+
+        class فارغٌ: ...
+
+        assert bypass_parameters_of(فارغٌ) == frozenset()
+
     def test_تنفيذُالحدِّلايقبلُدالّةًحُرّةًبلاآثارٍمُعلَنة(self) -> None:
         """الفرقُ عن `gateway.execute`: لا `Callable[[], T]` مُعتِمةً هنا."""
         توقيع = inspect.signature(SovereignExecutionBoundary.execute)
