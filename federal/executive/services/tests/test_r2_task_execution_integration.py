@@ -143,7 +143,10 @@ def test_durable_events_survive_bus_reconstruction_and_replay() -> None:
     ids = [event["event_id"] for event in events]
     assert len(set(ids)) == len(ids), "معرّف حدث مكرّر يُفسد سلامة السجل"
 
-    replayed = fresh.replay("r2_replay_probe", subject=TRANSITION_SUBJECT, limit=200)
+    # replay يقرأ من أوّل السجلِّ تصاعديًّا، فحدٌّ ثابتٌ يقطعُ الأحداثَ الأحدثَ
+    # متى تجاوزَ السجلُّ المشتركُ ذلك الحدَّ. الحدُّ يُقاسُ من طولِ السجلِّ نفسِه.
+    stream_length = fresh.count(subject=TRANSITION_SUBJECT)
+    replayed = fresh.replay("r2_replay_probe", subject=TRANSITION_SUBJECT, limit=stream_length)
     assert any(event["data"]["task_id"] == task_id for event in replayed)
 
 

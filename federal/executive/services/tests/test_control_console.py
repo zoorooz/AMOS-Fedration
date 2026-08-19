@@ -200,13 +200,15 @@ def test_kill_switch_reset() -> None:
 
 def test_kill_switch_writes_audit() -> None:
     """تفعيل Kill Switch يكتب في سجل التدقيق."""
-    audit_before = len(client.get("/v1/audit", headers=AUTH_HEADERS).json())
+    # ‎/v1/audit مُسقَّفٌ بـ limit، فطولُ صفحتِه يتشبَّعُ متى تجاوزَ السجلُّ السقفَ
+    # ولا يَشهدُ بنموِّ السلسلةِ. عددُ المُدخلاتِ في ‎/v1/audit/verify غيرُ مُسقَّفٍ.
+    audit_before = client.get("/v1/audit/verify", headers=AUTH_HEADERS).json()["entries"]
     client.post(
         "/v1/kill-switch",
         headers=AUTH_HEADERS,
         json={"level": "alert", "reason": "اختبار تدقيق", "activated_by": "tester"},
     )
-    audit_after = len(client.get("/v1/audit", headers=AUTH_HEADERS).json())
+    audit_after = client.get("/v1/audit/verify", headers=AUTH_HEADERS).json()["entries"]
     assert audit_after > audit_before
 
 
