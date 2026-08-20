@@ -34,6 +34,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from amos_federation.common.database import get_session_factory, init_db
+from amos_federation.common.money import to_money
 from amos_federation.common.principal import DEFAULT_TENANT
 from amos_federation.services.executive_core.agent_identity import get_identity
 from amos_federation.services.national_registry.authorization import (
@@ -72,6 +73,8 @@ from amos_federation.services.state_registry.models import (
 from amos_federation.services.state_registry.trace import record_domain_trace
 
 if TYPE_CHECKING:
+    from decimal import Decimal
+
     from amos_federation.common.principal import AuthorizationContext
 
 # === أسماء الأحداث — مُسجَّلة في `EVENT_CONTRACTS` ===
@@ -784,7 +787,7 @@ class NationalRegistry:
         department_id: str | None = None,
         budget_id: str | None = None,
         account_id: str | None = None,
-        max_amount: str | int | None = None,
+        max_amount: Decimal | str | int | None = None,
     ) -> dict[str, Any]:
         """امنح منصبًا سلطةً على عمليةٍ مُسمّاة وهدفٍ مُسمّى — R7-C8.
 
@@ -844,7 +847,9 @@ class NationalRegistry:
                 department_id=department_id,
                 budget_id=budget_id,
                 account_id=account_id,
-                max_amount=None if max_amount is None else str(max_amount),
+                # لا `str(max_amount)`: كانت تُبيِّضُ العائمَ فتُمرِّرُه عبرَ بابِ
+                # المالِ الذي يرفضُه. و`to_money` هو البابُ (Q-20).
+                max_amount=None if max_amount is None else to_money(max_amount),
                 status="active",
                 granted_by=context.principal_id,
                 tenant_id=tenant,

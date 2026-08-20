@@ -72,6 +72,7 @@ from sqlalchemy import (
 )
 
 from amos_federation.common.database import Base
+from amos_federation.common.money import MoneyType
 
 # === مفردات الأنواع والحالات — مصدرٌ واحد للقيد وللتحقّق ===
 
@@ -371,9 +372,11 @@ class AuthorityGrantModel(Base):
     )
     budget_id = Column(String, ForeignKey("state_budgets.id", ondelete="RESTRICT"), nullable=True)
     account_id = Column(String, ForeignKey("state_accounts.id", ondelete="RESTRICT"), nullable=True)
-    #: حدٌّ أعلى اختياري للمبلغ الواحد — يُقرأ نصًّا ويُقارَن كعملة صحيحة في
-    #: `resolver`، ولا يُخزَّن عائمًا. غيابه يعني «بلا حدٍّ في هذه المِنحة».
-    max_amount = Column(String, nullable=True)
+    #: حدٌّ أعلى اختياري للمبلغ الواحد — `NUMERIC(20,4)` (الهجرة 014 · Q-20).
+    #: غيابه يعني «بلا حدٍّ في هذه المِنحة»، ولا يعني «حدُّه صفر». وكان نصًّا
+    #: فكان يقبلُ ما ليس عددًا ثمّ يسقطُ إلى الرفضِ عندَ القراءة؛ فصارَ الرفضُ
+    #: عندَ الكتابةِ حيث موضعُه.
+    max_amount = Column(MoneyType, nullable=True)
     status = Column(String, nullable=False, default="active")
     granted_by = Column(String, nullable=False)
     granted_at = Column(DateTime, default=_now)

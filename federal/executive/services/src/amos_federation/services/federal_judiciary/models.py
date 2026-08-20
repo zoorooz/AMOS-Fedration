@@ -96,6 +96,7 @@ from amos_federation.common.database import Base
 # isort: off
 from amos_federation.services.state_registry import models as _state_registry_models
 from amos_federation.services.state_treasury import models as _state_treasury_models
+from amos_federation.common.money import MoneyType
 from amos_federation.services.national_registry import models as _national_registry_models
 
 # isort: on
@@ -399,8 +400,10 @@ class CaseClaimModel(Base):
     legal_basis_kind = Column(String, nullable=False, default="NONE")
     legal_basis_ref = Column(String, default="")
     legal_basis_verified = Column(Boolean, nullable=False, default=False)
-    #: مبلغُ المطالبة نصًّا بأربع منازل — مفردةُ الخزانة نفسها (R7-B).
-    amount = Column(String)
+    #: مبلغُ المطالبة — `NUMERIC(20,4)` بعقدِ المالِ نفسِه (R7-B · الهجرة 014).
+    #: كان نصًّا هروبًا من العائم، وصارَ عشريًّا بقرارِ Q-20 فحرَسَته القاعدةُ
+    #: نفسُها لا بايثونُ وحدَها: لا `'abc'` ولا `'1e9'` ولا مقدارٌ بلا حدّ.
+    amount = Column(MoneyType, nullable=True)
     filed_by = Column(String, nullable=False)
     tenant_id = Column(String, nullable=False, default="default")
     created_at = Column(DateTime, default=_now)

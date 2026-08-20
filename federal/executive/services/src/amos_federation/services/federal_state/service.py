@@ -48,6 +48,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import select
 
 from amos_federation.common.database import get_session_factory, init_db
+from amos_federation.common.money import to_money
 from amos_federation.common.principal import DEFAULT_TENANT
 from amos_federation.services.executive_core import get_executive_core
 from amos_federation.services.federal_state.authority import (
@@ -532,7 +533,8 @@ class FederalStateGovernment:
                 to_institution_id=target_institution.id if target_institution else None,
                 operation=operation,
                 scope=scope,
-                max_amount=str(max_amount) if max_amount is not None else None,
+                # `to_money` لا `str`: النصُّ يُخفي العائمَ، والبابُ يردُّه (Q-20).
+                max_amount=to_money(max_amount) if max_amount is not None else None,
                 status="active",
                 reason=reason,
                 granted_by=context.principal_id,

@@ -91,21 +91,21 @@
     "federal": {
       "domain": "federal",
       "md_files": 60,
-      "py_files": 213,
+      "py_files": 215,
       "yaml_files": 3,
-      "code_lines": 60990,
+      "code_lines": 61204,
       "nucleus_count": 7,
       "nucleus_status": {
         "unspecified": 7
       },
       "has_readme": true,
-      "real_source_hits": 209,
+      "real_source_hits": 210,
       "fake_hits": 1,
       "in_memory_hits": 60,
       "secret_hits": 0,
       "observed_hits": 127,
       "api_routes": 178,
-      "test_refs": 152,
+      "test_refs": 154,
       "identity_violations": 2,
       "test_evidence": "PASS",
       "coverage_evidence": "PASS",
@@ -126,7 +126,7 @@
           "COVERAGE": "PASS",
           "DEPLOYMENT": "ABSENT"
         },
-        "TEST_NAME_MENTIONS": 152
+        "TEST_NAME_MENTIONS": 154
       },
       "maturity": "UNIT_TESTED",
       "findings_count": 83
@@ -191,7 +191,7 @@
       "secret_hits": 0,
       "observed_hits": 0,
       "api_routes": 0,
-      "test_refs": 9,
+      "test_refs": 11,
       "identity_violations": 2,
       "test_evidence": "ABSENT",
       "coverage_evidence": "ABSENT",
@@ -212,7 +212,7 @@
           "COVERAGE": "ABSENT",
           "DEPLOYMENT": "ABSENT"
         },
-        "TEST_NAME_MENTIONS": 9
+        "TEST_NAME_MENTIONS": 11
       },
       "maturity": "IMPLEMENTED",
       "findings_count": 1
@@ -234,7 +234,7 @@
       "secret_hits": 0,
       "observed_hits": 0,
       "api_routes": 0,
-      "test_refs": 144,
+      "test_refs": 146,
       "identity_violations": 3,
       "test_evidence": "ABSENT",
       "coverage_evidence": "ABSENT",
@@ -255,7 +255,7 @@
           "COVERAGE": "ABSENT",
           "DEPLOYMENT": "ABSENT"
         },
-        "TEST_NAME_MENTIONS": 144
+        "TEST_NAME_MENTIONS": 146
       },
       "maturity": "IMPLEMENTED",
       "findings_count": 3
@@ -492,7 +492,7 @@
       "secret_hits": 0,
       "observed_hits": 0,
       "api_routes": 0,
-      "test_refs": 130,
+      "test_refs": 131,
       "identity_violations": 1,
       "test_evidence": "PASS",
       "coverage_evidence": "ABSENT",
@@ -513,7 +513,7 @@
           "COVERAGE": "ABSENT",
           "DEPLOYMENT": "ABSENT"
         },
-        "TEST_NAME_MENTIONS": 130
+        "TEST_NAME_MENTIONS": 131
       },
       "maturity": "INTEGRATED",
       "findings_count": 0

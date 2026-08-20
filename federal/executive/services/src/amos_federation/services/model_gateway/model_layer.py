@@ -10,12 +10,14 @@ import hashlib
 import time
 import uuid
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import Column, DateTime, Integer, String, Text, create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from amos_federation.common.database import get_database_url
+from amos_federation.common.money import MoneyType, to_money
 
 
 class ModelBase(DeclarativeBase):
@@ -45,10 +47,30 @@ class CostLogModel(ModelBase):
     invocation_id = Column(String, nullable=False, unique=True)
     model = Column(String, nullable=False)
     tokens = Column(Integer, default=0)
-    cost_usd = Column(String, default="0.0")
+    #: كلفةٌ بالدولارِ الحقيقيِّ — مالٌ بلا خلافٍ في تصنيفِه، فـ`NUMERIC(20,4)`
+    #: لا نصًّا ولا عائمًا (الهجرة 014 · Q-20). والقيمةُ في بايثون `Decimal`.
+    cost_usd = Column(MoneyType, nullable=False, default=Decimal("0"))
     latency_ms = Column(Integer, default=0)
     source = Column(String, default="local")
     created_at = Column(DateTime, default=lambda: datetime.now(UTC))
+
+
+def _money_from_provider_float(value: float) -> Decimal:
+    """يُحوِّلُ كلفةً عائمةً آتيةً من حسابِ التسعيرِ إلى مبلغٍ عشريٍّ — نقطةً واحدةً مُعلَنة.
+
+    ## لماذا دالّةٌ باسمٍ لا `str()` في مكانِها
+
+    `to_money` يرفضُ العائمَ عن قصدٍ («خطأٌ لا رأي»). وكان الرمزُ يكتبُ
+    `str(cost_usd)` فيُبيِّضُ العائمَ نصًّا ويمرُّ من البابِ الذي جاءَ ليردَّه.
+    فالتبييضُ الصامتُ أُلغيَ، وبقيَ التحويلُ **واحدًا وباسمٍ يُقرأ**، لأنَّ سلسلةَ
+    حسابِ الكلفةِ في هذه البوّابةِ (`PRICING` و`compute_cost`) عائمةٌ كلُّها،
+    وتحويلُها إلى `Decimal` يُغيِّرُ نوعَ ردٍّ عامٍّ (`cost_usd: float` في
+    `main.py`) فلا يُفعَلُ بلا قرار: هو مُقيَّدٌ سؤالًا مستقلًّا **Q-29**.
+
+    والتقريبُ إلى أربعِ منازلَ قبلَ التحويلِ مقصودٌ: هو دقّةُ عقدِ المالِ نفسِها،
+    فلا تُخزَّنُ منازلُ لا يعترفُ بها العقد.
+    """
+    return to_money(f"{value:.4f}")
 
 
 class ModelLayer:
@@ -145,7 +167,7 @@ class ModelLayer:
                 invocation_id=invocation_id,
                 model=model,
                 tokens=tokens,
-                cost_usd=str(cost_usd),
+                cost_usd=_money_from_provider_float(cost_usd),
                 latency_ms=latency_ms,
                 source=source,
             )

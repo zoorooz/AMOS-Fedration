@@ -91,6 +91,7 @@ from amos_federation.common.database import Base
 # isort: off
 from amos_federation.services.state_registry import models as _state_registry_models
 from amos_federation.services.state_treasury import models as _state_treasury_models
+from amos_federation.common.money import MoneyType
 from amos_federation.services.national_registry import models as _national_registry_models
 from amos_federation.services.government_services import models as _government_services_models
 from amos_federation.services.federal_judiciary import models as _federal_judiciary_models
@@ -337,7 +338,8 @@ class GovernmentDelegationModel(Base):
     )
     operation = Column(String, nullable=False)
     scope = Column(String, nullable=False)
-    max_amount = Column(String, nullable=True)
+    #: حدٌّ أعلى اختياري للمبلغ الواحد — `NUMERIC(20,4)` (الهجرة 014 · Q-20).
+    max_amount = Column(MoneyType, nullable=True)
     status = Column(String, nullable=False, default="active")
     reason = Column(Text, default="")
     granted_by = Column(String, nullable=False)
