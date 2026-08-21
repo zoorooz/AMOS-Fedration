@@ -79,7 +79,15 @@ jobs:
         with:
           python-version: "3.12"
       - name: تثبيت التبعيات
-        run: pip install pytest
+        # `cryptography` لازمة لا زائدة — للسببِ المُعلَنِ في وظيفةِ النواةِ
+        # الدستوريّةِ أدناه: `core.constitutional_engine.rules` تستوردُ
+        # `core.sovereignty.crown` وهي تستندُ إلى Ed25519. وبوّابةُ 5 هنا تُشغّلُ
+        # `tests/governance/` كلَّها، وفيها من يحرسُ معجمَ المالِ الدستوريّ
+        # (Q-18) فيستدعي المُحرِّكَ ليقرأَ حكمَه الفعليّ. فبغيابِها تسقطُ
+        # البوّابةُ بـ`ModuleNotFoundError` في الجمعِ قبلَ أن يُفحَصَ حارسٌ واحد
+        # — فتسقطُ الوظيفةُ لا قانونُ الهُويّة. ولا يُستعملُ `importorskip`
+        # دواءً: حارسٌ يُتخطَّى بصمتٍ ليس حارسًا (القاعدةُ 12).
+        run: pip install pytest cryptography
 
       - name: بوابة 1 — كل مجلد يحمل بطاقة هوية كاملة وكل ملف يُعلن هدفه
         run: python tools/governance/check_repository_identity.py .
