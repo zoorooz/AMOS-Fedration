@@ -4,6 +4,7 @@ AMOS-Federation Tests — Q-19 Money Delegation Guard
 النطاق: federal/executive/services/tests
 المالك: federal/executive/services
 تاريخ الإنشاء: 2026-08-21 (Q-19)
+تاريخ آخر تعديل: 2026-08-22 (W-019 — نقضُ قيدِ «الوسمُ ما زالَ قائمًا» صراحةً)
 
 ## ما يحرسُه هذا الملفّ ولماذا هكذا
 
@@ -233,16 +234,23 @@ def test_no_service_wide_treasury_actor_tag(path: Path) -> None:
     assert not re.search(r"actor\s*=\s*[\"']TREASURY[\"']", source)
 
 
-def test_the_2a_precedent_still_carries_the_wholesale_tag_it_is_measured_not_denied() -> None:
-    """سابقةُ 2A ما زالت تحملُ الوسمَ بالجملة — يُقاسُ ولا يُنكَر.
+def test_the_2a_precedent_no_longer_carries_the_wholesale_tag() -> None:
+    """سابقةُ 2A لم تعدِ تحملُ الوسمَ بالجملة — نقضٌ مُعلَنٌ لقيدٍ سابق.
 
-    نقضُ السابقةِ آخرُ الترتيبِ المُلزِمِ ولم يُنفَّذْ بعد. فيُثبَّتُ الواقعُ هنا كما
-    هو، فإن نُقِضَ غدًا سقطَ هذا الاختبارُ فنبَّهَ على أنَّ الوثيقةَ تحتاجُ تحديثًا —
-    لا أن يُقالَ اليومَ إنَّ النمطَ زالَ وهو قائم.
+    كانَ هذا الاختبارُ يُثبِتُ أنَّ السابقةَ **ما زالت** تحملُ الوسمَ بالجملة،
+    وكانَ صادقًا يومَ كُتِبَ لأنَّ نقضَ السابقةِ كانَ آخرَ الترتيبِ المُلزِمِ ولم
+    يُنفَّذْ بعد. ثمَّ نُفِّذَ في **W-019** (2026-08-22)، فصارَ نصُّه القديمُ دعوى
+    كاذبةً لو بَقِي. فنُقِضَ صراحةً لا صمتًا: يُثبِتُ اليومَ أنَّ الوسمَ زالَ
+    فعلًا من موضعِه الأصليّ، فلا خدمةَ في المستودعِ تنطقُ باسمِ الخزانةِ بالجملة.
+
+    وما لا يقُولُه هذا القيد: أنَّ الحرسَ نُقِص. الحدُّ السياديُّ باقٍ في موضعِه،
+    وإنما صارَ الفعلُ والفاعلُ صادقَين — وذلك مقيسٌ في
+    `test_2a_precedent_correction.py`.
     """
     runtime = _source(SRC / "services" / "governance" / "state_runtime.py")
-    assert 'TREASURY_ACTOR = "TREASURY"' in runtime
-    assert "ConstitutionalAuthorizer(actor=TREASURY_ACTOR)" in runtime
+    assert 'TREASURY_ACTOR = "TREASURY"' not in runtime
+    assert "ConstitutionalAuthorizer(actor=TREASURY_ACTOR)" not in runtime
+    assert not re.search(r"actor\s*=\s*[\"']TREASURY[\"']", runtime)
 
 
 # ── 6 · الوصلُ المفروض: المُحرِّكُ يُسأَلُ في مسارِ المال (Q-31 · W-015) ──

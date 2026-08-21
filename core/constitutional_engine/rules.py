@@ -57,6 +57,10 @@ TREASURY_ACTIONS = frozenset({
 # يُقرأُ غدًا سهوًا لا قرارًا.
 NON_CONSTITUTIONAL_MONEY_ACTIONS = frozenset({
     "reward_task_completion", "charge_model_invoke", "run_economic_cycle",
+    # نقضُ سابقةِ 2A (2026-08-22 · W-019): عمودُ `federal_states.budget` مقوَّمٌ
+    # بـ`amos-credit`، فكانت السابقةُ تُمارِسُ عليه `allocate_budget` — وهو حصرُ
+    # الخزانةِ في المادة الثالثة. فصارَ لها فعلُها الصريحُ خارجَ معجمِ المال.
+    "allocate_operational_credit",
 })
 
 # جدولُ الترجمةِ من اسمِ العمليّةِ في خدمةِ خزانةِ الدولةِ إلى فعلِها المعجميّ.

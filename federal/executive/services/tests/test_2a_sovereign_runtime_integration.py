@@ -3,7 +3,7 @@
 النطاق: `state_registry.register_institution` و `governance.state_runtime.allocate_budget`
 المالك: federal/executive/services
 تاريخ الإنشاء: 2026-08-18
-تاريخ آخر تعديل: 2026-08-18
+تاريخ آخر تعديل: 2026-08-22 (W-019 — نقضُ السابقة: فعلٌ غيرُ دستوريٍّ وفاعلٌ تنفيذيّ)
 
 هذا الملفُّ لا يُعيدُ اختبارَ 1F–1N ولا يقيسُ تصميمًا؛ يقيسُ ثمانيَ دعاوى على
 الكتابتينِ نفسِهما، والقياسُ على الأثرِ في قاعدةِ البياناتِ وعلى مراحلِ الحصيلةِ
@@ -35,6 +35,9 @@ from amos_federation.services.executive_core.sovereignty_bridge import (
     ConstitutionalAuthorizer,
     GuardedResult,
     UndeclaredExecutionError,
+    compensator,
+    declared_effect,
+    operation_key,
 )
 from amos_federation.services.governance import state_runtime as runtime_module
 from amos_federation.services.governance.state_runtime import StateModel, StateRuntime
@@ -100,8 +103,9 @@ def registry(tmp_path: Path) -> tuple[StateRegistry, RecordingAuthorizer]:
 
 @pytest.fixture
 def runtime(tmp_path: Path) -> tuple[StateRuntime, RecordingAuthorizer]:
+    # بعدَ نقضِ السابقة (W-019): لا `actor=` — الفاعلُ الافتراضيُّ تنفيذيٌّ
+    # كما في الإنتاج، فلا يقيسُ الاختبارُ طريقًا لا يمرُّ منه مُنادٍ.
     authorizer = RecordingAuthorizer(
-        actor=runtime_module.TREASURY_ACTOR,
         idempotency_ledger_path=tmp_path / "BUDGET-IDEM.json",
     )
     return StateRuntime(authorizer=authorizer), authorizer
@@ -238,7 +242,17 @@ class TestG4NewBudgetPathChangesRealState:
 
 class TestG5UnauthorizedChangesNothing:
     def test_gateway_denial_leaves_budget_untouched(self, tmp_path: Path) -> None:
-        """فاعلٌ تنفيذيٌّ يوزِّعُ ميزانيةً: البوابةُ ترفضُ (R-003-1) ولا تتغيّرُ حالة."""
+        """الفعلُ الحصريُّ مرفوضٌ على التنفيذيّ، والمرفوضُ لا يمسُّ ميزانيةً.
+
+        **نُقِضَ نصُّ هذا الاختبارِ صراحةً لا صمتًا (W-019).** كانَ يقيسُ أنَّ
+        `StateRuntime.allocate_budget` بفاعلٍ تنفيذيٍّ يُرفَض، وكانَ صادقًا يومَ
+        كُتِبَ لأنَّ السابقةَ كانت تُمارِسُ الفعلَ الحصريَّ `allocate_budget` على
+        عمودٍ مقوَّمٍ بـ`amos-credit`. وقُضِيَ في Q-17 أنَّ `amos-credit` ليست مالًا
+        دستوريًّا، فصارَ للعمليّةِ فعلٌ غيرُ دستوريٍّ يملِكُه التنفيذيُّ، فلو بقيَ
+        النصُّ القديمُ لقاسَ طريقًا لا وجودَ له. وما يُقاسُ اليومَ أولى: أنَّ
+        الجدارَ نفسَه (R-003-1) لم يُمَسَّ — الفعلُ الحصريُّ ما زالَ يُرفَضُ
+        للتنفيذيِّ في البوابةِ نفسِها، والرفضُ لا يترُكُ أثرًا في الميزانية.
+        """
         authorizer = ConstitutionalAuthorizer(
             actor="EXECUTIVE", idempotency_ledger_path=tmp_path / "DENIED.json"
         )
@@ -247,8 +261,25 @@ class TestG5UnauthorizedChangesNothing:
 
         rt = StateRuntime(authorizer=authorizer)
         before = _budget_of(rt, "science")
+        target = "federal_states/science"
+        effect = declared_effect("WRITE", f"{target}/budget", "فعلٌ حصريٌّ يُحاولُه فاعلٌ غيرُ مختصّ")
         with pytest.raises(SovereigntyViolation):
-            rt.allocate_budget("science", "500", "توزيعٌ بفاعلٍ غيرِ مختصّ", allocation_id="g5")
+            authorizer.guard_declared(
+                "allocate_budget",
+                target,
+                declared_effects=(effect,),
+                applier=lambda _e: rt._add_to_budget("science", 500),  # noqa: SLF001
+                operation_key=operation_key(
+                    runtime_module.BUDGET_OPERATION_SCOPE, "g5-denied-exclusive"
+                ),
+                compensators=(
+                    compensator(
+                        effect.signature,
+                        lambda: None,
+                        "لا عكسَ مطلوبًا: الرفضُ قبلَ التطبيقِ فلا أثرَ يُعكَس",
+                    ),
+                ),
+            )
         assert _budget_of(rt, "science") == before, "غيرُ المُصرَّحِ به غيَّرَ حالة."
 
     def test_local_authorization_denial_writes_no_row(

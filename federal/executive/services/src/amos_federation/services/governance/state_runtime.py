@@ -4,6 +4,7 @@ AMOS-Federation Phase 12 — State Runtime
 النطاق: services/governance/state_runtime
 المالك: federal/executive/services
 تاريخ الإنشاء: 2026-08-15
+تاريخ آخر تعديل: 2026-08-22 (W-019 — نقضُ سابقةِ 2A: فعلٌ غيرُ دستوريٍّ وفاعلٌ تنفيذيّ)
 
 المتطلبات (من خارطة الطريق):
   12.1: State Runtime بحيث كل ولاية لها services/agents/tools منفصلة
@@ -33,12 +34,21 @@ from amos_federation.services.executive_core.sovereignty_bridge import (
     operation_key,
 )
 
-#: فاعلُ العمليّة: `allocate_budget` اختصاصُ الخزانةِ في المادة الثالثة، والبوابةُ
-#: ترفضُه لفاعلٍ تنفيذيٍّ بـ R-003-1. فالفاعلُ يُعلَنُ صادقًا لا يُقنَّعُ باسمٍ آخر.
-TREASURY_ACTOR = "TREASURY"
+#: وحدةُ تقويمِ العمودِ الذي تكتبُ فيه هذه الوحدة — مُعلَنةٌ في المخطَّطِ نفسِه
+#: (`StateModel.budget` أدناه: `# amos-credit`)، وتُقرأُ هنا ولا تُستنبَط.
+BUDGET_UNIT = "amos-credit"
 
-#: فعلُ التوزيعِ كما يعرفُه الدستورُ نفسُه — لا اسمٌ محليٌّ يوازيه.
-ACTION_ALLOCATE_BUDGET = "allocate_budget"
+#: فعلُ العمليّة بعدَ **نقضِ سابقةِ 2A** (W-019 · أثرُ القرارِ Q-17 · الخيارِ 2).
+#:
+#: كانَ الفعلُ `allocate_budget` — وهو **حصرُ الخزانةِ** في المادة الثالثة. وقُضِيَ
+#: في Q-17 أنَّ `amos-credit` **وحدةُ قياسٍ تشغيليّةٌ لا مالٌ دستوريّ**، وهذا العمودُ
+#: مقوَّمٌ بها. فكانت السابقةُ تُمارِسُ فعلًا حصريًّا على **غيرِ مال**: تُوهِمُ حركةَ
+#: مالٍ عامٍّ حيثُ لا مالَ عامّ، وتُميِّعُ حصريّةَ الفعلِ التي يحرسُها R-003-1.
+#:
+#: فصارَ للعمليّةِ فعلُها الصريحُ، مُثبَتًا في `NON_CONSTITUTIONAL_MONEY_ACTIONS` في
+#: `core/constitutional_engine/rules.py`. وما بقيَ كما هو: الحدُّ السياديُّ نفسُه —
+#: أثرٌ مُعلَنٌ قبلَ وقوعِه، ومفتاحُ عمليّةٍ، ومعوّضٌ يعكسُ الفرقَ فعلًا.
+ACTION_ALLOCATE_OPERATIONAL_CREDIT = "allocate_operational_credit"
 
 #: نطاقُ مفاتيحِ الذرّيّة (1H) لتوزيعِ الميزانية.
 BUDGET_OPERATION_SCOPE = "state_runtime.budget.allocate"
@@ -145,20 +155,28 @@ class StateRuntime:
         StateBase.metadata.create_all(self._engine)
         self._Session = sessionmaker(bind=self._engine, autoflush=False, expire_on_commit=False)
         self._init_states()
-        # 2A: المُصرِّحُ نفسُه لا مُصرِّحٌ ثانٍ — والفاعلُ خزانةٌ لأنَّ `allocate_budget`
-        # اختصاصُ الخزانةِ في المادة الثالثة، وتمريرُه فاعلًا تنفيذيًّا يُرفَض بـ R-003-1.
+        # المُصرِّحُ نفسُه لا مُصرِّحٌ ثانٍ. والفاعلُ **تنفيذيٌّ** بعدَ نقضِ سابقةِ 2A:
+        # لا يُوسَمُ كائنُ التشغيلِ كلُّه بفاعلِ خزانةٍ (وهذا نصُّ ما منعَه Q-19)،
+        # والصادقُ أنَّ عدَّ وحدةٍ تشغيليّةٍ في خدمةٍ تنفيذيّةٍ عملُ الفرعِ التنفيذيّ.
         self._authorizer = authorizer
 
     @property
     def authorizer(self) -> ConstitutionalAuthorizer:
-        """المُصرِّحُ السياديُّ بفاعلِ الخزانة — يُبنى عندَ أوّلِ حاجةٍ أو يسقطُ صريحًا."""
+        """المُصرِّحُ السياديُّ بالفاعلِ التنفيذيِّ الافتراضيّ — يُبنى عندَ أوّلِ حاجة.
+
+        لا `actor=` هنا: الفاعلُ الافتراضيُّ في الجسرِ هو `EXECUTIVE`، فلا وسمَ
+        جملةٍ بفرعٍ آخر. ومن أرادَ فاعلًا آخرَ يُمرِّرُ مُصرِّحَه صريحًا فيُقرأُ
+        إعلانُه عندَ موضعِه لا يُخفى في بناءِ الخدمة.
+        """
         if self._authorizer is None:
-            self._authorizer = ConstitutionalAuthorizer(actor=TREASURY_ACTOR)
+            self._authorizer = ConstitutionalAuthorizer()
         return self._authorizer
 
-    # ── المسارُ القديمُ المُغلَق · 2A ─────────────────────────────────────
+    # ── المسارُ القديمُ المُغلَق · 2A (والحدُّ باقٍ بعدَ نقضِها) ──────────
     def _allocate_budget_unguarded(self, state_id: str, amount: str) -> None:
         """مسارٌ **مُغلَقٌ** منذ 2A — يُرفَعُ دائمًا ولا يمسُّ ميزانيةً.
+
+        نقضُ سابقةِ 2A غيَّرَ **الفعلَ والفاعلَ** لا الحدَّ: هذا المسارُ يبقى مُغلَقًا.
 
         هذا هو شكلُ الكتابةِ التي كانت تقعُ قبلَ 2A: قراءةُ الميزانيةِ وجمعُها
         وتثبيتُها بلا إذنٍ سياديٍّ ولا أثرٍ مُعلَنٍ ولا ذرّيّةٍ ولا معوّض. وبقاءُ
@@ -167,7 +185,7 @@ class StateRuntime:
         raise UndeclaredExecutionError(
             f"توزيعُ ميزانيةٍ مباشرٌ على الولاية «{state_id}» بمقدار «{amount}» "
             "لا يعبرُ حدَّ التنفيذِ السياديَّ. المسارُ الوحيدُ هو `allocate_budget` "
-            "بإذنِ خزانةٍ وأثرٍ مُعلَنٍ ومفتاحِ عمليّةٍ ومعوّضٍ يعكسُ الفرقَ فعلًا."
+            "بإذنٍ سياديٍّ وأثرٍ مُعلَنٍ ومفتاحِ عمليّةٍ ومعوّضٍ يعكسُ الفرقَ فعلًا."
         )
 
     def _add_to_budget(self, state_id: str, delta: int) -> int | None:
@@ -383,11 +401,16 @@ class StateRuntime:
         reason: str = "",
         allocation_id: str | None = None,
     ) -> dict[str, Any]:
-        """12.4: توزيع الميزانية الفدرالية — عبرَ حدِّ التنفيذِ السياديّ (2A).
+        """12.4: توزيع الميزانية الفدرالية — عبرَ حدِّ التنفيذِ السياديّ (2A · مَنقوضةً في W-019).
 
         الفرقُ عن ما قبلَ 2A ليس شكليًّا: الأثرُ يُعلَنُ قبلَ وقوعِه، والإذنُ من
-        البوابةِ بفاعلِ **الخزانة** (المادة الثالثة: `allocate_budget` اختصاصُها)،
-        والعمليّةُ ذرّيّةٌ بمفتاحٍ، ولها معوّضٌ يعكسُ الفرقَ فعلًا.
+        البوابةِ نفسِها، والعمليّةُ ذرّيّةٌ بمفتاحٍ، ولها معوّضٌ يعكسُ الفرقَ فعلًا.
+
+        **وما نُقِضَ (W-019):** الفعلُ لم يعدُ `allocate_budget` الحصريَّ، والفاعلُ لم
+        يعدُ خزانةً. فهذا العمودُ مقوَّمٌ بـ`amos-credit`، وقُضِيَ في Q-17 أنَّها وحدةُ
+        قياسٍ تشغيليّةٌ لا مالٌ دستوريّ. فلا يُمارَسُ عليها حصرُ الخزانة، ولا يُقالُ
+        للبوابةِ إنَّ مالًا عامًّا يتحرَّك. ولم يُنقَصِ حرسٌ: المراحلُ الإلزاميّةُ كلُّها
+        قائمةٌ، و`allocate_budget` ما زالَ مرفوضًا على الفاعلِ التنفيذيِّ في البوابةِ نفسِها.
 
         `allocation_id` مفتاحُ العمليّةِ من المُنادي: توزيعانِ مقصودانِ بالمقدارِ
         نفسِه عمليّتانِ مختلفتانِ، فيُمرَّرُ لكلٍّ مفتاحُه. وإذا لم يُمرَّر اشتُقَّ
@@ -406,7 +429,9 @@ class StateRuntime:
         delta = int(amount)
         target = f"federal_states/{state_id}"
         effect = declared_effect(
-            "WRITE", f"{target}/budget", f"توزيعُ ميزانيةٍ بمقدار {delta}: {reason or 'بلا سبب'}"
+            "WRITE",
+            f"{target}/budget",
+            f"توزيعُ ميزانيةٍ بمقدار {delta} {BUDGET_UNIT}: {reason or 'بلا سبب'}",
         )
 
         def _apply(_effect: Any) -> dict[str, Any]:
@@ -416,10 +441,17 @@ class StateRuntime:
                 raise BudgetAllocationError(
                     f"الولاية «{state_id}» غابت بينَ الفحصِ والتطبيق — لا أثرَ يُزعَم"
                 )
+            # الفاعلُ في التدقيقِ صادقٌ بعدَ النقض: من كتبَ هو زمنُ تشغيلِ الولاياتِ
+            # لا الخزانةُ — ووحدةُ المبلغِ مُعلَنةٌ فلا يُقرأُ الرقمُ غدًا مالًا عامًّا.
             PersistentAuditStore().append(
                 "state.budget_allocated",
-                "treasury",
-                {"state_id": state_id, "amount": amount, "reason": reason},
+                "state_runtime",
+                {
+                    "state_id": state_id,
+                    "amount": amount,
+                    "unit": BUDGET_UNIT,
+                    "reason": reason,
+                },
             )
             return {
                 "state_id": state_id,
@@ -429,7 +461,7 @@ class StateRuntime:
             }
 
         guarded = self.authorizer.guard_declared(
-            ACTION_ALLOCATE_BUDGET,
+            ACTION_ALLOCATE_OPERATIONAL_CREDIT,
             target,
             declared_effects=(effect,),
             applier=_apply,
@@ -444,7 +476,12 @@ class StateRuntime:
                     "طرحُ المقدارِ المُوزَّعِ من الميزانية — عكسٌ حقيقيٌّ للفرق",
                 ),
             ),
-            metadata={"state_id": state_id, "amount": amount, "reason": reason},
+            metadata={
+                "state_id": state_id,
+                "amount": amount,
+                "unit": BUDGET_UNIT,
+                "reason": reason,
+            },
         )
         if guarded.is_replay:
             # إعادةٌ لمفتاحٍ مُثبَّت: لا توزيعَ ثانيًا. والصدقُ أن يُقال «أُعيدَ».

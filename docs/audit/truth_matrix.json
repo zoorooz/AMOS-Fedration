@@ -7,7 +7,7 @@
       "md_files": 67,
       "py_files": 41,
       "yaml_files": 0,
-      "code_lines": 14728,
+      "code_lines": 14729,
       "nucleus_count": 14,
       "nucleus_status": {
         "unspecified": 14
@@ -19,7 +19,7 @@
       "secret_hits": 0,
       "observed_hits": 3,
       "api_routes": 0,
-      "test_refs": 447,
+      "test_refs": 451,
       "identity_violations": 2,
       "test_evidence": "PASS",
       "coverage_evidence": "PASS",
@@ -40,7 +40,7 @@
           "COVERAGE": "PASS",
           "DEPLOYMENT": "ABSENT"
         },
-        "TEST_NAME_MENTIONS": 447
+        "TEST_NAME_MENTIONS": 451
       },
       "maturity": "UNIT_TESTED",
       "findings_count": 2
@@ -91,9 +91,9 @@
     "federal": {
       "domain": "federal",
       "md_files": 60,
-      "py_files": 219,
+      "py_files": 220,
       "yaml_files": 3,
-      "code_lines": 61982,
+      "code_lines": 62238,
       "nucleus_count": 7,
       "nucleus_status": {
         "unspecified": 7
@@ -105,7 +105,7 @@
       "secret_hits": 0,
       "observed_hits": 127,
       "api_routes": 178,
-      "test_refs": 165,
+      "test_refs": 167,
       "identity_violations": 2,
       "test_evidence": "PASS",
       "coverage_evidence": "PASS",
@@ -126,7 +126,7 @@
           "COVERAGE": "PASS",
           "DEPLOYMENT": "ABSENT"
         },
-        "TEST_NAME_MENTIONS": 165
+        "TEST_NAME_MENTIONS": 167
       },
       "maturity": "UNIT_TESTED",
       "findings_count": 83
@@ -363,7 +363,7 @@
       "secret_hits": 0,
       "observed_hits": 0,
       "api_routes": 0,
-      "test_refs": 68,
+      "test_refs": 78,
       "identity_violations": 2,
       "test_evidence": "ABSENT",
       "coverage_evidence": "ABSENT",
@@ -384,7 +384,7 @@
           "COVERAGE": "ABSENT",
           "DEPLOYMENT": "ABSENT"
         },
-        "TEST_NAME_MENTIONS": 68
+        "TEST_NAME_MENTIONS": 78
       },
       "maturity": "IMPLEMENTED",
       "findings_count": 2
@@ -492,7 +492,7 @@
       "secret_hits": 0,
       "observed_hits": 0,
       "api_routes": 0,
-      "test_refs": 138,
+      "test_refs": 139,
       "identity_violations": 1,
       "test_evidence": "PASS",
       "coverage_evidence": "ABSENT",
@@ -513,7 +513,7 @@
           "COVERAGE": "ABSENT",
           "DEPLOYMENT": "ABSENT"
         },
-        "TEST_NAME_MENTIONS": 138
+        "TEST_NAME_MENTIONS": 139
       },
       "maturity": "INTEGRATED",
       "findings_count": 0
@@ -817,7 +817,7 @@
     {
       "kind": "SILENT_FALLBACK",
       "path": "federal/executive/services/tests/test_2a_sovereign_runtime_integration.py",
-      "line": 375,
+      "line": 406,
       "detail": "استثناء يُبتلع بلا تسجيل ولا رفع — يخفي فشل مصدر الحقيقة",
       "severity": "MEDIUM"
     },
