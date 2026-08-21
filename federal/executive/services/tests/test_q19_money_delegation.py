@@ -193,7 +193,10 @@ def test_authorize_money_layer_cannot_be_called_without_an_entrypoint() -> None:
     assert "entrypoint: str," in signature
     body_start = source.index("if grant_required:", source.index("def _authorize_money("))
     prelude = source[source.index("def _authorize_money(") : body_start]
-    assert "resolve_money_delegation(operation, entrypoint=entrypoint)" in prelude
+    # بعدَ تنفيذِ Q-31 (W-015) لم يبقَ نداءُ تفويضٍ عارٍ هنا: صارَ إحضارُ التفويضِ
+    # داخلَ نقطةِ الفرضِ نفسِها، فيُحضَرُ التفويضُ ويُعرَضُ على المُحرِّكِ بنداءٍ واحد.
+    assert "require_constitutional_money_authority(" in prelude
+    assert "entrypoint=entrypoint" in prelude
 
 
 def test_every_money_call_site_count_matches_the_declared_table() -> None:
@@ -203,12 +206,16 @@ def test_every_money_call_site_count_matches_the_declared_table() -> None:
     """
     treasury = _source(TREASURY_SRC).count("resolve_money_delegation(")
     economy = _source(ECONOMY_SRC).count("resolve_money_delegation(")
-    # العددُ مقيسٌ لا مُقدَّر: في الخزانةِ أربعةُ نداءاتٍ مباشرةٍ للعمليّاتِ
-    # التي لا تعبُرُ طبقةَ التخويل، ونداءٌ واحدٌ داخلَ `_authorize_money` يخدمُ
-    # الأربعَ الباقيةَ لأنّها تُمرِّرُ مدخلَها معامَلًا — فخمسة. وفي
-    # الاقتصادِ نداءانِ مباشران. وسطرُ الاستيرادِ لا يُعدُّ لأنّه لا يحملُ قوسًا.
-    assert treasury == 5
+    # العددُ مقيسٌ لا مُقدَّر، وتغيّرَ بتنفيذِ Q-31 (W-015): كانَ في الخزانةِ
+    # خمسةُ نداءاتٍ، ثمَّ اندمجَ نداءُ `_authorize_money` في نقطةِ الفرضِ
+    # الدستوريّةِ التي تُحضِرُ التفويضَ بنفسِها، فبقيَ أربعةٌ مباشرةٌ للعمليّاتِ
+    # التي لا تعبُرُ طبقةَ التخويل. وفي الاقتصادِ نداءانِ مباشران لم يتغيّرا.
+    # وسطرُ الاستيرادِ لا يُعدُّ لأنّه لا يحملُ قوسًا.
+    assert treasury == 4
     assert economy == 2
+    # مجموعُ المواضعِ عشرةٌ كما كان: ستّةٌ تُحضِرُ تفويضَها مباشرةً،
+    # وأربعةٌ تمرُّ بطبقةِ التخويلِ فتُحضَرُ لها هناك — وهي وحدها المفروضةُ دستوريًّا.
+    assert treasury + economy == 6
     assert len(MONEY_DELEGATIONS) == len(MEASURED_CALL_SITES) == 10
 
 
@@ -238,15 +245,18 @@ def test_the_2a_precedent_still_carries_the_wholesale_tag_it_is_measured_not_den
     assert "ConstitutionalAuthorizer(actor=TREASURY_ACTOR)" in runtime
 
 
-# ── 6 · الحدُّ المُعلَن: المُحرِّكُ لم يُوصَلْ بعد (Q-31) ─────────────────
-def test_engine_is_not_yet_invoked_in_the_money_path_and_that_is_declared() -> None:
-    """لا يُدَّعى ما ليس مفروضًا: مسارُ المالِ لا يستدعي المُحرِّكَ بعد.
+# ── 6 · الوصلُ المفروض: المُحرِّكُ يُسأَلُ في مسارِ المال (Q-31 · W-015) ──
+def test_engine_is_invoked_in_the_money_path_through_one_enforcement_point() -> None:
+    """المُحرِّكُ صارَ مَوصولًا — وهذا القيدُ نقضٌ مُعلَنٌ لقيدٍ سابق.
 
-    قرارُ **Q-31** حُسِمَ بالخيارِ الثاني (الوصلُ في طبقةِ التخويلِ وحدَها) ويُنفَّذُ
-    بعدَ هذا القيد. وحتّى يُنفَّذَ، هذا الاختبارُ يُثبِّتُ الحدَّ صريحًا فلا تُقرأُ
-    وثيقةُ Q-19 على أنّها أنجزَت ما لم تُنجِزْه. ومن وصلَ المُحرِّكَ غدًا يسقطُ هنا
-    فيُحدِّثُ الوثيقةَ مع الوصلِ — وذلك مقصودٌ لا عَرَض.
+    كانَ هذا الاختبارُ يُثبِّتُ أنَّ المُحرِّكَ **لم يُوصَلْ** بعد، وكانَ ذلك صادقًا يومَ
+    كُتِب. ثمَّ نُفِّذَ **Q-31** بالخيارِ الثاني (W-015)، فصارَ نصُّه القديمُ دعوى
+    كاذبةً لو بَقِي. فنُقِضَ صراحةً لا صمتًا: يُثبِّتُ اليومَ الوصلَ نفسَه، ويُثبِّتُ
+    معه القيدَ الذي بَقِيَ صحيحًا — أنَّ الخزانةَ **لا تبني مُحرِّكًا لنفسِها**، بل
+    تسألُ نقطةَ فرضٍ واحدةً، فلا جسرَ ثانيًا ولا `ActionRequest` مُختلَقًا هنا.
     """
     treasury = _source(TREASURY_SRC)
+    assert "require_constitutional_money_authority" in treasury
     assert "ActionRequest" not in treasury
     assert "ConstitutionalEngine" not in treasury
+    assert "ConstitutionalAuthorizer" not in treasury

@@ -72,6 +72,9 @@ from amos_federation.common.database import get_session_factory, init_db
 from amos_federation.common.money_delegation import resolve_money_delegation
 from amos_federation.common.principal import DEFAULT_TENANT
 from amos_federation.services.executive_core.engine import get_executive_core
+from amos_federation.services.executive_core.money_authority import (
+    require_constitutional_money_authority,
+)
 from amos_federation.services.government_services.models import CaseModel, DecisionModel
 from amos_federation.services.national_registry.models import TransactionAuthorityModel
 from amos_federation.services.national_registry.resolver import (
@@ -390,9 +393,20 @@ class StateTreasury:
           ولا يُمرّر له `claimed_official_id` إلى المُحلّل: سلطته ليست من هوية،
           فلا يُقاس ادّعاءه بمناصب هويةٍ لا يُشترط أن توجد.
         """
-        # Q-19: التفويضُ يُحضَرُ قبلَ أيِّ فحصٍ آخرَ ويسبقُ لمسَ القاعدة. فعمليّةٌ
-        # ماليّةٌ بلا تفويضٍ مُعلَنٍ لا تصلُ حدَّ التخويلِ أصلًا — تُغلَقُ هنا.
-        resolve_money_delegation(operation, entrypoint=entrypoint)
+        # Q-19 ثمَّ Q-31: التفويضُ يُحضَرُ ويُعرَضُ على المُحرِّكِ الدستوريِّ قبلَ أيِّ
+        # فحصٍ آخرَ وقبلَ لمسِ القاعدة. فعمليّةٌ بلا تفويضٍ مُعلَنٍ، أو تفويضٌ لم
+        # يأذنْ به الدستورُ، لا يصلُ حدَّ التخويلِ أصلًا — يُغلَقُ هنا.
+        require_constitutional_money_authority(
+            operation,
+            entrypoint=entrypoint,
+            target=f"institution:{institution_id}",
+            metadata={
+                "budget_id": budget_id,
+                "account_id": account_id,
+                "amount": None if amount is None else str(amount),
+                "grant_required": grant_required,
+            },
+        )
         if grant_required:
             decision = require_treasury_authority(
                 session,
