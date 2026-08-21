@@ -52,6 +52,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import func, select
 
 from amos_federation.common.database import get_session_factory, init_db
+from amos_federation.common.money_delegation import resolve_money_delegation
 from amos_federation.common.principal import DEFAULT_TENANT
 from amos_federation.services.executive_core import get_executive_core
 from amos_federation.services.federal_state.authority import require_government_authority
@@ -1292,6 +1293,9 @@ class NationalEconomy:
         claimed_official_id: str | None = None,
     ) -> dict[str, Any]:
         """أجِز إنفاقًا قبل أيّ حركةِ مال — حالتُها `authorized` وبلا مرجعِ حركة."""
+        resolve_money_delegation(
+            "economy.expenditure.authorize", entrypoint="authorize_expenditure"
+        )
         require_domain_permission(
             context, "economy.expenditure.authorize", PERMISSIONS_ECONOMY_EXECUTE
         )
@@ -1713,6 +1717,9 @@ class NationalEconomy:
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         """اصرف تحويلًا مُجازًا بالخزانة القائمة — لا محرّكَ نقلِ مالٍ ثانيًا."""
+        resolve_money_delegation(
+            "economy.transfer.execute", entrypoint="execute_transfer"
+        )
         require_domain_permission(context, "economy.transfer.execute", PERMISSIONS_ECONOMY_EXECUTE)
         tenant = self._tenant_of(context)
         session = self._session()

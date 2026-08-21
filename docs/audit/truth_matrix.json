@@ -19,7 +19,7 @@
       "secret_hits": 0,
       "observed_hits": 3,
       "api_routes": 0,
-      "test_refs": 437,
+      "test_refs": 439,
       "identity_violations": 2,
       "test_evidence": "PASS",
       "coverage_evidence": "PASS",
@@ -40,7 +40,7 @@
           "COVERAGE": "PASS",
           "DEPLOYMENT": "ABSENT"
         },
-        "TEST_NAME_MENTIONS": 437
+        "TEST_NAME_MENTIONS": 439
       },
       "maturity": "UNIT_TESTED",
       "findings_count": 2
@@ -91,9 +91,9 @@
     "federal": {
       "domain": "federal",
       "md_files": 60,
-      "py_files": 215,
+      "py_files": 217,
       "yaml_files": 3,
-      "code_lines": 61204,
+      "code_lines": 61645,
       "nucleus_count": 7,
       "nucleus_status": {
         "unspecified": 7
@@ -105,7 +105,7 @@
       "secret_hits": 0,
       "observed_hits": 127,
       "api_routes": 178,
-      "test_refs": 154,
+      "test_refs": 156,
       "identity_violations": 2,
       "test_evidence": "PASS",
       "coverage_evidence": "PASS",
@@ -126,7 +126,7 @@
           "COVERAGE": "PASS",
           "DEPLOYMENT": "ABSENT"
         },
-        "TEST_NAME_MENTIONS": 154
+        "TEST_NAME_MENTIONS": 156
       },
       "maturity": "UNIT_TESTED",
       "findings_count": 83
@@ -363,7 +363,7 @@
       "secret_hits": 0,
       "observed_hits": 0,
       "api_routes": 0,
-      "test_refs": 64,
+      "test_refs": 67,
       "identity_violations": 2,
       "test_evidence": "ABSENT",
       "coverage_evidence": "ABSENT",
@@ -384,7 +384,7 @@
           "COVERAGE": "ABSENT",
           "DEPLOYMENT": "ABSENT"
         },
-        "TEST_NAME_MENTIONS": 64
+        "TEST_NAME_MENTIONS": 67
       },
       "maturity": "IMPLEMENTED",
       "findings_count": 2
@@ -492,7 +492,7 @@
       "secret_hits": 0,
       "observed_hits": 0,
       "api_routes": 0,
-      "test_refs": 132,
+      "test_refs": 133,
       "identity_violations": 1,
       "test_evidence": "PASS",
       "coverage_evidence": "ABSENT",
@@ -513,7 +513,7 @@
           "COVERAGE": "ABSENT",
           "DEPLOYMENT": "ABSENT"
         },
-        "TEST_NAME_MENTIONS": 132
+        "TEST_NAME_MENTIONS": 133
       },
       "maturity": "INTEGRATED",
       "findings_count": 0

@@ -69,6 +69,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from amos_federation.common.database import get_session_factory, init_db
+from amos_federation.common.money_delegation import resolve_money_delegation
 from amos_federation.common.principal import DEFAULT_TENANT
 from amos_federation.services.executive_core.engine import get_executive_core
 from amos_federation.services.government_services.models import CaseModel, DecisionModel
@@ -368,6 +369,7 @@ class StateTreasury:
         context: AuthorizationContext,
         operation: str,
         *,
+        entrypoint: str,
         required: tuple[str, ...],
         grant_required: bool,
         institution_id: str,
@@ -388,6 +390,9 @@ class StateTreasury:
           ولا يُمرّر له `claimed_official_id` إلى المُحلّل: سلطته ليست من هوية،
           فلا يُقاس ادّعاءه بمناصب هويةٍ لا يُشترط أن توجد.
         """
+        # Q-19: التفويضُ يُحضَرُ قبلَ أيِّ فحصٍ آخرَ ويسبقُ لمسَ القاعدة. فعمليّةٌ
+        # ماليّةٌ بلا تفويضٍ مُعلَنٍ لا تصلُ حدَّ التخويلِ أصلًا — تُغلَقُ هنا.
+        resolve_money_delegation(operation, entrypoint=entrypoint)
         if grant_required:
             decision = require_treasury_authority(
                 session,
@@ -839,6 +844,7 @@ class StateTreasury:
         institution_code: str | None = None,
     ) -> dict[str, Any]:
         """أسِّس خزانة بعملة واحدة، تابعةً لمؤسسة أو مركزية."""
+        resolve_money_delegation("treasury.establish", entrypoint="establish_treasury")
         require_domain_permission(context, "treasury.establish", PERMISSIONS_TREASURY_ESTABLISH)
         currency_code = normalize_currency(currency)
         if not name.strip():
@@ -897,6 +903,7 @@ class StateTreasury:
         department_code: str | None = None,
     ) -> dict[str, Any]:
         """افتح حسابًا في خزانة — بلا رصيد ابتدائي: الرصيد من الدفتر لا من مدخل."""
+        resolve_money_delegation("treasury.account.open", entrypoint="open_account")
         require_domain_permission(context, "treasury.account.open", PERMISSIONS_ACCOUNT_OPEN)
         if kind not in ACCOUNT_KINDS:
             raise TreasuryError(f"نوع حساب غير معروف: '{kind}' — المسموح {list(ACCOUNT_KINDS)}")
@@ -982,6 +989,7 @@ class StateTreasury:
         department_code: str | None = None,
     ) -> dict[str, Any]:
         """أنشئ موازنة مؤسسة لفترة — حدٌّ أعلى فقط، بلا مجاميع يدخلها المستدعي."""
+        resolve_money_delegation("treasury.budget.create", entrypoint="create_budget")
         require_domain_permission(context, "treasury.budget.create", PERMISSIONS_BUDGET_WRITE)
         if not _PERIOD_PATTERN.match(period or ""):
             raise TreasuryError(
@@ -1086,6 +1094,7 @@ class StateTreasury:
                 session,
                 context,
                 "treasury.allocation.create",
+                entrypoint="allocate",
                 required=PERMISSIONS_ALLOCATION_WRITE,
                 grant_required=grant_required,
                 institution_id=budget.institution_id,
@@ -1222,6 +1231,7 @@ class StateTreasury:
                 session,
                 context,
                 "treasury.funding.post",
+                entrypoint="post_funding",
                 required=PERMISSIONS_FUNDING,
                 grant_required=grant_required,
                 institution_id=treasury.institution_id,
@@ -1331,6 +1341,7 @@ class StateTreasury:
                 session,
                 context,
                 "treasury.disbursement.post",
+                entrypoint="disburse",
                 required=PERMISSIONS_DISBURSE,
                 grant_required=grant_required,
                 institution_id=budget.institution_id,
@@ -1443,6 +1454,9 @@ class StateTreasury:
         وتُخزَّن `task_id` مفتاحًا أجنبيًّا في الحركة، فالحركة لا تدّعي تنفيذًا لا
         صفَّ له في `tasks`.
         """
+        resolve_money_delegation(
+            "treasury.disbursement.post", entrypoint="execute_decision_disbursement"
+        )
         require_domain_permission(context, "treasury.disbursement.post", PERMISSIONS_DISBURSE)
         spend = require_positive(amount, field="amount")
 
@@ -1545,6 +1559,7 @@ class StateTreasury:
                 session,
                 context,
                 "treasury.transaction.reverse",
+                entrypoint="reverse_transaction",
                 required=PERMISSIONS_REVERSAL,
                 grant_required=grant_required,
                 institution_id=institution_id,
