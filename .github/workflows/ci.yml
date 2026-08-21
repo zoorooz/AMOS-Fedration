@@ -87,7 +87,8 @@ jobs:
         # البوّابةُ بـ`ModuleNotFoundError` في الجمعِ قبلَ أن يُفحَصَ حارسٌ واحد
         # — فتسقطُ الوظيفةُ لا قانونُ الهُويّة. ولا يُستعملُ `importorskip`
         # دواءً: حارسٌ يُتخطَّى بصمتٍ ليس حارسًا (القاعدةُ 12).
-        run: pip install pytest cryptography
+        # والأسماءُ لا تُكتبُ هنا بل تُقرَأُ من الإعلانِ الواحد (T0.1).
+        run: pip install -r requirements-dev.txt
 
       - name: بوابة 1 — كل مجلد يحمل بطاقة هوية كاملة وكل ملف يُعلن هدفه
         run: python tools/governance/check_repository_identity.py .
@@ -156,7 +157,7 @@ jobs:
 
       - name: بوابة 3 — البوّابةُ نفسُها مُراقَبةٌ باختباراتها
         run: |
-          pip install pytest
+          pip install -r requirements-dev.txt
           pytest tests/governance/test_completion_ledger_gate.py -v --tb=short
 
   constitutional-kernel:
@@ -172,7 +173,8 @@ jobs:
         # فتستورد `core.constitutional_engine.rules` من `core.sovereignty.crown` وهي
         # تستند إلى Ed25519. وبغيابها كانت البوابة الأولى تسقط بـ ModuleNotFoundError
         # قبل أن تُفحص مادة دستورية واحدة — فسقطت الوظيفة لا الدستور.
-        run: pip install pytest pytest-cov cryptography
+        # والأسماءُ من الإعلانِ الواحدِ لا مبثوثةً هنا (T0.1).
+        run: pip install -r requirements-dev.txt
 
       - name: بوابة 1 — نص الدستور غير مُعدَّل (المادة الخامسة)
         run: python -m core.constitutional_engine.cli verify
@@ -213,7 +215,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: تثبيت التبعيات
-        run: pip install pytest pytest-cov cryptography
+        run: pip install -r requirements-dev.txt
 
       - name: بوابة 1 — السيادة الملكية محروسة بنيويًا
         run: python -m core.sovereignty.cli sovereignty-check
@@ -314,7 +316,7 @@ jobs:
           python-version: "3.12"
       - name: تثبيت التبعيات
         run: |
-          pip install pytest pytest-cov cryptography
+          pip install -r requirements-dev.txt
           # بوابتا الأسرار تفحصان إعدادات الخدمات فعليًّا، فتلزمهما تبعياتها.
           pip install -r federal/executive/services/requirements.lock
 
@@ -485,8 +487,12 @@ jobs:
       # docs/audit/E2_3_A_CROSS_SYSTEM_INTEGRATION_ASSESSMENT.md بند B3).
       # فبوابة تعتمده كانت ستسقط لسبب لا علاقة له بصحّة الحزم.
       - run: pip install -e "federal/executive/services[dev]"
-      # matplotlib تعتمدها اختبارات أداة الرسم ولم تُعلَن في pyproject — دَين مرصود.
-      - run: pip install matplotlib
+      # كان هنا `pip install matplotlib` مع إعلانِ دَينٍ: «لم تُعلَن في
+      # pyproject». وقُيسَ أنَّ الدَّينَ قُضِيَ فعلًا: `matplotlib>=3.9.0` مُعلَنةٌ
+      # في `federal/executive/services/pyproject.toml` ضمنَ `dependencies`،
+      # فيأتيها التركيبُ أعلاه. فالسطرُ رُفِعَ لأنَّه تكرارٌ، والإعلانُ رُفِعَ
+      # لأنَّه صارَ خلافَ المقيس (T0.7).
+      - run: pip install -r requirements-dev.txt
       # الحزم الثلاث تُشغَّل بالتسلسل داخل الأداة نفسها — التوازي يفسد ملف
       # قاعدة SQLite المشترك، وقد قيس ذلك فعلًا لا افتراضًا.
       - name: تشغيل الحزم الثلاث وتوليد المصفوفة

@@ -80,33 +80,43 @@ ConstitutionalEngine().enforce(ActionRequest(Branch.EXECUTIVE, "legislate"))
 
 ## قاعدة بيانات Supabase
 
-المشروع متصل بقاعدة بيانات Supabase (PostgreSQL 17) تحتوي على:
+المشروع متصل بقاعدة بيانات Supabase (PostgreSQL **17.6**).
 
-| الجدول | الصفوف | المجلد المرتبط |
-|---|---|---|
-| `agent_population` | 342 | agents/ |
-| `event_store` | 157 | runtime/ |
-| `audit_entries` | 10 | ops/ |
-| `tools` | 10 | tools/ |
-| `royal_guards` | 7 | royal/ |
-| `institutions` | 8 | institutions/ |
-| `school_results` | 6 | agents/ |
-| `king_decrees` | 1 | royal/ |
-| `tasks` | 1 | runtime/ |
-| `memories` | 2 | core/ |
-| `experiences` | 1 | core/ |
-| `model_cache` | 2 | tools/ |
-| `model_cost_log` | 2 | tools/ |
-| `treasury_transactions` | 0 | federal/ |
-| `treasury_budgets` | 0 | federal/ |
-| `treasury_reports` | 0 | federal/ |
-| `agent_health_checks` | 0 | royal/ |
-| `agent_isolations` | 0 | royal/ |
-| `agent_treatments` | 0 | royal/ |
-| `interface_registry` | 0 | interfaces/ |
-| `tool_generation_queue` | 0 | tools/ |
-| `agent_training_queue` | 0 | agents/ |
-| `reviews` | 0 | royal/ |
+**كان هنا جدولٌ مكتوبٌ بيدٍ يُعلن 23 جدولًا و`agent_population` = 342 و
+`event_store` = 157.** وقد قيسَت القاعدةُ الحقيقيّةُ فخالفَته خلافًا كبيرًا
+(القيد `C-3`، ثمّ `W-002`)، فرُفِعَ الجدولُ ولم يُصحَّح رقمًا رقمًا: **جردٌ
+يُصانُ بيدٍ داخلَ وثيقةٍ يَبلى بأوّلِ ترحيل**، فبقاؤه يُنتِجُ الكذبَ نفسَه بعدَ
+أسبوع. والحقيقةُ تُقرَأُ من القاعدةِ نفسِها بالأمرِ المُعلَنِ أدناه.
+
+### المقيسُ في 2026-08-21
+
+| المقياس | القيمة المقيسة |
+|---|---|
+| جداولُ `public` | **86** |
+| جداولُ المخطَّطاتِ غيرِ النظاميّةِ كلِّها | **122** (`public` 86 · `auth` 23 · `storage` 8 · `realtime` 3 · `supabase_migrations` 1 · `vault` 1) |
+| صفوفُ `agent_population` | **5,116** |
+| صفوفُ `event_store` | **1,027** |
+| صفوفُ `audit_entries` | **71** |
+
+> هذه الأرقامُ **لحظةُ قياسٍ بتاريخِها**، لا وصفًا ثابتًا. آخرُ قياسٍ سابقٍ
+> (`W-002` · 2026-08-19) أعطى **85** جدولًا في `public` و`event_store` = 1016،
+> فالفارقُ في يومين دليلٌ على أنّ الجردَ المكتوبَ بيدٍ لا يصلحُ مرجعًا.
+
+### كيف يُعادُ القياس
+
+```sql
+-- جردُ الجداولِ لكلِّ مخطَّطٍ غيرِ نظاميّ
+select table_schema, count(*) as tables
+from information_schema.tables
+where table_type = 'BASE TABLE'
+  and table_schema not in ('pg_catalog', 'information_schema')
+group by 1 order by 2 desc;
+```
+
+**حدُّ صدقٍ مُعلَن:** لا بوّابةَ في CI تحرسُ هذا القسم، لأنّ الوصولَ إلى القاعدةِ
+يلزمُه سرٌّ لا يُدفَعُ في المستودع. فمن عدَّلَ المخطَّطَ فعليه إعادةُ القياسِ
+وتحديثُ التاريخِ أعلاه وقيدُه في سجلِّ الإكمال. وربطُ هذا الجردِ بأداةٍ تُقارِنُه
+بالقاعدةِ آليًّا يبقى بندًا مفتوحًا يحتاجُ مفتاحَ خدمةٍ (واجبٌ بشريّ).
 
 ## خطة الفصل المستقبلية
 

@@ -3,7 +3,7 @@
 النطاق: `core/sovereignty/` — إذنُ الإنفاذِ والتحقّقُ منه واستهلاكُه.
 المالك: core/sovereignty/ — التاج
 تاريخ الإنشاء: 2026-08-18
-تاريخ آخر تعديل: 2026-08-18
+تاريخ آخر تعديل: 2026-08-21
 
 ## الفجوةُ التي تسدُّها هذه الوحدة
 
@@ -72,6 +72,27 @@ REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
 CONSUMED_PERMITS_PATH: Final[Path] = (
     REPO_ROOT / "royal" / "authority" / "CONSUMED_PERMITS.json"
 )
+
+#: مُتغيّرُ بيئةٍ يُعلِن موضعَ سجلِّ الأذونِ المُستهلَكةِ عندَ التشغيل.
+#:
+#: الموضعُ الافتراضيُّ أعلاه **لم يُنقَل**: هو عقدُ مرحلةٍ مغلقةٍ (1G)، ونقلُه
+#: قرارٌ بشريٌّ مُعلَنٌ في `PROJECT_STATE.md`. لكنَّ الافتراضيَّ داخلَ الشجرةِ
+#: المُتعقَّبة، فكلُّ تشغيلٍ لا يُصرِّحُ بموضعِه يكتبُ حالةَ تشغيلٍ في المستودعِ
+#: نفسِه — وقد قيسَ ذلك فعلًا: `pytest tests/sovereignty/test_supreme_authority.py`
+#: كان يُنشئُ `royal/authority/CONSUMED_PERMITS.json` في شجرةٍ نظيفة. فالمخرَجُ
+#: يُوجَّه بإعلانٍ صريحٍ في البيئةِ، ويبقى الافتراضيُّ كما هو لمن لا يُعلِن.
+CONSUMED_PERMITS_PATH_ENV: Final[str] = "AMOS_CONSUMED_PERMITS_PATH"
+
+
+def consumed_permits_path() -> Path:
+    """موضعُ سجلِّ الأذون: المُعلَنُ في البيئةِ إن أُعلِن، وإلّا الافتراضيُّ نفسُه.
+
+    يُقرَأُ عندَ كلِّ بناءٍ لا عندَ الاستيراد: قراءةٌ عندَ الاستيرادِ تُجمِّدُ
+    الموضعَ على أوّلِ لحظةٍ استُورِدَت فيها الوحدة، فيصيرُ الإعلانُ اللاحقُ بلا
+    أثرٍ — وهو سقوطٌ صامتٌ لا يُقبَل (القاعدة 16).
+    """
+    مُعلَن = os.environ.get(CONSUMED_PERMITS_PATH_ENV, "").strip()
+    return Path(مُعلَن) if مُعلَن else CONSUMED_PERMITS_PATH
 
 
 class EnforcementError(Exception):
@@ -235,7 +256,7 @@ class ConsumedPermitLedger:
     الطريقُ الذي يُهاجَم به عمليًّا.
     """
 
-    path: Path = field(default_factory=lambda: CONSUMED_PERMITS_PATH)
+    path: Path = field(default_factory=consumed_permits_path)
 
     def _load(self) -> dict[str, str]:
         if not self.path.exists():
@@ -336,6 +357,7 @@ class PolicyEnforcementPoint:
 
 __all__ = [
     "CONSUMED_PERMITS_PATH",
+    "CONSUMED_PERMITS_PATH_ENV",
     "DEFAULT_PERMIT_TTL_SECONDS",
     "PERMIT_DOMAIN",
     "ConsumedPermitLedger",
@@ -346,6 +368,7 @@ __all__ = [
     "PermitReplayError",
     "PermitScopeError",
     "PolicyEnforcementPoint",
+    "consumed_permits_path",
     "issue_permit",
     "sign_permit",
 ]

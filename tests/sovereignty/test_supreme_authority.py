@@ -2,7 +2,7 @@
 
 المالك: tests/sovereignty/ — التاج
 تاريخ الإنشاء: 2026-08-16
-تاريخ آخر تعديل: 2026-08-16
+تاريخ آخر تعديل: 2026-08-21
 """
 
 from __future__ import annotations
@@ -36,6 +36,7 @@ from core.sovereignty.gateway import (
 )
 from core.sovereignty.compensation import Compensator
 from core.sovereignty.contract import EffectKind, SovereignEffect
+from core.sovereignty.enforcement import ConsumedPermitLedger
 from core.sovereignty.enforcement_boundary import SovereignExecutionBoundary
 from core.sovereignty.gateways import (
     AgentGateway,
@@ -349,9 +350,13 @@ class Testتكامل_شامل:
         الأثرُ يُعلَن قبلَ وقوعِه ومعوّضُه مربوط، فما كان يُقاسُ على قيمةِ إرجاعٍ
         صار يُقاسُ على الحالةِ نفسِها — وهو قياسٌ أصدق.
         """
+        # سجلُّ الأذونِ يُعلَنُ موضعُه صراحةً كسجلِّ الذرّيّة: حدٌّ يُعلِنُ بعضَ
+        # مواضِعِه ويتركُ بعضَها يهبِطُ إلى الافتراضيِّ كان يكتبُ `royal/authority/`
+        # `CONSUMED_PERMITS.json` داخلَ الشجرةِ المُتعقَّبة — وقد قيس (O-1N-1).
         حدّ = SovereignExecutionBoundary(
             gateway=بوابة,
             idempotency_ledger=IdempotencyLedger(path=tmp_path / "ذرّيّة.json"),
+            consumed_permits=ConsumedPermitLedger(path=tmp_path / "أذون.json"),
         )
         بوابة_ولاية = StateGateway(بوابة, boundary=حدّ)
         نُفذ: list[str] = []
