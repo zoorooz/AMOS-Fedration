@@ -58,6 +58,18 @@ MEASURED_CALL_SITES: tuple[tuple[str, str], ...] = (
 
 
 # ── 1 · الجدولُ نفسُه ────────────────────────────────────────────────────
+@pytest.fixture(autouse=True)
+def _core_on_path() -> None:
+    """اهتدِ إلى النواةِ قبلَ كلِّ اختبارٍ — ولا يُتّكَلُ على ترتيبِ التشغيل.
+
+    قِيسَ أنَّ اختبارًا يستوردُ `core` مباشرةً كانَ ينجحُ **بحظِّ الترتيب**: اختبارٌ
+    أسبقُ ينادي `assert_lexicon_agreement()` فيُضيفُ الجذرَ إلى المسار، فيجدُهُ
+    التالي مُضافًا. ولمّا بُعثِرَ الترتيبُ سقط. وحارسٌ يعتمدُ على ترتيبٍ عِلّتُهُ
+    فيهِ لا في محروسِه، فأُصلِحَ بجذرِه: كلُّ اختبارٍ يبدأُ والنواةُ مُهتدًى إليها.
+    """
+    assert_lexicon_agreement()
+
+
 def test_every_delegation_actor_is_treasury() -> None:
     """لا فاعلَ غيرَ الخزانةِ في جدولِ المال — وإلّا فهو نقلُ اختصاصٍ مُقنَّع."""
     for delegation in MONEY_DELEGATIONS:
@@ -109,10 +121,7 @@ def test_delegation_and_lexicon_never_disagree_about_an_operation() -> None:
     from core.constitutional_engine.rules import MONEY_OPERATION_LEXICON
 
     for delegation in MONEY_DELEGATIONS:
-        assert (
-            MONEY_OPERATION_LEXICON[delegation.operation]
-            == delegation.constitutional_action
-        )
+        assert MONEY_OPERATION_LEXICON[delegation.operation] == delegation.constitutional_action
 
 
 # ── 3 · الفرضُ: الرفضُ يقعُ فعلًا ────────────────────────────────────────
@@ -217,9 +226,7 @@ def test_no_service_wide_treasury_actor_tag(path: Path) -> None:
     assert not re.search(r"actor\s*=\s*[\"']TREASURY[\"']", source)
 
 
-def test_the_2a_precedent_still_carries_the_wholesale_tag_it_is_measured_not_denied() -> (
-    None
-):
+def test_the_2a_precedent_still_carries_the_wholesale_tag_it_is_measured_not_denied() -> None:
     """سابقةُ 2A ما زالت تحملُ الوسمَ بالجملة — يُقاسُ ولا يُنكَر.
 
     نقضُ السابقةِ آخرُ الترتيبِ المُلزِمِ ولم يُنفَّذْ بعد. فيُثبَّتُ الواقعُ هنا كما

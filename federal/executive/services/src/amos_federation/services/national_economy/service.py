@@ -1717,9 +1717,7 @@ class NationalEconomy:
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         """اصرف تحويلًا مُجازًا بالخزانة القائمة — لا محرّكَ نقلِ مالٍ ثانيًا."""
-        resolve_money_delegation(
-            "economy.transfer.execute", entrypoint="execute_transfer"
-        )
+        resolve_money_delegation("economy.transfer.execute", entrypoint="execute_transfer")
         require_domain_permission(context, "economy.transfer.execute", PERMISSIONS_ECONOMY_EXECUTE)
         tenant = self._tenant_of(context)
         session = self._session()
