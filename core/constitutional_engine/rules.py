@@ -32,7 +32,82 @@ from .model import ActionRequest, Branch, CrownEffect, Severity
 LEGISLATIVE_ACTIONS = frozenset({"legislate", "enact_policy", "amend_policy", "repeal_policy"})
 JUDICIAL_ACTIONS = frozenset({"adjudicate", "arbitrate", "interpret_constitution", "issue_ruling"})
 EXECUTIVE_ACTIONS = frozenset({"execute_task", "dispatch_agent", "orchestrate", "coordinate"})
-TREASURY_ACTIONS = frozenset({"allocate_budget", "issue_tokens", "allocate_resources", "book_expense"})
+# معجمُ المالِ الدستوريّ — القرارُ السياديُّ Q-18 · الخيارُ 2 (2026-08-21).
+# كانَ المعجمُ أربعةَ أفعالٍ، فمرَّ ستةَ عشرَ فعلًا ماليًّا آخرَ `ALLOW` للتنفيذِ
+# لأنَّ البوّابةَ لا تعرفُ أسماءَها. والقرارُ وسَّعَ المعجمَ بأفعالٍ صريحة،
+# ورفضَ نصًّا أن يُسمَّى فعلُ مالٍ باسمٍ نطاقيٍّ (`treasury.disburse`) هروبًا من `DENY`.
+#
+# والتوسيعُ تضييقٌ لا توسيع: كلُّ فعلٍ يُضافُ يصيرُ حصرًا للخزانةِ فيُمنعُ على
+# الفروعِ الثلاثةِ الأخرى بـ`R-003-1` — موافقٌ لأصلِ الصياغةِ أعلاه.
+# وما لم يفعلْه: لا يَصِلُ المُحرِّكَ بمسارِ خزانةِ الدولةِ — وهو مرهونٌ بـQ-19 وQ-31.
+TREASURY_ACTIONS = frozenset({
+    # المعجمُ الأصليُّ (قبلَ Q-18)
+    "allocate_budget", "issue_tokens", "allocate_resources", "book_expense",
+    # ما كانَ ممنوعًا على القضاءِ وحدَه فصارَ حصرًا للخزانة (سدُّ ثُغرةٍ مقيسة)
+    "disburse_funds", "transfer_treasury",
+    # العمليّاتُ المُغيِّرةُ في خزانةِ الدولة — بأسماءٍ قانونيّةٍ لا نطاقيّة
+    "establish_treasury", "open_account", "create_budget",
+    "allocate_funds", "post_funding", "reverse_transaction",
+    # الاقتصادُ المركَّبُ حينَ يمسُّ الميزانيّاتَ نفسَها
+    "authorize_expenditure", "execute_transfer", "award_procurement",
+})
+
+# أفعالُ مالٍ مُستثناةٌ من المعجمِ بقرارِ Q-17: amos-credit وحدةُ قياسٍ
+# تشغيليّةٌ لا مالٌ دستوريّ. وأُثبِتَت صريحةً لأنَّ الاستثناءَ المسكوتَ عنه
+# يُقرأُ غدًا سهوًا لا قرارًا.
+NON_CONSTITUTIONAL_MONEY_ACTIONS = frozenset({
+    "reward_task_completion", "charge_model_invoke", "run_economic_cycle",
+})
+
+# جدولُ الترجمةِ من اسمِ العمليّةِ في خدمةِ خزانةِ الدولةِ إلى فعلِها المعجميّ.
+# يُعلَنُ الآنَ ولا يُفرَضُ الآن: الفرضُ يقتضي حسمَ فاعلِ الخزانةِ في Q-19، فلو
+# فُرِضَ اليومَ بفاعلٍ تنفيذيٍّ لصارَ كلُّ تحريكِ مالٍ `DENY` وتعطَّلَتِ الخزانة.
+MONEY_OPERATION_LEXICON: dict[str, str] = {
+    "treasury.establish": "establish_treasury",
+    "treasury.account.open": "open_account",
+    "treasury.budget.create": "create_budget",
+    "treasury.allocate": "allocate_funds",
+    "treasury.allocation.create": "allocate_funds",
+    "treasury.funding.post": "post_funding",
+    "treasury.disburse": "disburse_funds",
+    "treasury.disbursement.post": "disburse_funds",
+    "treasury.decision.disburse": "disburse_funds",
+    "treasury.transaction.reverse": "reverse_transaction",
+    "economy.expenditure.authorize": "authorize_expenditure",
+    "economy.transfer.execute": "execute_transfer",
+    "economy.procurement.award": "award_procurement",
+}
+
+
+def _assert_money_lexicon_canonical() -> None:
+    """احرسْ صيغةَ معجمِ المالِ عندَ الاستيراد — لا اسمَ نطاقيًّا لفعلِ مالٍ (Q-18).
+
+    تسميةُ فعلِ المالِ باسمٍ نطاقيٍّ هي بابُ «تحييدِ فعلٍ حصريٍّ هروبًا من DENY»،
+    وقد رُفِضَت نصًّا. فتُمنعُ هنا بنيةً لا وصيّةً: من أضافَ `treasury.disburse`
+    إلى المعجمِ غدًا لن يمرَّ استيرادُ الوحدةِ أصلًا.
+
+    Raises:
+        ValueError: اسمٌ نطاقيّ، أو فعلٌ في المعجمِ والمُستثنى معًا، أو
+            جدولُ ترجمةٍ يُحيلُ إلى فعلٍ خارجَ المعجم.
+    """
+    for action in TREASURY_ACTIONS | NON_CONSTITUTIONAL_MONEY_ACTIONS:
+        if "." in action:
+            raise ValueError(
+                f"فعلُ المالِ «{action}» مُسمًّى باسمٍ نطاقيّ. التسميةُ النطاقيّةُ لفعلِ مالٍ "
+                "مرفوضةٌ نصًّا (Q-18) — تُحيِّدُ حصريّةَ الفعلِ وتُبطلُ R-003-1."
+            )
+    overlap = TREASURY_ACTIONS & NON_CONSTITUTIONAL_MONEY_ACTIONS
+    if overlap:
+        raise ValueError(
+            f"فعلٌ ماليٌّ في المعجمِ وفي المُستثنى معًا: {sorted(overlap)}. لا فعلَ "
+            "يكونُ مالًا دستوريًّا وغيرَ دستوريٍّ في آنٍ واحد."
+        )
+    unknown = set(MONEY_OPERATION_LEXICON.values()) - TREASURY_ACTIONS
+    if unknown:
+        raise ValueError(f"جدولُ الترجمةِ يُحيلُ إلى أفعالٍ ليست في المعجم: {sorted(unknown)}.")
+
+
+_assert_money_lexicon_canonical()
 
 # أفعال تمس البقاء والتكاثر — المادة الأولى، الحق الأول
 HUMAN_GATED_ACTIONS = frozenset({

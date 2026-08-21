@@ -38,6 +38,16 @@ CANDIDATES = [
     "reward_task_completion",
     "charge_model_invoke",
     "run_economic_cycle",
+    # الأفعالُ القانونيّةُ المُضافةُ إلى المعجمِ بقرارِ Q-18 — تُسبَرُ لتُقاسَ لا لتُدَّعى
+    "establish_treasury",
+    "open_account",
+    "create_budget",
+    "allocate_funds",
+    "post_funding",
+    "reverse_transaction",
+    "authorize_expenditure",
+    "execute_transfer",
+    "award_procurement",
 ]
 
 engine = ConstitutionalEngine()
