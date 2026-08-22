@@ -1,103 +1,53 @@
 # =============================================================================
 # File:        royal/stubs/guard_check.py
-# Purpose:     فحص الحرس الملكي — إرجاع بيانات حقيقية من قاعدة البيانات (7 حراس + مرسوم)
+# Purpose:     فحص الحرس الملكي — قياسٌ حيٌّ لعدد الحرّاس والمراسيم
 # Owner:       royal/
 # Created:     2026-08-15
+# Last Modified: 2026-08-22 (W-025)
 # Phase:       P3 (Working Nuclei)
 # Article 009: هذا الملف يلتزم بالمادة 009 — الشفافية والمراجعة المستمرة.
-#              جميع البيانات مأخوذة من قاعدة بيانات Supabase ومخزنة كذاكرة مؤقتة.
+#              لا يحمل هذا الملف رقمًا ثابتًا ولا نسخةً مؤقّتة: العدد يُقاس لحظة
+#              النداء من قاعدة البيانات، وإن لم يكن المصدر مهيَّأً أُعلنت الحالة
+#              `unmeasured` — وهي ليست `pass`.
 # =============================================================================
 """
-أداة فحص الحرس الملكي (Royal Guard Check) — Phase P3 Stub.
+أداة فحص الحرس الملكي (Royal Guard Check).
 
-تُرجع بيانات حقيقية مخزنة كذاكرة مؤقتة (cached DB data) لـ 7 حراس ملكيين
-و مرسوم ملكي واحد لتأسيس الدولة الفدرالية الملكية.
+الهدف: قياسُ حالةِ الإقليمِ من مصدرِ الحقيقةِ الحيِّ لحظةَ النداء، لا اقتباسُ
+       ثابتٍ مكتوبٍ في الكود. ما يُقاس: عددُ صفوفِ `royal_guards` و`king_decrees`.
+النطاق: قراءةُ عدّاداتٍ فقط عبرَ `tools.audit.live_truth`. لا كتابةَ ولا حكم.
+المالك: royal/
+تاريخ الإنشاء: 2026-08-15
+تاريخ آخر تعديل: 2026-08-22
+
+سببُ التغيير (W-025): كان هذا الملفُ يُخزّنُ أرقامًا ثابتةً ويقارنُها بنفسِها،
+فكانت البوّابةُ تُصادِقُ على ذاتِها (tautology). القياسُ الحيُّ في 2026-08-22 أظهرَ
+أنَّ أرقامًا منها كانت مخالفةً للواقع — والتفصيلُ في
+`docs/audit/measurements/domain_truth_snapshot.json` وبندِ السجل W-025.
 """
 
-# --- Cached DB data: 7 royal guards ---
-GUARDS = [
-    {
-        "id": "Sentinel-Prime",
-        "role": "senior_auditor",
-        "responsibility": "monitor_all_governance",
-        "loyalty": 100,
-        "status": "active",
-    },
-    {
-        "id": "Sentinel-Shield",
-        "role": "security_officer",
-        "responsibility": "monitor_security_threats",
-        "loyalty": 100,
-        "status": "active",
-    },
-    {
-        "id": "Sentinel-Veil",
-        "role": "treasury_accountant",
-        "responsibility": "monitor_financial_flows",
-        "loyalty": 100,
-        "status": "active",
-    },
-    {
-        "id": "Sentinel-Forge",
-        "role": "infrastructure_engineer",
-        "responsibility": "monitor_infrastructure",
-        "loyalty": 100,
-        "status": "active",
-    },
-    {
-        "id": "Sentinel-Oracle",
-        "role": "evaluation_analyst",
-        "responsibility": "monitor_model_evolution",
-        "loyalty": 100,
-        "status": "active",
-    },
-    {
-        "id": "Sentinel-Watch",
-        "role": "memory_archivist",
-        "responsibility": "monitor_memory_integrity",
-        "loyalty": 100,
-        "status": "active",
-    },
-    {
-        "id": "Sentinel-Crown",
-        "role": "executive_advisor",
-        "responsibility": "oversee_all_guards",
-        "loyalty": 100,
-        "status": "active",
-    },
-]
+import os
+import sys
 
-# --- Cached DB data: 1 king decree ---
-DECREES = [
-    {
-        "id": "decree-9cfbafde",
-        "title": "مرسوم ملكي: تأسيس الدولة الفدرالية الملكية",
-        "type": "founding",
-        "status": "enacted",
-    },
-]
+# جذرُ المستودعِ على المسار حتى تُحَلَّ `tools.audit.live_truth` عند التشغيلِ المباشر.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+from tools.audit.live_truth import check_domain  # noqa: E402
 
 
 def check():
-    """Run the royal guard smoke check.
+    """يقيسُ عدّاداتِ إقليمِ `royal` الآن.
 
     Returns:
-        dict: domain, count, guards, decrees, status, sample (first 3 guards).
+        dict: domain، status (`pass` إن قِيسَ الآن، `unmeasured` إن لم يُهيَّأِ
+            المصدر، `fail` إن هُيِّئَ وفشلَ القياس)، source، والعدّادات.
     """
-    sample = GUARDS[:3]
-    status = "pass" if len(GUARDS) == 7 else "fail"
-    return {
-        "domain": "royal",
-        "count": len(GUARDS),
-        "guards": len(GUARDS),
-        "decrees": len(DECREES),
-        "status": status,
-        "sample": sample,
-    }
+    return check_domain("royal", {"guards": "royal_guards", "decrees": "king_decrees"})
 
 
 if __name__ == "__main__":
     import json
 
-    result = check()
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print(json.dumps(check(), ensure_ascii=False, indent=2))

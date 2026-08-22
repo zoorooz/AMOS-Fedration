@@ -1,39 +1,53 @@
 # =============================================================================
 # File:        interfaces/stubs/registry_check.py
-# Purpose:     فحص سجل الواجهات — إرجاع بيانات حقيقية من قاعدة البيانات
+# Purpose:     فحص سجل الواجهات — قياسٌ حيٌّ لعدد الواجهات المسجَّلة
 # Owner:       interfaces/
 # Created:     2026-08-15
+# Last Modified: 2026-08-22 (W-025)
 # Phase:       P3 (Working Nuclei)
 # Article 009: هذا الملف يلتزم بالمادة 009 — الشفافية والمراجعة المستمرة.
-#              جميع البيانات مأخوذة من قاعدة بيانات Supabase ومخزنة كذاكرة مؤقتة.
+#              لا يحمل هذا الملف رقمًا ثابتًا ولا نسخةً مؤقّتة: العدد يُقاس لحظة
+#              النداء من قاعدة البيانات، وإن لم يكن المصدر مهيَّأً أُعلنت الحالة
+#              `unmeasured` — وهي ليست `pass`.
 # =============================================================================
 """
-أداة فحص سجل الواجهات (Interfaces Registry Check) — Phase P3 Stub.
+أداة فحص سجل الواجهات (Interfaces Registry Check).
 
-تُرجع بيانات حقيقية مخزنة كذاكرة مؤقتة (cached DB data).
-لا توجد واجهات مسجّلة بعد (0) — وهو المتوقع في P3.
+الهدف: قياسُ حالةِ الإقليمِ من مصدرِ الحقيقةِ الحيِّ لحظةَ النداء، لا اقتباسُ
+       ثابتٍ مكتوبٍ في الكود. ما يُقاس: عددُ صفوفِ جدولِ `interface_registry`.
+النطاق: قراءةُ عدّاداتٍ فقط عبرَ `tools.audit.live_truth`. لا كتابةَ ولا حكم.
+المالك: interfaces/
+تاريخ الإنشاء: 2026-08-15
+تاريخ آخر تعديل: 2026-08-22
+
+سببُ التغيير (W-025): كان هذا الملفُ يُخزّنُ أرقامًا ثابتةً ويقارنُها بنفسِها،
+فكانت البوّابةُ تُصادِقُ على ذاتِها (tautology). القياسُ الحيُّ في 2026-08-22 أظهرَ
+أنَّ أرقامًا منها كانت مخالفةً للواقع — والتفصيلُ في
+`docs/audit/measurements/domain_truth_snapshot.json` وبندِ السجل W-025.
 """
 
-# --- Cached DB data: interfaces registry (empty — expected for P3) ---
-INTERFACES = []
+import os
+import sys
+
+# جذرُ المستودعِ على المسار حتى تُحَلَّ `tools.audit.live_truth` عند التشغيلِ المباشر.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+from tools.audit.live_truth import check_domain  # noqa: E402
 
 
 def check():
-    """Run the interfaces registry smoke check.
+    """يقيسُ عدّاداتِ إقليمِ `interfaces` الآن.
 
     Returns:
-        dict: domain, count, status, note.
+        dict: domain، status (`pass` إن قِيسَ الآن، `unmeasured` إن لم يُهيَّأِ
+            المصدر، `fail` إن هُيِّئَ وفشلَ القياس)، source، والعدّادات.
     """
-    return {
-        "domain": "interfaces",
-        "count": len(INTERFACES),
-        "status": "pass",
-        "note": "No interfaces registered yet (expected for P3)",
-    }
+    return check_domain("interfaces", {"count": "interface_registry"})
 
 
 if __name__ == "__main__":
     import json
 
-    result = check()
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print(json.dumps(check(), ensure_ascii=False, indent=2))

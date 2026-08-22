@@ -1,66 +1,53 @@
 # =============================================================================
 # File:        agents/stubs/registry_check.py
-# Purpose:     فحص سجل الوكلاء — إرجاع بيانات حقيقية من قاعدة البيانات (342 وكيل)
+# Purpose:     فحص سجل الوكلاء — قياسٌ حيٌّ لتعداد السكان من قاعدة البيانات
 # Owner:       agents/
 # Created:     2026-08-15
+# Last Modified: 2026-08-22 (W-025)
 # Phase:       P3 (Working Nuclei)
 # Article 009: هذا الملف يلتزم بالمادة 009 — الشفافية والمراجعة المستمرة.
-#              جميع البيانات مأخوذة من قاعدة بيانات Supabase ومخزنة كذاكرة مؤقتة.
+#              لا يحمل هذا الملف رقمًا ثابتًا ولا نسخةً مؤقّتة: العدد يُقاس لحظة
+#              النداء من قاعدة البيانات، وإن لم يكن المصدر مهيَّأً أُعلنت الحالة
+#              `unmeasured` — وهي ليست `pass`.
 # =============================================================================
 """
-أداة فحص سجل الوكلاء (Agents Registry Check) — Phase P3 Stub.
+أداة فحص سجل الوكلاء (Agents Registry Check).
 
-تُرجع بيانات حقيقية مخزنة كذاكرة مؤقتة (cached DB data) لـ 342 وكيلًا
-مسجّلًا في جدول agent_population. العينة أدناه تمثّل ثلاثة وكلاء فعليين.
+الهدف: قياسُ حالةِ الإقليمِ من مصدرِ الحقيقةِ الحيِّ لحظةَ النداء، لا اقتباسُ
+       ثابتٍ مكتوبٍ في الكود. ما يُقاس: عددُ صفوفِ جدولِ `agent_population` (تعدادُ السكان) وجدولِ `agents`.
+النطاق: قراءةُ عدّاداتٍ فقط عبرَ `tools.audit.live_truth`. لا كتابةَ ولا حكم.
+المالك: agents/
+تاريخ الإنشاء: 2026-08-15
+تاريخ آخر تعديل: 2026-08-22
+
+سببُ التغيير (W-025): كان هذا الملفُ يُخزّنُ أرقامًا ثابتةً ويقارنُها بنفسِها،
+فكانت البوّابةُ تُصادِقُ على ذاتِها (tautology). القياسُ الحيُّ في 2026-08-22 أظهرَ
+أنَّ أرقامًا منها كانت مخالفةً للواقع — والتفصيلُ في
+`docs/audit/measurements/domain_truth_snapshot.json` وبندِ السجل W-025.
 """
 
-# Total count of agents in agent_population table
-AGENT_COUNT = 342
+import os
+import sys
 
-# --- Cached DB data: sample agents from agent_population ---
-AGENTS_SAMPLE = [
-    {
-        "id": "agent-1aff6422",
-        "name": "منفذ معرفي 4",
-        "type": "cognitive_executor",
-        "tier": "cognitive",
-        "status": "registered",
-    },
-    {
-        "id": "agent-447d7770",
-        "name": "منفذ معرفي 5",
-        "type": "cognitive_executor",
-        "tier": "cognitive",
-        "status": "registered",
-    },
-    {
-        "id": "agent-f3ca5c9c",
-        "name": "منفذ تشغيلي 1",
-        "type": "operational_executor",
-        "tier": "operational",
-        "status": "registered",
-    },
-]
+# جذرُ المستودعِ على المسار حتى تُحَلَّ `tools.audit.live_truth` عند التشغيلِ المباشر.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+from tools.audit.live_truth import check_domain  # noqa: E402
 
 
 def check():
-    """Run the agents registry smoke check.
+    """يقيسُ عدّاداتِ إقليمِ `agents` الآن.
 
     Returns:
-        dict: domain, count, status, sample (3 agents).
+        dict: domain، status (`pass` إن قِيسَ الآن، `unmeasured` إن لم يُهيَّأِ
+            المصدر، `fail` إن هُيِّئَ وفشلَ القياس)، source، والعدّادات.
     """
-    sample = AGENTS_SAMPLE[:3]
-    status = "pass" if AGENT_COUNT == 342 else "fail"
-    return {
-        "domain": "agents",
-        "count": AGENT_COUNT,
-        "status": status,
-        "sample": sample,
-    }
+    return check_domain("agents", {"count": "agent_population", "identities": "agents"})
 
 
 if __name__ == "__main__":
     import json
 
-    result = check()
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print(json.dumps(check(), ensure_ascii=False, indent=2))

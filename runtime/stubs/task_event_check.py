@@ -1,84 +1,53 @@
 # =============================================================================
 # File:        runtime/stubs/task_event_check.py
-# Purpose:     فحص المهام والأحداث — إرجاع بيانات حقيقية من قاعدة البيانات
+# Purpose:     فحص المهام والأحداث — قياسٌ حيٌّ من جدولَي المهام ومخزن الأحداث
 # Owner:       runtime/
 # Created:     2026-08-15
+# Last Modified: 2026-08-22 (W-025)
 # Phase:       P3 (Working Nuclei)
 # Article 009: هذا الملف يلتزم بالمادة 009 — الشفافية والمراجعة المستمرة.
-#              جميع البيانات مأخوذة من قاعدة بيانات Supabase ومخزنة كذاكرة مؤقتة.
+#              لا يحمل هذا الملف رقمًا ثابتًا ولا نسخةً مؤقّتة: العدد يُقاس لحظة
+#              النداء من قاعدة البيانات، وإن لم يكن المصدر مهيَّأً أُعلنت الحالة
+#              `unmeasured` — وهي ليست `pass`.
 # =============================================================================
 """
-أداة فحص المهام والأحداث (Runtime Task/Event Check) — Phase P3 Stub.
+أداة فحص المهام والأحداث (Runtime Task/Event Check).
 
-تُرجع بيانات حقيقية مخزنة كذاكرة مؤقتة (cached DB data):
-- مهمة واحدة (1 task)
-- 156 حدثًا إجمالًا (عينة من 5 معروضة)
+الهدف: قياسُ حالةِ الإقليمِ من مصدرِ الحقيقةِ الحيِّ لحظةَ النداء، لا اقتباسُ
+       ثابتٍ مكتوبٍ في الكود. ما يُقاس: عددُ صفوفِ `tasks` و`event_store`.
+النطاق: قراءةُ عدّاداتٍ فقط عبرَ `tools.audit.live_truth`. لا كتابةَ ولا حكم.
+المالك: runtime/
+تاريخ الإنشاء: 2026-08-15
+تاريخ آخر تعديل: 2026-08-22
+
+سببُ التغيير (W-025): كان هذا الملفُ يُخزّنُ أرقامًا ثابتةً ويقارنُها بنفسِها،
+فكانت البوّابةُ تُصادِقُ على ذاتِها (tautology). القياسُ الحيُّ في 2026-08-22 أظهرَ
+أنَّ أرقامًا منها كانت مخالفةً للواقع — والتفصيلُ في
+`docs/audit/measurements/domain_truth_snapshot.json` وبندِ السجل W-025.
 """
 
-# --- Cached DB data: 1 task ---
-TASKS = [
-    {
-        "id": "task-492d0c0f120e",
-        "type": "event_chain_test",
-        "description": "مهمة اختبار المرحلة 2",
-        "status": "assigned",
-        "priority": "normal",
-        "domain": "general",
-    },
-]
+import os
+import sys
 
-# Total number of events in the events table
-EVENT_COUNT = 156
+# جذرُ المستودعِ على المسار حتى تُحَلَّ `tools.audit.live_truth` عند التشغيلِ المباشر.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
-# --- Cached DB data: sample events (5 of 156) ---
-EVENTS_SAMPLE = [
-    {
-        "id": "evt-acfeaeee",
-        "type": "amos_federation.tool.executed",
-        "timestamp": "2026-08-15 05:49:12",
-    },
-    {
-        "id": "evt-f5a44164",
-        "type": "amos_federation.health.agent_isolated",
-        "timestamp": "2026-08-15 04:18:41",
-    },
-    {
-        "id": "evt-f8411a9a",
-        "type": "amos_federation.health.treatment_completed",
-        "timestamp": "2026-08-15 04:18:26",
-    },
-    {
-        "id": "evt-3890b0c0",
-        "type": "amos_federation.health.check_completed",
-        "timestamp": "2026-08-15 04:18:26",
-    },
-    {
-        "id": "evt-d4bc69a5",
-        "type": "amos_federation.health.treatment_completed",
-        "timestamp": "2026-08-15 04:18:09",
-    },
-]
+from tools.audit.live_truth import check_domain  # noqa: E402
 
 
 def check():
-    """Run the runtime task/event smoke check.
+    """يقيسُ عدّاداتِ إقليمِ `runtime` الآن.
 
     Returns:
-        dict: domain, tasks, events, status, sample_events (first 3).
+        dict: domain، status (`pass` إن قِيسَ الآن، `unmeasured` إن لم يُهيَّأِ
+            المصدر، `fail` إن هُيِّئَ وفشلَ القياس)، source، والعدّادات.
     """
-    sample_events = EVENTS_SAMPLE[:3]
-    status = "pass" if len(TASKS) == 1 and EVENT_COUNT == 156 else "fail"
-    return {
-        "domain": "runtime",
-        "tasks": len(TASKS),
-        "events": EVENT_COUNT,
-        "status": status,
-        "sample_events": sample_events,
-    }
+    return check_domain("runtime", {"tasks": "tasks", "events": "event_store"})
 
 
 if __name__ == "__main__":
     import json
 
-    result = check()
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print(json.dumps(check(), ensure_ascii=False, indent=2))

@@ -1,66 +1,53 @@
 # =============================================================================
 # File:        core/stubs/memory_check.py
-# Purpose:     فحص الذاكرة الأساسية — إرجاع بيانات حقيقية من قاعدة البيانات
+# Purpose:     فحص الذاكرة الأساسية — قياسٌ حيٌّ لعدد الذكريات والخبرات
 # Owner:       core/
 # Created:     2026-08-15
+# Last Modified: 2026-08-22 (W-025)
 # Phase:       P3 (Working Nuclei)
 # Article 009: هذا الملف يلتزم بالمادة 009 — الشفافية والمراجعة المستمرة.
-#              جميع البيانات مأخوذة من قاعدة بيانات Supabase ومخزنة كذاكرة مؤقتة.
+#              لا يحمل هذا الملف رقمًا ثابتًا ولا نسخةً مؤقّتة: العدد يُقاس لحظة
+#              النداء من قاعدة البيانات، وإن لم يكن المصدر مهيَّأً أُعلنت الحالة
+#              `unmeasured` — وهي ليست `pass`.
 # =============================================================================
 """
-أداة فحص الذاكرة الأساسية (Core Memory Check) — Phase P3 Stub.
+أداة فحص الذاكرة الأساسية (Core Memory Check).
 
-تُرجع بيانات حقيقية مخزنة كذاكرة مؤقتة (cached DB data):
-- ذاكرتان (2 memories)
-- خبرة واحدة (1 experience)
+الهدف: قياسُ حالةِ الإقليمِ من مصدرِ الحقيقةِ الحيِّ لحظةَ النداء، لا اقتباسُ
+       ثابتٍ مكتوبٍ في الكود. ما يُقاس: عددُ صفوفِ `memories` و`experiences`.
+النطاق: قراءةُ عدّاداتٍ فقط عبرَ `tools.audit.live_truth`. لا كتابةَ ولا حكم.
+المالك: core/
+تاريخ الإنشاء: 2026-08-15
+تاريخ آخر تعديل: 2026-08-22
+
+سببُ التغيير (W-025): كان هذا الملفُ يُخزّنُ أرقامًا ثابتةً ويقارنُها بنفسِها،
+فكانت البوّابةُ تُصادِقُ على ذاتِها (tautology). القياسُ الحيُّ في 2026-08-22 أظهرَ
+أنَّ أرقامًا منها كانت مخالفةً للواقع — والتفصيلُ في
+`docs/audit/measurements/domain_truth_snapshot.json` وبندِ السجل W-025.
 """
 
-# --- Cached DB data: 2 memories ---
-MEMORIES = [
-    {
-        "key": "agent_context_reset:agent-a5ad24b5",
-        "value": "Context reset performed at 2026-08-15T05:49:00Z — "
-                  "agent-a5ad24b5 conversation history cleared and state reinitialized.",
-        "keywords": ["agent_context_reset", "agent-a5ad24b5", "reset"],
-    },
-    {
-        "key": "test-connection",
-        "value": "Supabase connection works",
-        "keywords": ["test", "connection"],
-    },
-]
+import os
+import sys
 
-# --- Cached DB data: 1 experience ---
-EXPERIENCES = [
-    {
-        "id": "exp-4d03746c",
-        "type": "success",
-        "task_id": "test-task",
-        "agent_id": "test-agent",
-        "quality_score": 0.95,
-    },
-]
+# جذرُ المستودعِ على المسار حتى تُحَلَّ `tools.audit.live_truth` عند التشغيلِ المباشر.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+from tools.audit.live_truth import check_domain  # noqa: E402
 
 
 def check():
-    """Run the core memory smoke check.
+    """يقيسُ عدّاداتِ إقليمِ `core` الآن.
 
     Returns:
-        dict: domain, memories, experiences, status, sample (2 memories).
+        dict: domain، status (`pass` إن قِيسَ الآن، `unmeasured` إن لم يُهيَّأِ
+            المصدر، `fail` إن هُيِّئَ وفشلَ القياس)، source، والعدّادات.
     """
-    sample = MEMORIES[:2]
-    status = "pass" if len(MEMORIES) == 2 and len(EXPERIENCES) == 1 else "fail"
-    return {
-        "domain": "core",
-        "memories": len(MEMORIES),
-        "experiences": len(EXPERIENCES),
-        "status": status,
-        "sample": sample,
-    }
+    return check_domain("core", {"memories": "memories", "experiences": "experiences"})
 
 
 if __name__ == "__main__":
     import json
 
-    result = check()
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print(json.dumps(check(), ensure_ascii=False, indent=2))

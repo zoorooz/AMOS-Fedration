@@ -19,9 +19,9 @@
 |---|---:|
 | الأقاليم المفحوصة | 12 |
 | الأقاليم بحالة PROVEN | 0 |
-| إجمالي المخالفات | 97 |
+| إجمالي المخالفات | 89 |
 | ملفات بلا ترويسة هوية (المادة 009) | 26 |
-| منها CRITICAL | 11 |
+| منها CRITICAL | 3 |
 | منها HIGH | 63 |
 | منها MEDIUM | 23 |
 
@@ -31,7 +31,7 @@
 |---|---:|---|
 | IN_MEMORY_STORE | 60 | مخزن ذاكرة يُستخدم بديلًا عن تخزين دائم |
 | SILENT_FALLBACK | 26 | استثناء يُبتلع بلا تسجيل ولا رفع |
-| HARDCODED_TRUTH | 10 | قيمة ثابتة تُقدَّم كحقيقة تشغيلية بدل قاعدة البيانات |
+| HARDCODED_TRUTH | 2 | قيمة ثابتة تُقدَّم كحقيقة تشغيلية بدل قاعدة البيانات |
 | SANDBOX_DISABLED | 1 | أداة خطرة مسجّلة بلا عزل |
 
 ---
@@ -40,17 +40,17 @@
 
 | الإقليم | موثّق | منفّذ | مصدر حقيقي | زائف/مخبأ | مدمج | مختبَر | مؤمَّن | مُراقَب | منشور | **مُثبَت** | الحالة |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| `core/` | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ❌ | **❌** | `UNIT_TESTED` |
-| `royal/` | ✅ | ✅ | ✅ | — | ❌ | ❌ | ✅ | ❌ | ❌ | **❌** | `IMPLEMENTED` |
+| `core/` | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | ❌ | **❌** | `INTEGRATED` |
+| `royal/` | ✅ | ❌ | ❌ | — | ❌ | ❌ | ✅ | ❌ | ❌ | **❌** | `SPECIFIED` |
 | `federal/` | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ❌ | **❌** | `UNIT_TESTED` |
 | `states/` | ✅ | ❌ | ❌ | — | ❌ | ❌ | ✅ | ❌ | ❌ | **❌** | `SPECIFIED` |
-| `institutions/` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | ✅ | ❌ | ❌ | **❌** | `IMPLEMENTED` |
+| `institutions/` | ✅ | ❌ | ❌ | — | ❌ | ❌ | ✅ | ❌ | ❌ | **❌** | `SPECIFIED` |
 | `agents/` | ✅ | ✅ | ✅ | ⚠️ | ✅ | ❌ | ✅ | ❌ | ❌ | **❌** | `IMPLEMENTED` |
-| `tools/` | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ❌ | **❌** | `UNIT_TESTED` |
+| `tools/` | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | ❌ | **❌** | `INTEGRATED` |
 | `interfaces/` | ✅ | ❌ | ❌ | — | ❌ | ❌ | ✅ | ❌ | ❌ | **❌** | `SPECIFIED` |
-| `runtime/` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | ✅ | ❌ | ❌ | **❌** | `IMPLEMENTED` |
+| `runtime/` | ✅ | ❌ | ❌ | — | ❌ | ❌ | ✅ | ❌ | ❌ | **❌** | `SPECIFIED` |
 | `docs/` | ✅ | ❌ | ❌ | — | ❌ | ❌ | ✅ | ❌ | ❌ | **❌** | `SPECIFIED` |
-| `ops/` | ✅ | ✅ | ✅ | — | ❌ | ❌ | ✅ | ❌ | ❌ | **❌** | `IMPLEMENTED` |
+| `ops/` | ✅ | ❌ | ❌ | — | ❌ | ❌ | ✅ | ❌ | ❌ | **❌** | `SPECIFIED` |
 | `tests/` | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ❌ | ❌ | **❌** | `INTEGRATED` |
 
 > `⚠️` في عمود «زائف/مخبأ» يعني وجود قيم ثابتة أو مخازن ذاكرة تُستخدم بديلًا عن مصدر الحقيقة. أي إقليم يحمل `⚠️` **لا يمكن** أن يصل PROVEN.
@@ -61,38 +61,30 @@
 
 | الإقليم | md | py | yaml | أسطر كود | نوى | بلا ترويسة هوية | حالات النوى |
 |---|---:|---:|---:|---:|---:|---:|---|
-| `core/` | 67 | 41 | 0 | 14729 | 14 | 2 | unspecified=14 |
-| `royal/` | 51 | 2 | 1 | 92 | 14 | 3 | unspecified=14 |
-| `federal/` | 60 | 222 | 3 | 62618 | 7 | 2 | unspecified=7 |
-| `states/` | 47 | 2 | 0 | 32 | 7 | 2 | unspecified=7 |
-| `institutions/` | 19 | 2 | 0 | 89 | 6 | 2 | unspecified=6 |
-| `agents/` | 601 | 4 | 283 | 549 | 11 | 3 | unspecified=11 |
-| `tools/` | 41 | 23 | 2 | 6210 | 12 | 3 | unspecified=12 |
-| `interfaces/` | 14 | 2 | 0 | 30 | 4 | 2 | unspecified=4 |
-| `runtime/` | 20 | 2 | 0 | 71 | 7 | 2 | unspecified=7 |
+| `core/` | 67 | 41 | 0 | 14712 | 14 | 2 | unspecified=14 |
+| `royal/` | 51 | 2 | 1 | 38 | 14 | 3 | unspecified=14 |
+| `federal/` | 60 | 222 | 3 | 62620 | 7 | 2 | unspecified=7 |
+| `states/` | 47 | 2 | 0 | 38 | 7 | 2 | unspecified=7 |
+| `institutions/` | 19 | 2 | 0 | 38 | 6 | 2 | unspecified=6 |
+| `agents/` | 601 | 4 | 283 | 532 | 11 | 3 | unspecified=11 |
+| `tools/` | 41 | 24 | 2 | 6320 | 12 | 3 | unspecified=12 |
+| `interfaces/` | 14 | 2 | 0 | 38 | 4 | 2 | unspecified=4 |
+| `runtime/` | 20 | 2 | 0 | 38 | 7 | 2 | unspecified=7 |
 | `docs/` | 90 | 2 | 0 | 47 | 7 | 3 | unspecified=7 |
-| `ops/` | 38 | 2 | 0 | 93 | 12 | 1 | unspecified=12 |
-| `tests/` | 14 | 47 | 0 | 15693 | 5 | 1 | unspecified=5 |
+| `ops/` | 38 | 2 | 0 | 38 | 12 | 1 | unspecified=12 |
+| `tests/` | 14 | 48 | 0 | 15935 | 5 | 1 | unspecified=5 |
 
 ---
 
 ## 4. سجل المخالفات بالأدلة
 
-### CRITICAL (11)
+### CRITICAL (3)
 
 | الموقع | النوع | الخطورة | التفصيل |
 |---|---|---|---|
 | `agents/registry/imported_agents_data.py:15` | HARDCODED_TRUTH | CRITICAL | `AGENTS` بيانات ثابتة بديلة عن قاعدة البيانات |
-| `agents/stubs/registry_check.py:18` | HARDCODED_TRUTH | CRITICAL | `AGENT_COUNT = 342` عدّاد ثابت يُقدَّم كحقيقة تشغيلية |
-| `agents/stubs/registry_check.py:21` | HARDCODED_TRUTH | CRITICAL | `AGENTS_SAMPLE` بيانات ثابتة بديلة عن قاعدة البيانات |
-| `core/stubs/memory_check.py:19` | HARDCODED_TRUTH | CRITICAL | `MEMORIES` بيانات ثابتة بديلة عن قاعدة البيانات |
-| `core/stubs/memory_check.py:34` | HARDCODED_TRUTH | CRITICAL | `EXPERIENCES` بيانات ثابتة بديلة عن قاعدة البيانات |
 | `federal/executive/services/src/amos_federation/services/governance/expansion.py:108` | HARDCODED_TRUTH | CRITICAL | `FULL_POPULATION_CATEGORIES` بيانات ثابتة بديلة عن قاعدة البيانات |
-| `institutions/stubs/registry_check.py:18` | HARDCODED_TRUTH | CRITICAL | `INSTITUTIONS` بيانات ثابتة بديلة عن قاعدة البيانات |
-| `runtime/stubs/task_event_check.py:31` | HARDCODED_TRUTH | CRITICAL | `EVENT_COUNT = 156` عدّاد ثابت يُقدَّم كحقيقة تشغيلية |
-| `runtime/stubs/task_event_check.py:34` | HARDCODED_TRUTH | CRITICAL | `EVENTS_SAMPLE` بيانات ثابتة بديلة عن قاعدة البيانات |
 | `tools/registry/tool-index.yaml:49` | SANDBOX_DISABLED | CRITICAL | أداة مسجّلة بلا عزل (sandbox=false) |
-| `tools/stubs/registry_check.py:18` | HARDCODED_TRUTH | CRITICAL | `TOOLS` بيانات ثابتة بديلة عن قاعدة البيانات |
 
 ### HIGH (63)
 

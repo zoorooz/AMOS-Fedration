@@ -3,17 +3,36 @@
 # Purpose:     مشغّل اختبارات الدخان لكل النطاقات الـ12 — يفحص كل stub ويطبع جدولًا
 # Owner:       tests/
 # Created:     2026-08-15
+# Last Modified: 2026-08-22 (W-025)
 # Phase:       P3 (Working Nuclei)
 # Article 009: هذا الملف يلتزم بالمادة 009 — الشفافية والمراجعة المستمرة.
-#              يفحص جميع النطاقات ويتأكد من أن البيانات الحقيقية متاحة.
+#              يفصل هذا المشغّل بين ثلاث حالات: قِيسَ ونجح، وقِيسَ وفشل، ولم
+#              يُقَس. «غير مقيس» ليس نجاحًا ولا يُعَدُّ منه.
 # =============================================================================
 """
-مشغّل اختبارات الدخان (Smoke Test Runner) — Phase P3.
+مشغّل اختبارات الدخان (Smoke Test Runner).
 
-يقوم باستيراد كل domain stub، استدعاء دالة check() الخاصة به،
-والإبلاغ عن نجاح/فشل كل نطاق. يخرج برمز 0 إذا نجح الجميع، أو 1 إذا فشل أي نطاق.
+الهدف: استيرادُ كلِّ حارسِ إقليمٍ واستدعاءُ `check()` والإبلاغُ عن حالةِ كلِّ
+       إقليمٍ بثلاثِ حالاتٍ مُتمايزة:
+         pass       — قِيسَ الآنَ من مصدرِ الحقيقةِ ونجح.
+         unmeasured — لا مصدرَ حقيقةٍ مُهيَّأً؛ الأرقامُ مُقتبَسةٌ من لَقطةٍ مُؤرَّخة.
+         fail/error — قِيسَ وفشل، أو انكسرَ الحارسُ نفسُه.
+النطاق: 12 إقليمًا. لا يقرأُ قاعدةَ البياناتِ بنفسِه — الحرّاسُ يفعلون.
+المالك: tests/
+تاريخ الإنشاء: 2026-08-15
+تاريخ آخر تعديل: 2026-08-22
+
+رموزُ الخروج:
+    0  لا إقليمَ فاشلًا (يجوزُ وجودُ أقاليمَ غيرِ مقيسةٍ — وتُطبَعُ صريحًا).
+    1  إقليمٌ واحدٌ فاشلٌ على الأقل.
+    1  مع `--require-measured`: إن وُجِدَ إقليمٌ واحدٌ غيرُ مقيس.
+
+سببُ التغيير (W-025): كانت البوّابةُ تقارنُ ثوابتَ الحارسِ بنفسِها فتُصادِقُ على
+ذاتِها. صار الحكمُ الآنَ من القياس، وصار «غير مقيس» حالةً مرئيّةً لا تُخفى تحت
+راية النجاح. البوّاباتُ التي تشترطُ إثباتًا (D-4/D-7) تُشغِّلُ `--require-measured`.
 """
 
+import argparse
 import importlib
 import sys
 import os
@@ -56,7 +75,7 @@ def run_all():
             check_fn = getattr(mod, func_name)
             result = check_fn()
             status = result.get("status", "fail")
-            if status != "pass":
+            if status not in ("pass", "unmeasured"):
                 all_pass = False
             results.append((domain, status, result))
         except Exception as exc:  # noqa: BLE001
@@ -86,32 +105,57 @@ def print_summary_table(results):
                     "legislations", "compliance_reports"):
             if key in result:
                 detail_parts.append(f"{key}={result[key]}")
+        if "source" in result:
+            detail_parts.append(f"source={result['source']}")
         if "note" in result:
             detail_parts.append(result["note"])
+        if "reason" in result and status not in ("pass", "unmeasured"):
+            detail_parts.append(result["reason"])
         if "error" in result:
             detail_parts.append(f"error={result['error']}")
         detail = ", ".join(detail_parts) if detail_parts else "-"
-        marker = "PASS" if status == "pass" else "FAIL"
-        print(f"{domain:<16} {marker:<8} {detail}")
+        marker = {"pass": "PASS", "unmeasured": "UNMEASURED"}.get(status, "FAIL")
+        print(f"{domain:<16} {marker:<12} {detail}")
 
     print(sep)
-    passed = sum(1 for _, s, _ in results if s == "pass")
+    measured = sum(1 for _, s, _ in results if s == "pass")
+    unmeasured = sum(1 for _, s, _ in results if s == "unmeasured")
+    failed = sum(1 for _, s, _ in results if s not in ("pass", "unmeasured"))
     total = len(results)
-    print(f"  {passed}/{total} domains passed")
+    print(f"  {measured}/{total} أقاليمُ قِيسَت ونجحت | {unmeasured} غيرُ مقيسة | {failed} فاشلة")
+    if unmeasured:
+        print("  تنبيه: «غير مقيس» ليس نجاحًا — الأرقامُ أعلاه مُقتبَسةٌ من لَقطةٍ مُؤرَّخة،")
+        print("  ولا تُقبَلُ دليلًا في بوّابةٍ تشترطُ إثباتًا. هيِّئ AMOS_TRUTH_DB_URL،")
+        print("  أو شغِّلْ بـ --require-measured لتفشلَ البوّابةُ عندَ غيابِ القياس.")
     print("=" * 64)
 
 
-def main():
+def main(argv=None):
     """Entry point: run all smoke tests and exit with appropriate code."""
+    parser = argparse.ArgumentParser(description="بوّابةُ الدخانِ لكلِّ الأقاليم")
+    parser.add_argument(
+        "--require-measured",
+        action="store_true",
+        help="افشَلْ إن وُجِدَ إقليمٌ واحدٌ غيرُ مقيسٍ (تشترطُه بوّاباتُ الإثبات D-4/D-7)",
+    )
+    args = parser.parse_args(argv)
+
     results, all_pass = run_all()
     print_summary_table(results)
-    if all_pass:
-        print("\nAll smoke tests PASSED.")
-        sys.exit(0)
-    else:
+    unmeasured = [d for d, s, _ in results if s == "unmeasured"]
+
+    if not all_pass:
         print("\nSome smoke tests FAILED.")
-        sys.exit(1)
+        return 1
+    if unmeasured and args.require_measured:
+        print("\nغيرُ مقيسٍ ومطلوبٌ قياسُه: " + ", ".join(unmeasured))
+        return 1
+    if unmeasured:
+        print("\nلا إقليمَ فاشلًا — وبقيَ " + str(len(unmeasured)) + " إقليمًا غيرَ مقيس.")
+        return 0
+    print("\nAll smoke tests PASSED (measured).")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

@@ -1,0 +1,100 @@
+{
+  "$comment": "الهدف: لَقطةٌ مُؤرَّخةٌ لعدّاداتِ مصدرِ الحقيقةِ الحيِّ (قاعدةُ بياناتِ الفدرالية) تُقتبَسُ حين يعجزُ الحارسُ عن القياسِ الآن — تُقتبَسُ بحالةِ `unmeasured` ولا تُسمّى نجاحًا أبدًا (W-025). النطاق: عدّاداتُ صفوفٍ فقط + قياسُ انحرافِ سجلِّ الأدوات. المالك: tools/audit. تاريخ الإنشاء: 2026-08-22. تاريخ آخر تعديل: 2026-08-22.",
+  "measured_at": "2026-08-22T18:45:00+00:00",
+  "measured_by": "المنفّذ — بندُ السجل W-025",
+  "source": {
+    "kind": "postgres",
+    "provider": "Supabase",
+    "project_ref": "mqcfmwtdaymrmwvthqyw",
+    "host": "db.mqcfmwtdaymrmwvthqyw.supabase.co",
+    "server_version": "PostgreSQL 17.6",
+    "note": "المرجعُ نفسُه مُعلَنٌ أصلًا في tools/db_link.md — لا يُضافُ هنا سرٌّ جديد."
+  },
+  "method": {
+    "row_counts": "select table_name, (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from public.%I', table_name), false, true, '')))[1]::text::bigint as rows from information_schema.tables where table_schema='public' and table_type='BASE TABLE' order by table_name",
+    "tool_registry_live": "select id, name, category, sandbox_required from public.tools order by name",
+    "tool_registry_yaml": "قراءةُ tools/registry/tool-index.yaml وعدُّ المدخلاتِ وقيمِ sandbox_required"
+  },
+  "row_counts": {
+    "agent_population": 5116,
+    "agents": 49,
+    "audit_entries": 71,
+    "compliance_reports": 0,
+    "durable_events": 41,
+    "event_store": 1027,
+    "executive_roles": 5,
+    "experiences": 11,
+    "institutions": 8,
+    "interface_registry": 0,
+    "king_decrees": 1,
+    "legislations": 0,
+    "memories": 3,
+    "royal_guards": 7,
+    "school_results": 216,
+    "tasks": 28,
+    "tools": 10,
+    "treasury_budgets": 0,
+    "treasury_reports": 0,
+    "treasury_transactions": 0
+  },
+  "superseded_claims": {
+    "$comment": "الهدف: تسجيلُ ما كانت حرّاسُ الأقاليمِ تُعلنُه ثابتًا قبل W-025 مقابلَ ما قِيسَ فعلًا في 2026-08-22 — الخطأُ يبقى في تاريخِه ولا يُمحى.",
+    "agents/stubs/registry_check.py:AGENT_COUNT": { "claimed": 342, "measured": 5116, "table": "agent_population" },
+    "core/stubs/memory_check.py:MEMORIES": { "claimed": 2, "measured": 3, "table": "memories" },
+    "core/stubs/memory_check.py:EXPERIENCES": { "claimed": 1, "measured": 11, "table": "experiences" },
+    "runtime/stubs/task_event_check.py:EVENT_COUNT": { "claimed": 156, "measured": 1027, "table": "event_store" },
+    "runtime/stubs/task_event_check.py:TASKS": { "claimed": 1, "measured": 28, "table": "tasks" },
+    "ops/stubs/audit_check.py:AUDIT_ENTRIES": { "claimed": 10, "measured": 71, "table": "audit_entries" },
+    "institutions/stubs/registry_check.py:INSTITUTIONS": { "claimed": 8, "measured": 8, "table": "institutions" },
+    "tools/stubs/registry_check.py:TOOLS": { "claimed": 10, "measured": 10, "table": "tools" },
+    "royal/stubs/guard_check.py:GUARDS": { "claimed": 7, "measured": 7, "table": "royal_guards" },
+    "federal/stubs/treasury_check.py:EXECUTIVE_ROLES": { "claimed": 5, "measured": 5, "table": "executive_roles" }
+  },
+  "tool_registry_yaml": {
+    "path": "tools/registry/tool-index.yaml",
+    "entries": 10,
+    "sandbox_required_true": 9,
+    "sandbox_required_false": 1,
+    "sandbox_false_ids": ["legal_search"],
+    "has_risk_level_field": true
+  },
+  "tool_registry_live": {
+    "table": "public.tools",
+    "entries": 10,
+    "sandbox_required_true": 0,
+    "sandbox_required_false": 10,
+    "sandbox_false_ids": [
+      "chart_generate",
+      "data_analysis",
+      "design",
+      "document_analysis",
+      "generation",
+      "legal_search",
+      "medical_dbs",
+      "python_execute",
+      "research_apis",
+      "sql_query"
+    ],
+    "has_risk_level_column": false,
+    "columns": [
+      "id",
+      "name",
+      "description",
+      "category",
+      "keywords",
+      "endpoint",
+      "permissions_required",
+      "sandbox_required",
+      "tenant_id",
+      "created_at"
+    ],
+    "yaml_high_or_medium_risk_unisolated_in_live": [
+      "python_execute",
+      "medical_dbs",
+      "document_analysis",
+      "research_apis",
+      "data_analysis",
+      "generation"
+    ]
+  }
+}
