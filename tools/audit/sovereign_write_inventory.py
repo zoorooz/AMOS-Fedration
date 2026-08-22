@@ -29,6 +29,12 @@
   ولا يُسقَط، لأنّ الكتابةَ التي لا يُعرَفُ مدخلُها أخطرُ لا أهون.
 - كونُ الدالّةِ «مُغيِّرةً» لا يعني وجوبَ هجرتِها: الوجوبُ حكمٌ دستوريٌّ يُقرَّر في
   سجلِّ القرارات، وهذه الأداةُ تعدُّ فقط.
+- **المقيسُ كودُ المستودعِ وحدَه**: البيئاتُ الافتراضيّةُ (بعلامةِ `pyvenv.cfg`) وشجرُ
+  التبعيّاتِ المُورَّدةِ (`site-packages` وأمثالُها) تُقطَعُ من المشيِ لا تُرشَّحُ ملفًّا
+  ملفًّا. وهذا شرطُ صحّةٍ لا تحسينُ سرعةٍ: مسارُ التهيئةِ المُوثَّقُ ينشئُ `.venv` في
+  جذرِ المستودع، فكانَ الجردُ قبلَ W-022 يقيسُ **755** موضعًا بدلَ **168** لمن تبِعَ
+  الوثيقةَ، فتسقطُ عليه بوّابةُ `decision_gate` بدعوى «انحرافٍ صامت». والحرسُ:
+  `tests/governance/test_measurement_ignores_environments.py`.
 """
 
 from __future__ import annotations
@@ -36,13 +42,32 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import os
+from collections.abc import Iterator
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 #: ما يُستثنى من عدِّ الإنتاج — الاختباراتُ ليست إنتاجًا، والذاكرةُ المؤقّتةُ ليست مصدرًا.
-SKIP_DIR_NAMES = frozenset({"__pycache__", ".git", "tests", "test", "node_modules", "backups"})
+SKIP_DIR_NAMES = frozenset(
+    {"__pycache__", ".git", "tests", "test", "node_modules", "backups"}
+)
+
+#: مجلَّداتُ تبعيّاتٍ مُورَّدةٍ — كودُ غيرِنا ليس دَينَنا السياديّ.
+#:
+#: تُستثنى بأسمائِها لأنّ هذه الأسماءُ **اصطلاحُ أدواتِ الحزمِ نفسِها** لا اسمًا
+#: قد يختارُه مشروعٌ لوحدةٍ من وحداتِه.
+VENDOR_DIR_NAMES = frozenset(
+    {"site-packages", "dist-packages", ".tox", ".nox", ".eggs"}
+)
+
+#: علامةُ البيئةِ الافتراضيّةِ — بنيويّةٌ لا اسميّة (PEP 405).
+#:
+#: لا تُستثنى البيئةُ باسمِ مجلَّدِها (`.venv` · `venv` · `env` …) لأنّ الاسمَ
+#: اختيارُ مَن أنشأَها، ومنعُ الاسمِ يُسقِطُ وحدةَ مشروعٍ سُمِّيَت به. والعلامةُ
+#: الحاسمةُ ملفُّ `pyvenv.cfg` الذي يكتبُه `venv` في جذرِ البيئةِ وحدَها.
+VENV_MARKER = "pyvenv.cfg"
 
 #: نداءاتُ جلسةِ SQLAlchemy التي تُنتِجُ أثرًا كتابيًّا.
 WRITE_CALLS = frozenset({"add", "add_all", "commit", "delete", "merge"})
@@ -86,8 +111,15 @@ def _is_persistence_receiver(receiver: ast.expr) -> bool:
         token in WRITE_RECEIVER_TOKENS or token.endswith("_session") for token in tokens
     )
 
+
 #: كلماتُ SQL الخامِّ التغييريّة.
-SQL_WRITE_KEYWORDS = ("INSERT ", "UPDATE ", "DELETE FROM", "CREATE TABLE", "ALTER TABLE")
+SQL_WRITE_KEYWORDS = (
+    "INSERT ",
+    "UPDATE ",
+    "DELETE FROM",
+    "CREATE TABLE",
+    "ALTER TABLE",
+)
 
 #: علامةُ عبورِ الحدِّ السياديّ.
 GUARD_MARKER = "guard_declared("
@@ -184,11 +216,45 @@ class _WriteVisitor(ast.NodeVisitor):
 
 
 def is_production_file(relative: Path) -> bool:
-    """هل الملفُّ إنتاجيٌّ؟ الاختباراتُ والذاكرةُ المؤقّتةُ ليست إنتاجًا."""
-    if set(relative.parts) & SKIP_DIR_NAMES:
+    """هل الملفُّ إنتاجيٌّ؟ الاختباراتُ والتبعيّاتُ والذاكرةُ المؤقّتةُ ليست إنتاجًا."""
+    parts = set(relative.parts)
+    if parts & SKIP_DIR_NAMES or parts & VENDOR_DIR_NAMES:
         return False
     name = relative.name
-    return not (name.startswith("test_") or name.endswith("_test.py") or name == "conftest.py")
+    return not (
+        name.startswith("test_") or name.endswith("_test.py") or name == "conftest.py"
+    )
+
+
+def is_environment_root(directory: Path) -> bool:
+    """هل هذا المجلَّدُ جذرَ بيئةٍ افتراضيّة؟ — بعلامتِها البنيويّةِ لا باسمِها."""
+    return (directory / VENV_MARKER).is_file()
+
+
+def iter_source_files(base: Path) -> Iterator[Path]:
+    """امْشِ تحتَ `base` وأعطِ ملفّاتِ `.py` التي يجوزُ أن تُقاسَ.
+
+    البيئةُ الافتراضيّةُ **تُقطَعُ من الجذرِ** لا يُرشَّحُ ملفُّها ملفًّا: بيئةٌ
+    واحدةٌ فيها عشراتُ الآلافِ من الملفّاتِ، فالمشيُ فيها كلفةٌ بلا فائدةٍ فوقَ
+    كونِه تضخيمًا للعدّ. وسببُ وجودِ هذا القطعِ مقيسٌ لا متوقَّع: مسارُ التهيئةِ
+    المُعتمَدُ (`tools/dev/bootstrap.sh` · T0.2) يُنشئُ `.venv` **في جذرِ
+    المستودع**، فكانَ من تبِعَ الوثيقةَ يقيسُ دَينًا مُتضخِّمًا (755 موضعًا بدلَ
+    168) وتسقطُ عليه بوّابةُ `decision_gate` بدعوى «انحرافٍ صامت» — أي أنَّ
+    الأداةَ كانت تُعاقِبُ مَن هيّأَ بيئتَه بالطريقةِ المُوثَّقة.
+    """
+    collected: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(base):
+        current = Path(dirpath)
+        if VENV_MARKER in filenames:
+            dirnames[:] = []
+            continue
+        dirnames[:] = [
+            name
+            for name in dirnames
+            if name not in SKIP_DIR_NAMES and name not in VENDOR_DIR_NAMES
+        ]
+        collected.extend(current / name for name in filenames if name.endswith(".py"))
+    return iter(sorted(collected))
 
 
 def attribute_helper_writes(
@@ -239,7 +305,11 @@ def attribute_helper_writes(
 
 
 def synthesize_public_sites(
-    sites: list[WriteSite], calls: dict[str, set[str]], path: str, source: str, tree: ast.AST
+    sites: list[WriteSite],
+    calls: dict[str, set[str]],
+    path: str,
+    source: str,
+    tree: ast.AST,
 ) -> list[WriteSite]:
     """أضِفْ عمليّاتٍ عامّةً تكتبُ **بمعاونِها** ولا كتابةَ في جسدِها.
 
@@ -294,7 +364,7 @@ def collect(root: Path, subtree: Path | None = None) -> list[WriteSite]:
     """اجمعْ مواضعَ الكتابةِ كلَّها تحتَ `root` (أو تحتَ `subtree` منه)."""
     base = root / subtree if subtree else root
     sites: list[WriteSite] = []
-    for path in sorted(base.rglob("*.py")):
+    for path in iter_source_files(base):
         relative = path.relative_to(root)
         if not is_production_file(relative):
             continue
@@ -356,16 +426,22 @@ def summarize(sites: list[WriteSite]) -> dict[str, object]:
         "non_sovereign_write_operations": sum(
             1 for s in public if not s.guarded and not s.closed_legacy
         ),
-        "non_sovereign_by_file": dict(sorted(by_file.items(), key=lambda kv: (-kv[1], kv[0]))),
+        "non_sovereign_by_file": dict(
+            sorted(by_file.items(), key=lambda kv: (-kv[1], kv[0]))
+        ),
     }
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="جردُ الكتاباتِ الإنتاجيّةِ وحالتِها السياديّة")
+    parser = argparse.ArgumentParser(
+        description="جردُ الكتاباتِ الإنتاجيّةِ وحالتِها السياديّة"
+    )
     parser.add_argument("--root", default=str(REPO_ROOT), help="جذرُ المستودع")
     parser.add_argument("--service", default=None, help="مسارٌ فرعيٌّ نسبيٌّ لقصرِ الجرد")
     parser.add_argument("--json", dest="json_out", default=None, help="ملفُّ تفصيلٍ JSON")
-    parser.add_argument("--fail-if-any", action="store_true", help="اخرجْ بخطأٍ إن بقيت كتابةٌ متجاوزة")
+    parser.add_argument(
+        "--fail-if-any", action="store_true", help="اخرجْ بخطأٍ إن بقيت كتابةٌ متجاوزة"
+    )
     args = parser.parse_args()
 
     root = Path(args.root).resolve()
@@ -403,7 +479,8 @@ def main() -> int:
                 "الهدف: جردُ مواضعِ الكتابةِ في المستودعِ وتصنيفُ ما عبرَ الحدَّ "
                 "السّياديَّ وما لم يعبُر— مُخرَجُ "
                 "tools/audit/sovereign_write_inventory.py --json. ومنه يُشتَقُّ رقمُ "
-                "الدَّينِ وحدَه. المادةُ التاسعةُ · 2."),
+                "الدَّينِ وحدَه. المادةُ التاسعةُ · 2."
+            ),
             "summary": summary,
             "sites": [asdict(s) for s in sites],
         }
